@@ -8,9 +8,6 @@ import (
 	"strings"
 )
 
-func hello(w http.ResponseWriter, r *http.Request) {
-	io.WriteString(w, "Hello world!")
-}
 func fingerprint(w http.ResponseWriter, r *http.Request) {
 	id := strings.Replace(r.URL.Path, "/fingerprint/", "", 1)
 	switch r.Method {
@@ -21,8 +18,15 @@ func fingerprint(w http.ResponseWriter, r *http.Request) {
 		default:
 			w.Header().Set("Allow", "GET, PUT")
 			w.WriteHeader(http.StatusMethodNotAllowed)
-			io.WriteString(w, "Error ")
+			io.WriteString(w, "Error")
 	}
+}
+func routing() *http.ServeMux {
+	router := http.NewServeMux()
+	router.HandleFunc("/fingerprint/", fingerprint)
+	redirect := http.RedirectHandler("/fingerprint/", 307)
+	router.Handle("/", redirect)
+	return router
 }
 
 func main() {
@@ -32,8 +36,7 @@ func main() {
 	} else {
 		port = "8080"
 	}
-	http.HandleFunc("/fingerprint/", fingerprint)
-	http.HandleFunc("/", hello)
+	router := routing()
 	log.Printf("Listen on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, router))
 }
