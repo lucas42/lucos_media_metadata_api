@@ -31,8 +31,8 @@ func routing() *http.ServeMux {
 
 func main() {
 	var port string
-	if (len(os.Args) > 1) {
-		port = os.Args[1]
+	if (len(os.Getenv("PORT")) > 0) {
+		port = os.Getenv("PORT")
 	} else {
 		port = "8080"
 	}
