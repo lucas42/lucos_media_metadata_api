@@ -1,5 +1,3 @@
-
-
 package main
 
 import (
@@ -16,12 +14,20 @@ import (
 
 var serverUrl string
 
+/**
+ * Creats a test http server, using the FrontController under test
+ * Stores the URL of the server in a global variable
+ */
 func init() {
-    server := httptest.NewServer(routing())
+    server := httptest.NewServer(FrontController())
     serverUrl = server.URL
 }
 
-// Source: https://gist.github.com/turtlemonvh/e4f7404e28387fadb8ad275a99596f67
+/**
+ * Checks whether 2 JSON strings are equivalent
+ *
+ * Source: https://gist.github.com/turtlemonvh/e4f7404e28387fadb8ad275a99596f67
+ */
 func AreEqualJSON(s1, s2 string) (bool, error) {
 	var o1 interface{}
 	var o2 interface{}
@@ -39,6 +45,11 @@ func AreEqualJSON(s1, s2 string) (bool, error) {
 	return reflect.DeepEqual(o1, o2), nil
 }
 
+/**
+ * Makes a http request and compares the response to some expected values
+ *
+ * (Probably not the most go-eque way to do this, but it works for me)
+ */
 func makeRequest(t *testing.T, method string, url string, requestBody string, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
     reader := strings.NewReader(requestBody)
     request, err := http.NewRequest(method, url, reader)
@@ -77,6 +88,9 @@ func makeRequest(t *testing.T, method string, url string, requestBody string, ex
 	}
 }
 
+/**
+ * Checks whether a track can be edited based on its url and retrieved later
+ */
 func TestCanEditTrack(test *testing.T) {
 	trackurl := "http://example.org/track/1256"
 	escapedTrackUrl := url.QueryEscape(trackurl)
