@@ -17,3 +17,4 @@ Accepts the following environment variables:
 
 ## Testing
 Run `go test`
+[![CircleCI](https://circleci.com/gh/lucas42/lucos_media_metadata_api.svg?style=svg)](https://circleci.com/gh/lucas42/lucos_media_metadata_api)
