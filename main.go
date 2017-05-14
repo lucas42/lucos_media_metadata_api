@@ -8,18 +8,6 @@ import (
 	"strings"
 )
 
-func fingerprint(w http.ResponseWriter, r *http.Request) {
-	id := strings.Replace(r.URL.Path, "/fingerprint/", "", 1)
-	switch r.Method {
-		case "GET":
-			io.WriteString(w, "Hello fingerprint! "+id)
-		case "PUT":
-			io.WriteString(w, "PUT not done yet "+id)
-		default:
-			MethodNotAllowed(w, []string{"GET", "PUT"})
-	}
-}
-
 func MethodNotAllowed(w http.ResponseWriter, allowedMethods []string) {
 	concatMethods := strings.Join(allowedMethods, ", ")
 	w.Header().Set("Allow", concatMethods)
@@ -28,9 +16,8 @@ func MethodNotAllowed(w http.ResponseWriter, allowedMethods []string) {
 }
 func routing() *http.ServeMux {
 	router := http.NewServeMux()
-	router.HandleFunc("/fingerprint/", fingerprint)
 	router.HandleFunc("/tracks", trackHandling)
-	redirect := http.RedirectHandler("/fingerprint/", 307)
+	redirect := http.RedirectHandler("/tracks", 307)
 	router.Handle("/", redirect)
 	return router
 }

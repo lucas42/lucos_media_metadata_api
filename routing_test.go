@@ -14,10 +14,7 @@ import (
     "reflect"
 )
 
-var (
-    serverUrl string
-    fingerprintUrl string
-)
+var serverUrl string
 
 func init() {
     server := httptest.NewServer(routing())
@@ -80,20 +77,6 @@ func makeRequest(t *testing.T, method string, url string, requestBody string, ex
 	}
 }
 
-func TestRootFingerprint(t *testing.T) {
-	url := fmt.Sprintf("%s/fingerprint/", serverUrl)
-    makeRequest(t, "GET", url, "", 200, "Hello fingerprint! ", false)
-}
-func TestAddFingerprint(t *testing.T) {
-	url := fmt.Sprintf("%s/fingerprint/abc123", serverUrl)
-    fingerprintJson := `{"fingerprint": "123456"}`
-    makeRequest(t, "PUT", url, fingerprintJson, 200, "PUT not done yet abc123", false)
-}
-func TestPostFingerprint(t *testing.T) {
-	url := fmt.Sprintf("%s/fingerprint/abc245", serverUrl)
-    fingerprintJson := `{"fingerprint": "123456"}`
-    makeRequest(t, "POST", url, fingerprintJson, 405, "Method Not Allowed, must be one of: GET, PUT", false)
-}
 func TestCanEditTrack(test *testing.T) {
 	trackurl := "http://example.org/track/1256"
 	escapedTrackUrl := url.QueryEscape(trackurl)
