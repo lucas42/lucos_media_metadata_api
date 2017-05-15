@@ -12,15 +12,21 @@ import (
     "reflect"
 )
 
-var serverUrl string
+var server *httptest.Server
 
 /**
  * Creats a test http server, using the FrontController under test
  * Stores the URL of the server in a global variable
  */
 func init() {
-    server := httptest.NewServer(FrontController())
-    serverUrl = server.URL
+    restartServer()
+}
+
+func restartServer() {
+	if server != nil {
+		server.Close()
+	}
+	server = httptest.NewServer(FrontController())
 }
 
 /**
@@ -50,8 +56,9 @@ func AreEqualJSON(s1, s2 string) (bool, error) {
  *
  * (Probably not the most go-eque way to do this, but it works for me)
  */
-func makeRequest(t *testing.T, method string, url string, requestBody string, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
+func makeRequest(t *testing.T, method string, path string, requestBody string, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
     reader := strings.NewReader(requestBody)
+    url := server.URL + path
     request, err := http.NewRequest(method, url, reader)
     if err != nil {
         t.Error(err)
@@ -96,8 +103,10 @@ func TestCanEditTrack(test *testing.T) {
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	inputJson := `{"fingerprint": "aoecu1234", "duration": 300}`
 	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256"}`
-	url := fmt.Sprintf("%s/tracks?url=%s", serverUrl, escapedTrackUrl)
-	makeRequest(test, "GET", url, "", 404, "Track Not Found\n", false)
-	makeRequest(test, "PUT", url, inputJson, 200, outputJson, true)
-	makeRequest(test, "GET", url, "", 200, outputJson, true)
+	path := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "PUT", path, inputJson, 200, outputJson, true)
+	makeRequest(test, "GET", path, "", 200, outputJson, true)
+	restartServer()
+	makeRequest(test, "GET", path, "", 200, outputJson, true)
 }
