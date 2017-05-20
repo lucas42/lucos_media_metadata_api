@@ -16,30 +16,44 @@ type Track struct {
 }
 
 /**
- * A map of all tracks, keyed by url
- *
- * TODO: move this to a database, so it survives restarts
- */
-var allTracksByUrl map[string]Track = make(map[string]Track)
-
-/**
  * Updates data about a track for a given URL
  *
- * TODO: Update database
  */
 func updateTrackData(trackurl string, track Track) (err error) {
-	track.URL = trackurl
-	allTracksByUrl[trackurl] = track
-	return
+	stmt, err := db.Prepare("INSERT INTO track(url, fingerprint, duration) values(?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(trackurl, track.Fingerprint, track.Duration)
+	return err
 }
 
 /**
  * Gets data about a track for a given URL
  *
- * TODO: Fetch from database
  */
-func getTrackData(trackurl string) (track Track, err error) {
-	return allTracksByUrl[trackurl], nil
+func getTrackData(trackurl string) (track *Track, err error) {
+	track = new(Track)
+	stmt, err := db.Prepare("SELECT url, fingerprint, duration FROM track WHERE url = ?")
+	if err != nil {
+		return
+	}
+	defer stmt.Close()
+	rows, err := stmt.Query(trackurl)
+	if err != nil {
+		return
+	}
+
+	result := rows.Next()
+	if (result == false) {
+		return
+	}
+	err = rows.Scan(&track.URL, &track.Fingerprint, &track.Duration)
+	if err != nil {
+		return
+	}
+	return
 }
 
 /**

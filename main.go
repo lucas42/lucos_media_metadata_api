@@ -27,6 +27,7 @@ func FrontController() *http.ServeMux {
  * Uses the PORT environment variable to specify which tcp port to listen on (defaults to 8080)
  */
 func main() {
+	DBInit()
 	var port string
 	if (len(os.Getenv("PORT")) > 0) {
 		port = os.Getenv("PORT")
