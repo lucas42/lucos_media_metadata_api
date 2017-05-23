@@ -6,30 +6,36 @@ import (
 	"log"
 )
 
-var db *sql.DB
-var dbpath = "./media.sqlite"
+/**
+ * A struct for wrapping a database
+ */
+type Datastore struct {
+	DB *sql.DB
+}
 
-func DBInit() {
-	var err error
-	db, err = sql.Open("sqlite3", dbpath)
+
+func DBInit(dbpath string) (Datastore, error) {
+	db, err := sql.Open("sqlite3", dbpath)
+	database := Datastore{db}
 	if err != nil {
-		log.Fatal(err)
+		return database, err
 	}
-	
-	if (!DBTableExists("track")) {
+
+	if (!database.TableExists("track")) {
 		sqlStmt := `
 		CREATE TABLE "track" ("id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "fingerprint" TEXT UNIQUE, "url" TEXT UNIQUE, "duration" INTEGER);
 		`
-		_, err := db.Exec(sqlStmt)
+		_, err := database.DB.Exec(sqlStmt)
 		if err != nil {
-			log.Fatalf("%q: %s\n", err, sqlStmt)
+			return database, err
 		}
 	}
+	return database, nil
 }
 
-func DBTableExists(tablename string) bool {
+func (store Datastore) TableExists(tablename string) bool {
 	var count int
-	stmt, err := db.Prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?")
+	stmt, err := store.DB.Prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?")
 	if err != nil {
 		log.Fatal(err)
 	}

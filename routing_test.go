@@ -10,6 +10,7 @@ import (
     "io/ioutil"
     "encoding/json"
     "reflect"
+    "os"
 )
 
 var server *httptest.Server
@@ -19,14 +20,23 @@ var server *httptest.Server
  * Stores the URL of the server in a global variable
  */
 func init() {
+	os.Remove("testrouting.sqlite")
     restartServer()
+}
+func TestMain(m *testing.M) {
+	os.Remove("testrouting.sqlite")
+	restartServer()
+	result := m.Run()
+	os.Remove("testrouting.sqlite")
+	os.Exit(result)
 }
 
 func restartServer() {
 	if server != nil {
 		server.Close()
 	}
-	server = httptest.NewServer(FrontController())
+	store, _ := DBInit("testrouting.sqlite")
+	server = httptest.NewServer(FrontController(store))
 }
 
 /**

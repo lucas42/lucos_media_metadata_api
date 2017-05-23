@@ -12,9 +12,9 @@ import (
 /**
  * The front controller for all incoming requests
  */
-func FrontController() *http.ServeMux {
+func FrontController(store Datastore) *http.ServeMux {
 	router := http.NewServeMux()
-	router.HandleFunc("/tracks", TracksController)
+	router.HandleFunc("/tracks", store.TracksController)
 	redirect := http.RedirectHandler("/tracks", 307)
 	router.Handle("/", redirect)
 	return router
@@ -27,7 +27,11 @@ func FrontController() *http.ServeMux {
  * Uses the PORT environment variable to specify which tcp port to listen on (defaults to 8080)
  */
 func main() {
-	DBInit()
+	store, err := DBInit("media.sqlite")
+	if (err != nil) {
+		log.Fatal(err)
+		return
+	}
 	var port string
 	if (len(os.Getenv("PORT")) > 0) {
 		port = os.Getenv("PORT")
@@ -35,7 +39,7 @@ func main() {
 		port = "8080"
 	}
 	log.Printf("Listen on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, FrontController()))
+	log.Fatal(http.ListenAndServe(":"+port, FrontController(store)))
 }
 
 /**
