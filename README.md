@@ -4,6 +4,7 @@ An API for managing media metadata.
 ## Requirments
 
 * [Golang](https://golang.org/)
+* github.com/mattn/go-sqlite3
 
 ## Installing
 Run `go install`
