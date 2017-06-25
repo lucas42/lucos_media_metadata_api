@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -16,10 +17,29 @@ func FrontController(store Datastore) *http.ServeMux {
 	router := http.NewServeMux()
 	router.HandleFunc("/tracks/denorm/", store.DenormTracksController)
 	router.HandleFunc("/tracks", store.TracksController)
+	router.HandleFunc("/globals/", store.GlobalsController)
 	redirect := http.RedirectHandler("/tracks", 307)
 	router.Handle("/", redirect)
 	return router
 }
+
+/**
+ * Writes a http response based on some data
+ */
+func writeResponse(w http.ResponseWriter, found bool, data interface{}, err error) {
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if (!found) {
+		http.Error(w, "Track Not Found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(data)
+}
+
 
 /**
  * Listens for incoming http requests

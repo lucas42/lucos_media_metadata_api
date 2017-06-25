@@ -30,6 +30,16 @@ func DBInit(dbpath string) (Datastore, error) {
 			return database, err
 		}
 	}
+
+	if (!database.TableExists("global")) {
+		sqlStmt := `
+		CREATE TABLE "global" ("key" TEXT PRIMARY KEY NOT NULL, "value" TEXT);
+		`
+		_, err := database.DB.Exec(sqlStmt)
+		if err != nil {
+			return database, err
+		}
+	}
 	return database, nil
 }
 

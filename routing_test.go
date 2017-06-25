@@ -193,3 +193,18 @@ func TestGetAllTracks(test *testing.T) {
 	makeRequest(test, "GET", path2, "", 200, output2Json, true)
 	makeRequest(test, "GET", pathall, "", 200, alloutputJson2, true)
 }
+
+/**
+ * Checks whether a global value can be set and read
+ */
+func TestGlobals(test *testing.T) {
+	clearData()
+	path := "/globals/isXmas"
+	inputJson := `{"value":"yes"}`
+	outputJson := `{"key":"isXmas", "value":"yes"}`
+	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "PUT", path, inputJson, 200, outputJson, true)
+	makeRequest(test, "GET", path, "", 200, outputJson, true)
+	restartServer()
+	makeRequest(test, "GET", path, "", 200, outputJson, true)
+}

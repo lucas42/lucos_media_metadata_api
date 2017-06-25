@@ -168,23 +168,6 @@ func writeTrackDataByID(store Datastore, w http.ResponseWriter, trackid string) 
 }
 
 /**
- * Writes a http response based on some data
- */
-func writeResponse(w http.ResponseWriter, found bool, data interface{}, err error) {
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if (!found) {
-		http.Error(w, "Track Not Found", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(data)
-}
-
-/**
  * Decodes a JSON representation of a track
  */
 func DecodeTrack(r io.Reader) (Track, error) {
@@ -227,7 +210,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 }
 
 /** 
- * A controller for handling all requests dealing with tracks
+ * A controller for handling all requests dealing with denorm tracks
  */
 func (store Datastore) DenormTracksController(w http.ResponseWriter, r *http.Request) {
 	trackid := path.Base(r.URL.Path)
