@@ -20,7 +20,7 @@ type Track struct {
  *
  */
 func (store Datastore) updateTrackData(trackurl string, track Track) (err error) {
-	stmt, err := store.DB.Prepare("INSERT INTO track(url, fingerprint, duration) values(?, ?, ?)")
+	stmt, err := store.DB.Prepare("REPLACE INTO track(url, fingerprint, duration) values(?, ?, ?)")
 	if err != nil {
 		return err
 	}
@@ -44,6 +44,7 @@ func (store Datastore) getTrackData(trackurl string) (track *Track, err error) {
 	if err != nil {
 		return
 	}
+	defer rows.Close()
 
 	result := rows.Next()
 	if (result == false) {

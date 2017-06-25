@@ -78,24 +78,28 @@ func makeRequest(t *testing.T, method string, path string, requestBody string, e
     if err != nil {
         t.Error(err)
     }
-
-    if response.StatusCode != expectedResponseCode {
-        t.Errorf("Got response code %d, expected %d", response.StatusCode, expectedResponseCode)
-    }
     responseData,err := ioutil.ReadAll(response.Body)
 	if err != nil {
 	    t.Error(err)
 	}
 	actualResponseBody := string(responseData)
+
+	if (response.StatusCode >= 500) {
+		t.Errorf("Error code %d returned for %s, message: %s", response.StatusCode, url, actualResponseBody)
+		return
+	}
+
+    if response.StatusCode != expectedResponseCode {
+        t.Errorf("Got response code %d, expected %d", response.StatusCode, expectedResponseCode)
+    }
 	if (expectJSON) {
 		if (response.Header.Get("content-type") != "application/json") {
 			t.Errorf("Expected JSON Content Type, received: \"%s\"", request.Header.Get("Content-type"))
 		}
 		isEqual, err := AreEqualJSON(actualResponseBody, expectedResponseBody)
 		if err != nil {
-		    t.Error(err)
-		}
-		if (!isEqual) {
+			t.Errorf("Invalid JSON body: %s, expected: %s", actualResponseBody, expectedResponseBody)
+		} else if (!isEqual) {
 			t.Errorf("Unexpected JSON body: %s, expected: %s", actualResponseBody, expectedResponseBody)
 		}
 	} else {
@@ -119,4 +123,20 @@ func TestCanEditTrack(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
+}
+/**
+ * Checks whether a track can have its duration updated
+ */
+func TestCanUpdateDuration(test *testing.T) {
+	trackurl := "http://example.org/track/333"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	inputAJson := `{"fingerprint": "aoecu1234", "duration": 300}`
+	inputBJson := `{"fingerprint": "aoecu1234", "duration": 150}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333"}`
+	outputBJson := `{"fingerprint": "aoecu1234", "duration": 150, "url": "http://example.org/track/333"}`
+	path := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "PUT", path, inputAJson, 200, outputAJson, true)
+	makeRequest(test, "PUT", path, inputBJson, 200, outputBJson, true)
+	makeRequest(test, "GET", path, "", 200, outputBJson, true)
 }
