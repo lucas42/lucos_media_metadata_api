@@ -19,13 +19,12 @@ var server *httptest.Server
  * Creats a test http server, using the FrontController under test
  * Stores the URL of the server in a global variable
  */
-func init() {
+func clearData() {
 	os.Remove("testrouting.sqlite")
     restartServer()
 }
 func TestMain(m *testing.M) {
-	os.Remove("testrouting.sqlite")
-	restartServer()
+	clearData()
 	result := m.Run()
 	os.Remove("testrouting.sqlite")
 	os.Exit(result)
@@ -113,10 +112,11 @@ func makeRequest(t *testing.T, method string, path string, requestBody string, e
  * Checks whether a track can be edited based on its url and retrieved later
  */
 func TestCanEditTrack(test *testing.T) {
+	clearData()
 	trackurl := "http://example.org/track/1256"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	inputJson := `{"fingerprint": "aoecu1234", "duration": 300}`
-	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256"}`
+	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1}`
 	path := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path, inputJson, 200, outputJson, true)
@@ -128,12 +128,13 @@ func TestCanEditTrack(test *testing.T) {
  * Checks whether a track can have its duration updated
  */
 func TestCanUpdateDuration(test *testing.T) {
+	clearData()
 	trackurl := "http://example.org/track/333"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	inputAJson := `{"fingerprint": "aoecu1234", "duration": 300}`
 	inputBJson := `{"fingerprint": "aoecu1234", "duration": 150}`
-	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333"}`
-	outputBJson := `{"fingerprint": "aoecu1234", "duration": 150, "url": "http://example.org/track/333"}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1}`
+	outputBJson := `{"fingerprint": "aoecu1234", "duration": 150, "url": "http://example.org/track/333", "trackid": 1}`
 	path := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path, inputAJson, 200, outputAJson, true)
@@ -145,16 +146,17 @@ func TestCanUpdateDuration(test *testing.T) {
  * Checks whether a list of all tracks can be returned
  */
 func TestGetAllTracks(test *testing.T) {
+	clearData()
 	track1url := "http://example.org/track/1256"
 	escapedTrack1Url := url.QueryEscape(track1url)
 	track2url := "http://example.org/track/abcdef"
 	escapedTrack2Url := url.QueryEscape(track2url)
 	input1Json := `{"fingerprint": "aoecu1234", "duration": 300}`
 	input2Json := `{"fingerprint": "blahdebo", "duration": 150}`
-	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256"}`
-	output2Json := `{"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef"}`
-	alloutputJson1 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256"}]`
-	alloutputJson2 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256"}, {"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef"}]`
+	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1}`
+	output2Json := `{"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2}`
+	alloutputJson1 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1}]`
+	alloutputJson2 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1}, {"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2}]`
 	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)	
 	path2 := fmt.Sprintf("/tracks?url=%s", escapedTrack2Url)
 	pathall := "/tracks"

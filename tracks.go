@@ -13,6 +13,7 @@ type Track struct {
 	Fingerprint string `json:"fingerprint"`
 	Duration    int `json:"duration"`
 	URL         string `json:"url"`
+	ID          int `json:"trackid"`
 }
 
 /**
@@ -20,12 +21,22 @@ type Track struct {
  *
  */
 func (store Datastore) updateTrackData(trackurl string, track Track) (err error) {
-	stmt, err := store.DB.Prepare("REPLACE INTO track(url, fingerprint, duration) values(?, ?, ?)")
+	trackExists, _, err := store.getTrackData(trackurl)
+	if err != nil {
+		return err
+	}
+	query := ""
+	if (trackExists) {
+		query = "UPDATE TRACK SET fingerprint = ?, duration = ? WHERE url = ?"
+	} else {
+		query = "INSERT INTO track(fingerprint, duration, url) values(?, ?, ?)"
+	}
+	stmt, err := store.DB.Prepare(query)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(trackurl, track.Fingerprint, track.Duration)
+	_, err = stmt.Exec(track.Fingerprint, track.Duration, trackurl)
 	return err
 }
 
@@ -33,9 +44,10 @@ func (store Datastore) updateTrackData(trackurl string, track Track) (err error)
  * Gets data about a track for a given URL
  *
  */
-func (store Datastore) getTrackData(trackurl string) (track *Track, err error) {
+func (store Datastore) getTrackData(trackurl string) (found bool, track *Track, err error) {
+	found = false
 	track = new(Track)
-	stmt, err := store.DB.Prepare("SELECT url, fingerprint, duration FROM track WHERE url = ?")
+	stmt, err := store.DB.Prepare("SELECT id, url, fingerprint, duration FROM track WHERE url = ?")
 	if err != nil {
 		return
 	}
@@ -50,7 +62,8 @@ func (store Datastore) getTrackData(trackurl string) (track *Track, err error) {
 	if (result == false) {
 		return
 	}
-	err = rows.Scan(&track.URL, &track.Fingerprint, &track.Duration)
+	found = true
+	err = rows.Scan(&track.ID, &track.URL, &track.Fingerprint, &track.Duration)
 	if err != nil {
 		return
 	}
@@ -63,7 +76,7 @@ func (store Datastore) getTrackData(trackurl string) (track *Track, err error) {
  */
 func (store Datastore) getAllTracks() (tracks []*Track, err error) {
 	tracks = []*Track{}
-	rows, err := store.DB.Query("SELECT url, fingerprint, duration FROM track")
+	rows, err := store.DB.Query("SELECT id, url, fingerprint, duration FROM track")
 	if err != nil {
 		return
 	}
@@ -71,7 +84,7 @@ func (store Datastore) getAllTracks() (tracks []*Track, err error) {
 
 	for rows.Next() {
 		track := new(Track)
-		err = rows.Scan(&track.URL, &track.Fingerprint, &track.Duration)
+		err = rows.Scan(&track.ID, &track.URL, &track.Fingerprint, &track.Duration)
 		if err != nil {
 			return
 		}
@@ -104,12 +117,12 @@ func writeAllTrackData(store Datastore, w http.ResponseWriter) {
  * Writes a http response with a JSON representation of a given track
  */
 func writeTrackData(store Datastore, w http.ResponseWriter, trackurl string) {
-	track, err := store.getTrackData(trackurl)
+	trackfound, track, err := store.getTrackData(trackurl)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if (track.URL != trackurl) {
+	if (!trackfound) {
 		http.Error(w, "Track Not Found", http.StatusNotFound)
 		return
 	}
