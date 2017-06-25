@@ -89,7 +89,7 @@ func makeRequest(t *testing.T, method string, path string, requestBody string, e
 	}
 
     if response.StatusCode != expectedResponseCode {
-        t.Errorf("Got response code %d, expected %d", response.StatusCode, expectedResponseCode)
+        t.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
     }
 	if (expectJSON) {
 		if (response.Header.Get("content-type") != "application/json") {
@@ -140,6 +140,32 @@ func TestCanUpdateDuration(test *testing.T) {
 	makeRequest(test, "PUT", path, inputAJson, 200, outputAJson, true)
 	makeRequest(test, "PUT", path, inputBJson, 200, outputBJson, true)
 	makeRequest(test, "GET", path, "", 200, outputBJson, true)
+}
+
+/**
+ * Checks whether a track can be updated using its trackid
+ */
+func TestCanUpdateById(test *testing.T) {
+	clearData()
+	track1url := "http://example.org/track/333"
+	escapedTrack1Url := url.QueryEscape(track1url)
+	track2url := "http://example.org/track/334"
+	escapedTrack2Url := url.QueryEscape(track2url)
+	inputAJson := `{"fingerprint": "aoecu1234", "duration": 300}`
+	inputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334"}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1}`
+	outputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 1}`
+	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)	
+	path2 := fmt.Sprintf("/tracks?url=%s", escapedTrack2Url)
+	denormpath := "/tracks/denorm/1"
+	makeRequest(test, "GET", path1, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "GET", denormpath, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "PUT", path1, inputAJson, 200, outputAJson, true)
+	makeRequest(test, "GET", path1, "", 200, outputAJson, true)
+	makeRequest(test, "PUT", denormpath, inputBJson, 200, outputBJson, true)
+	makeRequest(test, "GET", path1, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "GET", path2, "", 200, outputBJson, true)
+	makeRequest(test, "GET", denormpath, "", 200, outputBJson, true)
 }
 
 /**

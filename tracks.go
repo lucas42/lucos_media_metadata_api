@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"encoding/json"
+	"path"
 )
 
 /**
@@ -20,8 +21,8 @@ type Track struct {
  * Updates data about a track for a given URL
  *
  */
-func (store Datastore) updateTrackData(trackurl string, track Track) (err error) {
-	trackExists, _, err := store.getTrackData(trackurl)
+func (store Datastore) updateTrackDataByURL(trackurl string, track Track) (err error) {
+	trackExists, _, err := store.getTrackDataByURL(trackurl)
 	if err != nil {
 		return err
 	}
@@ -41,10 +42,24 @@ func (store Datastore) updateTrackData(trackurl string, track Track) (err error)
 }
 
 /**
+ * Updates data about a track for a given trackid
+ *
+ */
+func (store Datastore) updateTrackDataByID(trackid string, track Track) (err error) {
+	stmt, err := store.DB.Prepare("UPDATE TRACK SET fingerprint = ?, duration = ?, url = ? WHERE id = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(track.Fingerprint, track.Duration, track.URL, trackid)
+	return err
+}
+
+/**
  * Gets data about a track for a given URL
  *
  */
-func (store Datastore) getTrackData(trackurl string) (found bool, track *Track, err error) {
+func (store Datastore) getTrackDataByURL(trackurl string) (found bool, track *Track, err error) {
 	found = false
 	track = new(Track)
 	stmt, err := store.DB.Prepare("SELECT id, url, fingerprint, duration FROM track WHERE url = ?")
@@ -53,6 +68,36 @@ func (store Datastore) getTrackData(trackurl string) (found bool, track *Track, 
 	}
 	defer stmt.Close()
 	rows, err := stmt.Query(trackurl)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	result := rows.Next()
+	if (result == false) {
+		return
+	}
+	found = true
+	err = rows.Scan(&track.ID, &track.URL, &track.Fingerprint, &track.Duration)
+	if err != nil {
+		return
+	}
+	return
+}
+
+/**
+ * Gets data about a track for a given ID
+ *
+ */
+func (store Datastore) getTrackDataByID(trackid string) (found bool, track *Track, err error) {
+	found = false
+	track = new(Track)
+	stmt, err := store.DB.Prepare("SELECT id, url, fingerprint, duration FROM track WHERE id = ?")
+	if err != nil {
+		return
+	}
+	defer stmt.Close()
+	rows, err := stmt.Query(trackid)
 	if err != nil {
 		return
 	}
@@ -104,31 +149,39 @@ func (store Datastore) getAllTracks() (tracks []*Track, err error) {
  */
 func writeAllTrackData(store Datastore, w http.ResponseWriter) {
 	tracks, err := store.getAllTracks()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(tracks)
+	writeResponse(w, true, tracks, err)
 }
 
 /**
  * Writes a http response with a JSON representation of a given track
  */
-func writeTrackData(store Datastore, w http.ResponseWriter, trackurl string) {
-	trackfound, track, err := store.getTrackData(trackurl)
+func writeTrackDataByURL(store Datastore, w http.ResponseWriter, trackurl string) {
+	trackfound, track, err := store.getTrackDataByURL(trackurl)
+	writeResponse(w, trackfound, track, err)
+}
+/**
+ * Writes a http response with a JSON representation of a given track
+ */
+func writeTrackDataByID(store Datastore, w http.ResponseWriter, trackid string) {
+	trackfound, track, err := store.getTrackDataByID(trackid)
+	writeResponse(w, trackfound, track, err)
+}
+
+/**
+ * Writes a http response based on some data
+ */
+func writeResponse(w http.ResponseWriter, found bool, data interface{}, err error) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if (!trackfound) {
+	if (!found) {
 		http.Error(w, "Track Not Found", http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(track)
+	json.NewEncoder(w).Encode(data)
 }
 
 /**
@@ -159,16 +212,41 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 					http.Error(w, err.Error(), http.StatusBadRequest)
 					return
 				}
-				err = store.updateTrackData(trackurl, track)
+				err = store.updateTrackDataByURL(trackurl, track)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
 				fallthrough
 			case "GET":
-				writeTrackData(store, w, trackurl)
+				writeTrackDataByURL(store, w, trackurl)
 			default:
 				MethodNotAllowed(w, []string{"GET", "PUT"})
 		}
+	}
+}
+
+/** 
+ * A controller for handling all requests dealing with tracks
+ */
+func (store Datastore) DenormTracksController(w http.ResponseWriter, r *http.Request) {
+	trackid := path.Base(r.URL.Path)
+	switch r.Method {
+		case "PUT":
+			track, err := DecodeTrack(r.Body)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			err = store.updateTrackDataByID(trackid, track)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			fallthrough
+		case "GET":
+			writeTrackDataByID(store, w, trackid)
+		default:
+			MethodNotAllowed(w, []string{"GET", "PUT"})
 	}
 }

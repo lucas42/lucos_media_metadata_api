@@ -14,6 +14,7 @@ import (
  */
 func FrontController(store Datastore) *http.ServeMux {
 	router := http.NewServeMux()
+	router.HandleFunc("/tracks/denorm/", store.DenormTracksController)
 	router.HandleFunc("/tracks", store.TracksController)
 	redirect := http.RedirectHandler("/tracks", 307)
 	router.Handle("/", redirect)
