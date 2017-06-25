@@ -140,3 +140,28 @@ func TestCanUpdateDuration(test *testing.T) {
 	makeRequest(test, "PUT", path, inputBJson, 200, outputBJson, true)
 	makeRequest(test, "GET", path, "", 200, outputBJson, true)
 }
+
+/**
+ * Checks whether a list of all tracks can be returned
+ */
+func TestGetAllTracks(test *testing.T) {
+	track1url := "http://example.org/track/1256"
+	escapedTrack1Url := url.QueryEscape(track1url)
+	track2url := "http://example.org/track/abcdef"
+	escapedTrack2Url := url.QueryEscape(track2url)
+	input1Json := `{"fingerprint": "aoecu1234", "duration": 300}`
+	input2Json := `{"fingerprint": "blahdebo", "duration": 150}`
+	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256"}`
+	output2Json := `{"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef"}`
+	alloutputJson1 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256"}]`
+	alloutputJson2 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256"}, {"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef"}]`
+	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)	
+	path2 := fmt.Sprintf("/tracks?url=%s", escapedTrack2Url)
+	pathall := "/tracks"
+	makeRequest(test, "PUT", path1, input1Json, 200, output1Json, true)
+	makeRequest(test, "GET", path1, "", 200, output1Json, true)
+	makeRequest(test, "GET", pathall, "", 200, alloutputJson1, true)
+	makeRequest(test, "PUT", path2, input2Json, 200, output2Json, true)
+	makeRequest(test, "GET", path2, "", 200, output2Json, true)
+	makeRequest(test, "GET", pathall, "", 200, alloutputJson2, true)
+}

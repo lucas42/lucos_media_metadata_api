@@ -58,12 +58,46 @@ func (store Datastore) getTrackData(trackurl string) (track *Track, err error) {
 }
 
 /**
- * Write a http response with a JSON reprenstation of all tracks
+ * Gets data about all tracks in the database
  *
- * TODO: actually implement.  Likely will require some form of pagination
  */
-func writeAllTrackData(w http.ResponseWriter) {
-	io.WriteString(w, "//TODO: all tracks")
+func (store Datastore) getAllTracks() (tracks []*Track, err error) {
+	tracks = []*Track{}
+	rows, err := store.DB.Query("SELECT url, fingerprint, duration FROM track")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		track := new(Track)
+		err = rows.Scan(&track.URL, &track.Fingerprint, &track.Duration)
+		if err != nil {
+			return
+		}
+		tracks = append(tracks, track)
+	}
+	err = rows.Err()
+	if err != nil {
+		return
+	}
+	return
+}
+
+/**
+ * Write a http response with a JSON representation of all tracks
+ *
+ * TODO: pagination
+ */
+func writeAllTrackData(store Datastore, w http.ResponseWriter) {
+	tracks, err := store.getAllTracks()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(tracks)
 }
 
 /**
@@ -100,7 +134,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 	trackurl := r.URL.Query().Get("url")
 	if (len(trackurl) == 0) {
 		if (r.Method == "GET") {
-			writeAllTrackData(w)
+			writeAllTrackData(store, w)
 		} else {
 			MethodNotAllowed(w, []string{"GET"})
 		}
