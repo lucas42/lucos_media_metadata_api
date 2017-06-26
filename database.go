@@ -40,6 +40,15 @@ func DBInit(dbpath string) (Datastore, error) {
 			return database, err
 		}
 	}
+	if (!database.TableExists("predicate")) {
+		sqlStmt := `
+		CREATE TABLE "predicate" ("id" TEXT PRIMARY KEY NOT NULL);
+		`
+		_, err := database.DB.Exec(sqlStmt)
+		if err != nil {
+			return database, err
+		}
+	}
 	return database, nil
 }
 

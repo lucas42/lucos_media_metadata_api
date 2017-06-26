@@ -18,6 +18,7 @@ func FrontController(store Datastore) *http.ServeMux {
 	router.HandleFunc("/tracks/denorm/", store.DenormTracksController)
 	router.HandleFunc("/tracks", store.TracksController)
 	router.HandleFunc("/globals/", store.GlobalsController)
+	router.HandleFunc("/predicates/", store.PredicatesController)
 	redirect := http.RedirectHandler("/tracks", 307)
 	router.Handle("/", redirect)
 	return router

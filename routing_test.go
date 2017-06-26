@@ -208,3 +208,24 @@ func TestGlobals(test *testing.T) {
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
 }
+
+/**
+ * Checks whether new predicates can be added
+ */
+func TestAddPredicate(test *testing.T) {
+	clearData()
+	allpath := "/predicates"
+	path1 := "/predicates/artist"
+	inputJson := `{}`
+	output1Json := `{"id":"artist"}`
+	//output2Json := `{"id":"artist"}`
+	list1Json := `[{"id":"artist"}]`
+	//list2Json := `[{"id":"album"},{"id":"artist"}]` // predicates sorted alphabetically
+	makeRequest(test, "GET", path1, "", 404, "Predicate Not Found\n", false)
+	makeRequest(test, "PUT", path1, inputJson, 200, output1Json, true)
+	makeRequest(test, "GET", path1, "", 200, output1Json, true)
+	makeRequest(test, "GET", allpath, "", 200, list1Json, true)
+	restartServer()
+	makeRequest(test, "GET", path1, "", 200, output1Json, true)
+
+}
