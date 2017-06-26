@@ -149,7 +149,7 @@ func (store Datastore) getAllTracks() (tracks []*Track, err error) {
  */
 func writeAllTrackData(store Datastore, w http.ResponseWriter) {
 	tracks, err := store.getAllTracks()
-	writeResponse(w, true, tracks, err)
+	writeResponse(w, true, "Track", tracks, err)
 }
 
 /**
@@ -157,14 +157,14 @@ func writeAllTrackData(store Datastore, w http.ResponseWriter) {
  */
 func writeTrackDataByURL(store Datastore, w http.ResponseWriter, trackurl string) {
 	trackfound, track, err := store.getTrackDataByURL(trackurl)
-	writeResponse(w, trackfound, track, err)
+	writeResponse(w, trackfound, "Track", track, err)
 }
 /**
  * Writes a http response with a JSON representation of a given track
  */
 func writeTrackDataByID(store Datastore, w http.ResponseWriter, trackid string) {
 	trackfound, track, err := store.getTrackDataByID(trackid)
-	writeResponse(w, trackfound, track, err)
+	writeResponse(w, trackfound, "Track", track, err)
 }
 
 /**

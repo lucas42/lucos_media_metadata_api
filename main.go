@@ -26,13 +26,14 @@ func FrontController(store Datastore) *http.ServeMux {
 /**
  * Writes a http response based on some data
  */
-func writeResponse(w http.ResponseWriter, found bool, data interface{}, err error) {
+func writeResponse(w http.ResponseWriter, found bool, typename string, data interface{}, err error) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if (!found) {
-		http.Error(w, "Track Not Found", http.StatusNotFound)
+		message := typename + " Not Found"
+		http.Error(w, message, http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

@@ -202,7 +202,7 @@ func TestGlobals(test *testing.T) {
 	path := "/globals/isXmas"
 	inputJson := `{"value":"yes"}`
 	outputJson := `{"key":"isXmas", "value":"yes"}`
-	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "GET", path, "", 404, "Global Variable Not Found\n", false)
 	makeRequest(test, "PUT", path, inputJson, 200, outputJson, true)
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
 	restartServer()
