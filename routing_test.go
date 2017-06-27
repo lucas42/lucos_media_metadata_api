@@ -200,13 +200,13 @@ func TestGetAllTracks(test *testing.T) {
 func TestGlobals(test *testing.T) {
 	clearData()
 	path := "/globals/isXmas"
-	inputJson := `{"value":"yes"}`
-	outputJson := `{"key":"isXmas", "value":"yes"}`
 	makeRequest(test, "GET", path, "", 404, "Global Variable Not Found\n", false)
-	makeRequest(test, "PUT", path, inputJson, 200, outputJson, true)
-	makeRequest(test, "GET", path, "", 200, outputJson, true)
+	makeRequest(test, "PUT", path, "yes", 200, "yes", false)
+	makeRequest(test, "GET", path, "", 200, "yes", false)
 	restartServer()
-	makeRequest(test, "GET", path, "", 200, outputJson, true)
+	makeRequest(test, "GET", path, "", 200, "yes", false)
+	makeRequest(test, "PUT", path, "notyet", 200, "notyet", false)
+	makeRequest(test, "GET", path, "", 200, "notyet", false)
 }
 
 /**
@@ -218,9 +218,7 @@ func TestAddPredicate(test *testing.T) {
 	path1 := "/predicates/artist"
 	inputJson := `{}`
 	output1Json := `{"id":"artist"}`
-	//output2Json := `{"id":"artist"}`
 	list1Json := `[{"id":"artist"}]`
-	//list2Json := `[{"id":"album"},{"id":"artist"}]` // predicates sorted alphabetically
 	makeRequest(test, "GET", path1, "", 404, "Predicate Not Found\n", false)
 	makeRequest(test, "PUT", path1, inputJson, 200, output1Json, true)
 	makeRequest(test, "GET", path1, "", 200, output1Json, true)
