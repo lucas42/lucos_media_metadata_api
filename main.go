@@ -19,13 +19,14 @@ func FrontController(store Datastore) *http.ServeMux {
 	router.HandleFunc("/tracks", store.TracksController)
 	router.HandleFunc("/globals/", store.GlobalsController)
 	router.HandleFunc("/predicates/", store.PredicatesController)
+	router.HandleFunc("/tags/", store.TagsController)
 	redirect := http.RedirectHandler("/tracks", 307)
 	router.Handle("/", redirect)
 	return router
 }
 
 /**
- * Writes a http response based on some data
+ * Writes a http JSON response based on some data
  */
 func writeResponse(w http.ResponseWriter, found bool, typename string, data interface{}, err error) {
 	if err != nil {
@@ -40,6 +41,23 @@ func writeResponse(w http.ResponseWriter, found bool, typename string, data inte
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(data)
+}
+/**
+ * Writes a http plain text response based on string
+ */
+func writePlainResponse(w http.ResponseWriter, found bool, typename string, data string, err error) {
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if (!found) {
+		message := typename + " Not Found"
+		http.Error(w, message, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(data))
 }
 
 

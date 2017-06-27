@@ -50,7 +50,7 @@ func (store Datastore) createPredicate(id string) (err error) {
  */
 func (store Datastore) getAllPredicates() (predicates []*Predicate, err error) {
 	predicates = []*Predicate{}
-	rows, err := store.DB.Query("SELECT id FROM predicate")
+	rows, err := store.DB.Query("SELECT id FROM predicate ORDER BY id")
 	if err != nil {
 		return
 	}
