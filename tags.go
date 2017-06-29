@@ -136,16 +136,26 @@ func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			err = store.updateTag(trackid, predicate, string(value))
-			if err != nil {
-				var status int
-				if (err.Error() == "Unknown Track") {
-					status = http.StatusNotFound
-				} else {
-					status = http.StatusInternalServerError
+			bypassUpdate := false
+			if (r.Header.Get("If-None-Match") == "*") {
+				bypassUpdate, _, err = store.getTagValue(trackid, predicate)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
 				}
-				http.Error(w, err.Error(), status)
-				return
+			}
+			if (!bypassUpdate) {
+				err = store.updateTag(trackid, predicate, string(value))
+				if err != nil {
+					var status int
+					if (err.Error() == "Unknown Track") {
+						status = http.StatusNotFound
+					} else {
+						status = http.StatusInternalServerError
+					}
+					http.Error(w, err.Error(), status)
+					return
+				}
 			}
 			fallthrough
 		case "GET":

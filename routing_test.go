@@ -61,9 +61,8 @@ func AreEqualJSON(s1, s2 string) (bool, error) {
 }
 
 /**
- * Makes a http request and compares the response to some expected values
+ * Constructs a http request and compares the response to some expected values
  *
- * (Probably not the most go-eque way to do this, but it works for me)
  */
 func makeRequest(t *testing.T, method string, path string, requestBody string, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
     reader := strings.NewReader(requestBody)
@@ -72,7 +71,15 @@ func makeRequest(t *testing.T, method string, path string, requestBody string, e
     if err != nil {
         t.Error(err)
     }
-
+    makeRawRequest(t, request, expectedResponseCode, expectedResponseBody, expectJSON)
+}
+/**
+ * Makes a http request and compares the response to some expected values
+ *
+ * (Probably not the most go-eque way to do this, but it works for me)
+ */
+func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
+	url := request.URL.String()
     response, err := http.DefaultClient.Do(request)
     if err != nil {
         t.Error(err)
@@ -111,7 +118,7 @@ func makeRequest(t *testing.T, method string, path string, requestBody string, e
 /**
  * Checks whether a track can be edited based on its url and retrieved later
  */
-func TestCanEditTrack(test *testing.T) {
+func TestCanEditTrackByUrl(test *testing.T) {
 	clearData()
 	trackurl := "http://example.org/track/1256"
 	escapedTrackUrl := url.QueryEscape(trackurl)
@@ -268,6 +275,40 @@ func TestAddTag(test *testing.T) {
 	makeRequest(test, "GET", allpredicates, "", 200, `[{"id":"album"},{"id":"artist"}]`, true)
 	makeRequest(test, "GET", alltagsfortrack, "", 200, `{"album": "un","artist":"Chumbawamba"}`, true)
 
+}
+/**
+ * Checks whether new tags can be added
+ */
+func TestAddTagIfMissing(test *testing.T) {
+
+	// Create track to add tag to
+	trackurl := "http://example.org/track/98765"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	trackInput := `{"fingerprint": "aoecu1234", "duration": 300}`
+	trackOutput := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1}`
+	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+	makeRequest(test, "PUT", trackpath, trackInput, 200, trackOutput, true)
+
+	// Add Tag (this should work as tag doesn't yet exist)
+	path := "/tags/1/rating"
+	reader := strings.NewReader("5")
+    request, err := http.NewRequest("PUT", server.URL + path, reader)
+    if err != nil {
+        test.Error(err)
+    }
+    request.Header.Add("If-None-Match", "*")
+    makeRawRequest(test, request, 200, "5", false)
+	makeRequest(test, "GET", path, "", 200, "5", false)
+
+	// Update Tag (this shouldn't have any effect as tag already exists)
+	reader = strings.NewReader("2")
+    request, err = http.NewRequest("PUT", server.URL + path, reader)
+    if err != nil {
+        test.Error(err)
+    }
+    request.Header.Add("If-None-Match", "*")
+    makeRawRequest(test, request, 200, "5", false)
+	makeRequest(test, "GET", path, "", 200, "5", false)
 }
 /**
  * Checks whether we error correctly for tags being added to unknown tracks
