@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"encoding/json"
 	"path"
+	"strconv"
 )
 
 /**
@@ -15,6 +16,7 @@ type Track struct {
 	Duration    int `json:"duration"`
 	URL         string `json:"url"`
 	ID          int `json:"trackid"`
+	Tags        map[string]string `json:"tags"`
 }
 
 /**
@@ -45,7 +47,7 @@ func (store Datastore) updateTrackDataByURL(trackurl string, track Track) (err e
  * Updates data about a track for a given trackid
  *
  */
-func (store Datastore) updateTrackDataByID(trackid string, track Track) (err error) {
+func (store Datastore) updateTrackDataByID(trackid int, track Track) (err error) {
 	stmt, err := store.DB.Prepare("UPDATE TRACK SET fingerprint = ?, duration = ?, url = ? WHERE id = ?")
 	if err != nil {
 		return err
@@ -82,6 +84,7 @@ func (store Datastore) getTrackDataByURL(trackurl string) (found bool, track *Tr
 	if err != nil {
 		return
 	}
+	track.Tags, err = store.getAllTagsForTrack(track.ID)
 	return
 }
 
@@ -89,7 +92,7 @@ func (store Datastore) getTrackDataByURL(trackurl string) (found bool, track *Tr
  * Gets data about a track for a given ID
  *
  */
-func (store Datastore) getTrackDataByID(trackid string) (found bool, track *Track, err error) {
+func (store Datastore) getTrackDataByID(trackid int) (found bool, track *Track, err error) {
 	found = false
 	track = new(Track)
 	stmt, err := store.DB.Prepare("SELECT id, url, fingerprint, duration FROM track WHERE id = ?")
@@ -112,6 +115,7 @@ func (store Datastore) getTrackDataByID(trackid string) (found bool, track *Trac
 	if err != nil {
 		return
 	}
+	track.Tags, err = store.getAllTagsForTrack(track.ID)
 	return
 }
 
@@ -130,6 +134,10 @@ func (store Datastore) getAllTracks() (tracks []*Track, err error) {
 	for rows.Next() {
 		track := new(Track)
 		err = rows.Scan(&track.ID, &track.URL, &track.Fingerprint, &track.Duration)
+		if err != nil {
+			return
+		}
+		track.Tags, err = store.getAllTagsForTrack(track.ID)
 		if err != nil {
 			return
 		}
@@ -162,7 +170,7 @@ func writeTrackDataByURL(store Datastore, w http.ResponseWriter, trackurl string
 /**
  * Writes a http response with a JSON representation of a given track
  */
-func writeTrackDataByID(store Datastore, w http.ResponseWriter, trackid string) {
+func writeTrackDataByID(store Datastore, w http.ResponseWriter, trackid int) {
 	trackfound, track, err := store.getTrackDataByID(trackid)
 	writeResponse(w, trackfound, "Track", track, err)
 }
@@ -213,7 +221,11 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
  * A controller for handling all requests dealing with denorm tracks
  */
 func (store Datastore) DenormTracksController(w http.ResponseWriter, r *http.Request) {
-	trackid := path.Base(r.URL.Path)
+	trackid, err := strconv.Atoi(path.Base(r.URL.Path))
+	if err != nil {
+		http.Error(w, "Track ID must be an integer", http.StatusBadRequest)
+		return
+	}
 	switch r.Method {
 		case "PUT":
 			track, err := DecodeTrack(r.Body)

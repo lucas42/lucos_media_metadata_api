@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -11,7 +12,7 @@ import (
  * Get the value for a given tag
  *
  */
-func (store Datastore) getTagValue(trackid string, predicate string) (found bool, value string, err error) {
+func (store Datastore) getTagValue(trackid int, predicate string) (found bool, value string, err error) {
 	found = false
 	stmt, err := store.DB.Prepare("SELECT value FROM tag WHERE trackid = ? AND predicateid = ?")
 	if err != nil {
@@ -40,7 +41,7 @@ func (store Datastore) getTagValue(trackid string, predicate string) (found bool
  * Creates or updates a tag
  *
  */
-func (store Datastore) updateTag(trackid string, predicate string, value string) (err error) {
+func (store Datastore) updateTag(trackid int, predicate string, value string) (err error) {
 	trackFound, _ , err := store.getTrackDataByID(trackid)
 	if err != nil { return }
 	if (!trackFound) {
@@ -64,7 +65,7 @@ func (store Datastore) updateTag(trackid string, predicate string, value string)
  * Gets all the tags for a given track
  *
  */
-func (store Datastore) getAllTagsForTrack(trackid string) (tags map[string]string, err error) {
+func (store Datastore) getAllTagsForTrack(trackid int) (tags map[string]string, err error) {
 	tags = make(map[string]string)
 	stmt, err := store.DB.Prepare("SELECT predicateid, value FROM tag WHERE trackid = ?")
 	if err != nil {
@@ -97,7 +98,7 @@ func (store Datastore) getAllTagsForTrack(trackid string) (tags map[string]strin
 /**
  * Writes a http response with the value of a tag
  */ 
-func writeTag(store Datastore, w http.ResponseWriter, trackid string, predicate string) {
+func writeTag(store Datastore, w http.ResponseWriter, trackid int, predicate string) {
 	found, value, err := store.getTagValue(trackid, predicate)
 	writePlainResponse(w, found, "Tag", value, err)
 }
@@ -105,7 +106,7 @@ func writeTag(store Datastore, w http.ResponseWriter, trackid string, predicate 
 /**
  * Writes a http response with a JSON representation of all tags for a given track
  */
-func writeAllTagsForTrack(store Datastore, w http.ResponseWriter, trackid string) {
+func writeAllTagsForTrack(store Datastore, w http.ResponseWriter, trackid int) {
 	tags, err := store.getAllTagsForTrack(trackid)
 	writeResponse(w, true, "Tag", tags, err)
 }
@@ -119,7 +120,11 @@ func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/tracks", http.StatusFound)
 		return
 	}
-	trackid := pathparts[1]
+	trackid, err := strconv.Atoi(pathparts[1])
+	if err != nil {
+		http.Error(w, "Track ID must be an integer", http.StatusBadRequest)
+		return
+	}
 	if (len(pathparts) < 3) {
 		if (r.Method == "GET") {
 			writeAllTagsForTrack(store, w, trackid)
