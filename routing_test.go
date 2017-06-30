@@ -150,6 +150,24 @@ func TestCanUpdateDuration(test *testing.T) {
 }
 
 /**
+ * Checks whether a track can be edited based on its fingerprint and retrieved later
+ */
+func TestCanEditTrackByFingerprint(test *testing.T) {
+	clearData()
+	inputJson := `{"url": "http://example.org/track/1256", "duration": 300}`
+	outputJson1 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}`
+	outputJson2 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/cdef", "trackid": 1, "tags": {}}`
+	path := "/tracks?fingerprint=aoecu1234"
+	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "PUT", path, inputJson, 200, outputJson1, true)
+	makeRequest(test, "GET", path, "", 200, outputJson1, true)
+	restartServer()
+	makeRequest(test, "GET", path, "", 200, outputJson1, true)
+	makeRequest(test, "PUT", path, `{"url": "http://example.org/track/cdef", "duration": 300}`, 200, outputJson2, true)
+	makeRequest(test, "GET", path, "", 200, outputJson2, true)
+}
+
+/**
  * Checks whether a track can be updated using its trackid
  */
 func TestCanUpdateById(test *testing.T) {
