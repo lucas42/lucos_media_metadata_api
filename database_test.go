@@ -15,5 +15,14 @@ func TestDatabaseSetup(test *testing.T) {
 	if (!db.TableExists("track")) {
 		test.Error("track table not created")
 	}
+	if (!db.TableExists("predicate")) {
+		test.Error("predicate table not created")
+	}
+	if (!db.TableExists("tag")) {
+		test.Error("tag table not created")
+	}
+	if (!db.TableExists("global")) {
+		test.Error("global table not created")
+	}
 	os.Remove(dbpath)
 }

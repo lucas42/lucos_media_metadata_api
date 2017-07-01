@@ -24,7 +24,14 @@ func DBInit(dbpath string) (database Datastore, err error) {
 	if err != nil { return }
 	if (!database.TableExists("track")) {
 		sqlStmt := `
-		CREATE TABLE "track" ("id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "fingerprint" TEXT UNIQUE, "url" TEXT UNIQUE, "duration" INTEGER);
+		CREATE TABLE "track" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+			"fingerprint" TEXT UNIQUE, 
+			"url" TEXT UNIQUE, 
+			"duration" INTEGER,
+			"weighting" INTEGER,
+			"cum_weighting" INTEGER
+		);
 		`
 		_, err = database.DB.Exec(sqlStmt)
 		if err != nil { return }
@@ -32,14 +39,19 @@ func DBInit(dbpath string) (database Datastore, err error) {
 
 	if (!database.TableExists("global")) {
 		sqlStmt := `
-		CREATE TABLE "global" ("key" TEXT PRIMARY KEY NOT NULL, "value" TEXT);
+		CREATE TABLE "global" (
+			"key" TEXT PRIMARY KEY NOT NULL, 
+			"value" TEXT
+		);
 		`
 		_, err = database.DB.Exec(sqlStmt)
 		if err != nil { return }
 	}
 	if (!database.TableExists("predicate")) {
 		sqlStmt := `
-		CREATE TABLE "predicate" ("id" TEXT PRIMARY KEY NOT NULL);
+		CREATE TABLE "predicate" (
+			"id" TEXT PRIMARY KEY NOT NULL
+		);
 		`
 		_, err = database.DB.Exec(sqlStmt)
 		if err != nil { return }
