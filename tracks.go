@@ -4,8 +4,8 @@ import (
 	"io"
 	"net/http"
 	"encoding/json"
-	"path"
 	"strconv"
+	"strings"
 )
 
 /**
@@ -177,7 +177,32 @@ func DecodeTrack(r io.Reader) (Track, error) {
 func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) {
 	trackurl := r.URL.Query().Get("url")
 	fingerprint := r.URL.Query().Get("fingerprint")
-	if (len(trackurl) > 0) {
+	pathparts := strings.Split(strings.Trim(r.URL.Path,"/"), "/")
+	if (len(pathparts) > 1) {
+		trackid, err := strconv.Atoi(pathparts[1])
+		if err != nil {
+			http.Error(w, "Track ID must be an integer", http.StatusBadRequest)
+			return
+		}
+		switch r.Method {
+			case "PUT":
+				track, err := DecodeTrack(r.Body)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				err = store.updateTrackDataByID(trackid, track)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				fallthrough
+			case "GET":
+				writeTrackDataByField(store, w, "id", trackid)
+			default:
+				MethodNotAllowed(w, []string{"GET", "PUT"})
+		}
+	} else if (len(trackurl) > 0) {
 		switch r.Method {
 			case "PUT":
 				track, err := DecodeTrack(r.Body)
@@ -221,34 +246,5 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 		} else {
 			MethodNotAllowed(w, []string{"GET"})
 		}
-	}
-}
-
-/** 
- * A controller for handling all requests dealing with denorm tracks
- */
-func (store Datastore) DenormTracksController(w http.ResponseWriter, r *http.Request) {
-	trackid, err := strconv.Atoi(path.Base(r.URL.Path))
-	if err != nil {
-		http.Error(w, "Track ID must be an integer", http.StatusBadRequest)
-		return
-	}
-	switch r.Method {
-		case "PUT":
-			track, err := DecodeTrack(r.Body)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			err = store.updateTrackDataByID(trackid, track)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			fallthrough
-		case "GET":
-			writeTrackDataByField(store, w, "id", trackid)
-		default:
-			MethodNotAllowed(w, []string{"GET", "PUT"})
 	}
 }

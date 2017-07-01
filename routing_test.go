@@ -182,15 +182,15 @@ func TestCanUpdateById(test *testing.T) {
 	outputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 1, "tags": {}}`
 	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)	
 	path2 := fmt.Sprintf("/tracks?url=%s", escapedTrack2Url)
-	denormpath := "/tracks/denorm/1"
+	path := "/tracks/1"
 	makeRequest(test, "GET", path1, "", 404, "Track Not Found\n", false)
-	makeRequest(test, "GET", denormpath, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path1, inputAJson, 200, outputAJson, true)
 	makeRequest(test, "GET", path1, "", 200, outputAJson, true)
-	makeRequest(test, "PUT", denormpath, inputBJson, 200, outputBJson, true)
+	makeRequest(test, "PUT", path, inputBJson, 200, outputBJson, true)
 	makeRequest(test, "GET", path1, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "GET", path2, "", 200, outputBJson, true)
-	makeRequest(test, "GET", denormpath, "", 200, outputBJson, true)
+	makeRequest(test, "GET", path, "", 200, outputBJson, true)
 }
 
 /**
@@ -198,7 +198,7 @@ func TestCanUpdateById(test *testing.T) {
  */
 func TestInvalidTrackIDs(test *testing.T) {
 	clearData()
-	makeRequest(test, "GET", "/tracks/denorm/blah", "", 400, "Track ID must be an integer\n", false)
+	makeRequest(test, "GET", "/tracks/blah", "", 400, "Track ID must be an integer\n", false)
 	makeRequest(test, "GET", "/tags/four/artist", "", 400, "Track ID must be an integer\n", false)
 }
 
