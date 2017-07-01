@@ -1,7 +1,7 @@
 package main
 
 import (
-	"database/sql"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 )
@@ -10,12 +10,12 @@ import (
  * A struct for wrapping a database
  */
 type Datastore struct {
-	DB *sql.DB
+	DB *sqlx.DB
 }
 
 
 func DBInit(dbpath string) (database Datastore, err error) {
-	db, err := sql.Open("sqlite3", dbpath)
+	db, err := sqlx.Open("sqlite3", dbpath)
 	if err != nil {
 		return
 	}

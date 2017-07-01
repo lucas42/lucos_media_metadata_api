@@ -25,22 +25,14 @@ type Track struct {
  */
 func (store Datastore) updateTrackDataByURL(trackurl string, track Track) (err error) {
 	trackExists, _, err := store.getTrackDataByField("url", trackurl)
-	if err != nil {
-		return err
-	}
-	query := ""
+	if err != nil { return }
+	track.URL = trackurl
 	if (trackExists) {
-		query = "UPDATE TRACK SET fingerprint = ?, duration = ? WHERE url = ?"
+		_, err = store.DB.NamedExec("UPDATE TRACK SET duration = :duration, url = :url, fingerprint = :fingerprint WHERE url = :url", track)
 	} else {
-		query = "INSERT INTO track(fingerprint, duration, url) values(?, ?, ?)"
+		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
 	}
-	stmt, err := store.DB.Prepare(query)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(track.Fingerprint, track.Duration, trackurl)
-	return err
+	return
 }
 
 /**
@@ -49,22 +41,14 @@ func (store Datastore) updateTrackDataByURL(trackurl string, track Track) (err e
  */
 func (store Datastore) updateTrackDataByFingerprint(fingerprint string, track Track) (err error) {
 	trackExists, _, err := store.getTrackDataByField("fingerprint", fingerprint)
-	if err != nil {
-		return err
-	}
-	query := ""
+	if err != nil { return }
+	track.Fingerprint = fingerprint
 	if (trackExists) {
-		query = "UPDATE TRACK SET duration = ?, url = ? WHERE fingerprint = ?"
+		_, err = store.DB.NamedExec("UPDATE TRACK SET duration = :duration, url = :url, fingerprint = :fingerprint WHERE fingerprint = :fingerprint", track)
 	} else {
-		query = "INSERT INTO track(duration, url, fingerprint) values(?, ?, ?)"
+		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
 	}
-	stmt, err := store.DB.Prepare(query)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(track.Duration, track.URL, fingerprint)
-	return err
+	return
 }
 
 /**
@@ -81,33 +65,22 @@ func (store Datastore) updateTrackDataByID(trackid int, track Track) (err error)
 	return err
 }
 
+
 /**
  * Gets data about a track for a given value of a given field
  *
  */
-func (store Datastore) getTrackDataByField(field string, value interface{}) (found bool, track *Track, err error) {
-	found = false
-	track = new(Track)
-	stmt, err := store.DB.Prepare("SELECT id, url, fingerprint, duration FROM track WHERE "+field+" = ?")
-	if err != nil {
-		return
-	}
-	defer stmt.Close()
-	rows, err := stmt.Query(value)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	result := rows.Next()
-	if (result == false) {
-		return
-	}
+func (store Datastore) getTrackDataByField(field string, value interface{}) (found bool, track Track, err error) {
 	found = true
-	err = rows.Scan(&track.ID, &track.URL, &track.Fingerprint, &track.Duration)
-	if err != nil {
-		return
-	}
+	track = Track{}
+    err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration FROM track WHERE "+field+"=$1", value)
+    if err != nil {
+    	if (err.Error() == "sql: no rows in result set") { 
+    		found = false
+    		err = nil
+    	}
+    	return
+    }
 	track.Tags, err = store.getAllTagsForTrack(track.ID)
 	return
 }
@@ -117,29 +90,16 @@ func (store Datastore) getTrackDataByField(field string, value interface{}) (fou
  * Gets data about all tracks in the database
  *
  */
-func (store Datastore) getAllTracks() (tracks []*Track, err error) {
-	tracks = []*Track{}
-	rows, err := store.DB.Query("SELECT id, url, fingerprint, duration FROM track")
-	if err != nil {
-		return
-	}
-	defer rows.Close()
+func (store Datastore) getAllTracks() (tracks []Track, err error) {
+	tracks = []Track{}
+	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration FROM track")
+	if (err != nil) { return }
 
-	for rows.Next() {
-		track := new(Track)
-		err = rows.Scan(&track.ID, &track.URL, &track.Fingerprint, &track.Duration)
-		if err != nil {
-			return
-		}
+	// Loop through all the tracks and add tags for each one
+	for i := range tracks {
+		track := &tracks[i]
 		track.Tags, err = store.getAllTagsForTrack(track.ID)
-		if err != nil {
-			return
-		}
-		tracks = append(tracks, track)
-	}
-	err = rows.Err()
-	if err != nil {
-		return
+		if (err != nil) { return }
 	}
 	return
 }
@@ -248,3 +208,4 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 }
+
