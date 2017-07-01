@@ -20,51 +20,19 @@ type Track struct {
 }
 
 /**
- * Updates data about a track for a given URL
+ * Updates data about a track based on a given field
  *
  */
-func (store Datastore) updateTrackDataByURL(trackurl string, track Track) (err error) {
-	trackExists, _, err := store.getTrackDataByField("url", trackurl)
+func (store Datastore) updateTrackDataByField(field string, value interface{}, track Track) (err error) {
+	trackExists, _, err := store.getTrackDataByField(field, value)
 	if err != nil { return }
-	track.URL = trackurl
 	if (trackExists) {
-		_, err = store.DB.NamedExec("UPDATE TRACK SET duration = :duration, url = :url, fingerprint = :fingerprint WHERE url = :url", track)
+		_, err = store.DB.NamedExec("UPDATE TRACK SET duration = :duration, url = :url, fingerprint = :fingerprint WHERE "+field+" = :"+field, track)
 	} else {
 		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
 	}
 	return
 }
-
-/**
- * Updates data about a track for a given Fingerprint
- *
- */
-func (store Datastore) updateTrackDataByFingerprint(fingerprint string, track Track) (err error) {
-	trackExists, _, err := store.getTrackDataByField("fingerprint", fingerprint)
-	if err != nil { return }
-	track.Fingerprint = fingerprint
-	if (trackExists) {
-		_, err = store.DB.NamedExec("UPDATE TRACK SET duration = :duration, url = :url, fingerprint = :fingerprint WHERE fingerprint = :fingerprint", track)
-	} else {
-		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
-	}
-	return
-}
-
-/**
- * Updates data about a track for a given trackid
- *
- */
-func (store Datastore) updateTrackDataByID(trackid int, track Track) (err error) {
-	stmt, err := store.DB.Prepare("UPDATE TRACK SET fingerprint = ?, duration = ?, url = ? WHERE id = ?")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(track.Fingerprint, track.Duration, track.URL, trackid)
-	return err
-}
-
 
 /**
  * Gets data about a track for a given value of a given field
@@ -138,74 +106,58 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 	trackurl := r.URL.Query().Get("url")
 	fingerprint := r.URL.Query().Get("fingerprint")
 	pathparts := strings.Split(strings.Trim(r.URL.Path,"/"), "/")
+
+	var trackid int
+	var filtervalue interface{}
+	var filterfield string
 	if (len(pathparts) > 1) {
-		trackid, err := strconv.Atoi(pathparts[1])
+		id, err := strconv.Atoi(pathparts[1])
 		if err != nil {
 			http.Error(w, "Track ID must be an integer", http.StatusBadRequest)
 			return
 		}
-		switch r.Method {
-			case "PUT":
-				track, err := DecodeTrack(r.Body)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				err = store.updateTrackDataByID(trackid, track)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				fallthrough
-			case "GET":
-				writeTrackDataByField(store, w, "id", trackid)
-			default:
-				MethodNotAllowed(w, []string{"GET", "PUT"})
-		}
+		filterfield = "id"
+		filtervalue = pathparts[1]
+		trackid = id
 	} else if (len(trackurl) > 0) {
-		switch r.Method {
-			case "PUT":
-				track, err := DecodeTrack(r.Body)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				err = store.updateTrackDataByURL(trackurl, track)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				fallthrough
-			case "GET":
-				writeTrackDataByField(store, w, "url", trackurl)
-			default:
-				MethodNotAllowed(w, []string{"GET", "PUT"})
-		}
+		filterfield = "url"
+		filtervalue = trackurl
 	} else if (len(fingerprint) > 0) {
-		switch r.Method {
-			case "PUT":
-				track, err := DecodeTrack(r.Body)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				err = store.updateTrackDataByFingerprint(fingerprint, track)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				fallthrough
-			case "GET":
-				writeTrackDataByField(store, w, "fingerprint", fingerprint)
-			default:
-				MethodNotAllowed(w, []string{"GET", "PUT"})
-		}
-	} else {
+		filterfield = "fingerprint"
+		filtervalue = fingerprint
+	}
+	if (filterfield == "") {
 		if (r.Method == "GET") {
 			writeAllTrackData(store, w)
 		} else {
 			MethodNotAllowed(w, []string{"GET"})
 		}
+	} else {
+		switch r.Method {
+			case "PUT":
+				track, err := DecodeTrack(r.Body)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				switch filterfield {
+					case "id":
+						track.ID = trackid
+					case "url":
+						track.URL = trackurl
+					case "fingerprint":
+						track.Fingerprint = fingerprint
+				}
+				err = store.updateTrackDataByField(filterfield, filtervalue, track)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				fallthrough
+			case "GET":
+				writeTrackDataByField(store, w, filterfield, filtervalue)
+			default:
+				MethodNotAllowed(w, []string{"GET", "PUT"})
+		}
 	}
 }
-
