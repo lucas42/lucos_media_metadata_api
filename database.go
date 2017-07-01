@@ -29,8 +29,8 @@ func DBInit(dbpath string) (database Datastore, err error) {
 			"fingerprint" TEXT UNIQUE, 
 			"url" TEXT UNIQUE, 
 			"duration" INTEGER,
-			"weighting" INTEGER,
-			"cum_weighting" INTEGER
+			"weighting" INTEGER NOT NULL DEFAULT 0,
+			"cum_weighting" INTEGER NOT NULL DEFAULT 0
 		);
 		`
 		_, err = database.DB.Exec(sqlStmt)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"io/ioutil"
 	"net/http"
 	"encoding/json"
 	"strconv"
@@ -53,6 +54,28 @@ func (store Datastore) getTrackDataByField(field string, value interface{}) (fou
 	return
 }
 
+/**
+ * Sets the weighting for a given track
+ *
+ */
+func (store Datastore) setTrackWeighting(trackid int, weighting int) (err error) {
+	_, err = store.DB.Exec("UPDATE track SET weighting = $1 WHERE id = $2", weighting, trackid)
+	return
+}
+
+/**
+ * Gets the weighting of a given track
+ *
+ */
+func (store Datastore) getTrackWeighting(trackid int) (trackfound bool, weighting int, err error) {
+	trackfound = true
+    err = store.DB.Get(&weighting, "SELECT weighting FROM track WHERE id=$1", trackid)
+    if (err != nil  && err.Error() == "sql: no rows in result set") { 
+		trackfound = false
+		err = nil
+    }
+    return
+}
 
 /**
  * Gets data about all tracks in the database
@@ -88,6 +111,15 @@ func writeAllTrackData(store Datastore, w http.ResponseWriter) {
 func writeTrackDataByField(store Datastore, w http.ResponseWriter, field string, value interface{}) {
 	trackfound, track, err := store.getTrackDataByField(field, value)
 	writeResponse(w, trackfound, "Track", track, err)
+}
+
+/**
+ * Writes a http response with the weighting of a given track
+ */
+func writeWeighting(store Datastore, w http.ResponseWriter, trackid int) {
+	trackfound, weighting, err := store.getTrackWeighting(trackid)
+	weightingval := strconv.Itoa(weighting)
+	writePlainResponse(w, trackfound, "Track", weightingval, err)
 }
 
 /**
@@ -131,6 +163,35 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 			writeAllTrackData(store, w)
 		} else {
 			MethodNotAllowed(w, []string{"GET"})
+		}
+	} else if (len(pathparts) > 2) {
+		switch pathparts[2] {
+			case "weighting":
+				switch r.Method {
+					case "PUT":
+						body, err := ioutil.ReadAll(r.Body)
+						if err != nil {
+							http.Error(w, err.Error(), http.StatusInternalServerError)
+							return
+						}
+						weighting, err := strconv.Atoi(string(body))
+						if err != nil {
+							http.Error(w, "Weighting must be an integer", http.StatusBadRequest)
+							return
+						}
+						err = store.setTrackWeighting(trackid, weighting)
+						if err != nil {
+							http.Error(w, err.Error(), http.StatusInternalServerError)
+							return
+						}
+						fallthrough
+					case "GET":
+						writeWeighting(store, w, trackid)
+					default:
+						MethodNotAllowed(w, []string{"GET", "PUT"})
+				}
+			default:
+				http.Error(w, "Track endpoint Not Found", http.StatusNotFound)
 		}
 	} else {
 		switch r.Method {

@@ -199,6 +199,7 @@ func TestCanUpdateById(test *testing.T) {
 func TestInvalidTrackIDs(test *testing.T) {
 	clearData()
 	makeRequest(test, "GET", "/tracks/blah", "", 400, "Track ID must be an integer\n", false)
+	makeRequest(test, "GET", "/tracks/blah/weighting", "", 400, "Track ID must be an integer\n", false)
 	makeRequest(test, "GET", "/tags/four/artist", "", 400, "Track ID must be an integer\n", false)
 }
 
@@ -349,4 +350,31 @@ func TestAddTagIfMissing(test *testing.T) {
 func TestAddTagForUnknownTrack(test *testing.T) {
 	clearData()
 	makeRequest(test, "PUT", "/tags/1/artist", "The Corrs", 404, "Unknown Track\n", false)
+}
+
+
+/**
+ * Checks whether a track can have its weighting updated
+ */
+func TestCanUpdateWeighting(test *testing.T) {
+	clearData()
+	path := "/tracks/1/weighting"
+	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
+
+	// Create track
+	trackurl := "http://example.org/track/eui4536"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/eui4536", "trackid": 1, "tags": {}}`
+	makeRequest(test, "PUT", trackpath, `{"fingerprint": "aoecu1234", "duration": 300}`, 200, outputJson, true)
+	
+	makeRequest(test, "GET", path, "", 200, "0", false)
+	makeRequest(test, "PUT", path, "bob", 400, "Weighting must be an integer\n", false)
+	makeRequest(test, "PUT", path, "3", 200, "3", false)
+	makeRequest(test, "GET", path, "", 200, "3", false)
+	restartServer()
+	makeRequest(test, "GET", path, "", 200, "3", false)
+	makeRequest(test, "PUT", path, "5", 200, "5", false)
+	makeRequest(test, "GET", path, "", 200, "5", false)
+
 }
