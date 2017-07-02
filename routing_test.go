@@ -6,6 +6,7 @@ import (
     "net/http/httptest"
     "net/url"
     "strings"
+    "strconv"
     "testing"
     "io/ioutil"
     "encoding/json"
@@ -198,8 +199,8 @@ func TestCanUpdateById(test *testing.T) {
  */
 func TestInvalidTrackIDs(test *testing.T) {
 	clearData()
-	makeRequest(test, "GET", "/tracks/blah", "", 400, "Track ID must be an integer\n", false)
-	makeRequest(test, "GET", "/tracks/blah/weighting", "", 400, "Track ID must be an integer\n", false)
+	makeRequest(test, "GET", "/tracks/blah", "", 404, "Track Endpoint Not Found\n", false)
+	makeRequest(test, "GET", "/tracks/blah/weighting", "", 404, "Track Endpoint Not Found\n", false)
 	makeRequest(test, "GET", "/tags/four/artist", "", 400, "Track ID must be an integer\n", false)
 }
 
@@ -377,4 +378,48 @@ func TestCanUpdateWeighting(test *testing.T) {
 	makeRequest(test, "PUT", path, "5", 200, "5", false)
 	makeRequest(test, "GET", path, "", 200, "5", false)
 
+}
+
+/**
+ * Checks random tracks endpoint
+ */
+func TestRandomTracks(test *testing.T) {
+	clearData()
+	path := "/tracks/random"
+	makeRequest(test, "GET", path, "", 200, "[]", true)
+
+	// Create 40 Tracks
+	for i := 1; i <= 40; i++ {
+		id := strconv.Itoa(i)
+		trackurl := "http://example.org/track/id"+id
+		escapedTrackUrl := url.QueryEscape(trackurl)
+		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+		inputJson := `{"fingerprint": "abcde`+id+`", "duration": 350}`
+		outputJson := `{"fingerprint": "abcde`+id+`", "duration": 350, "url": "`+trackurl+`", "trackid": `+id+`, "tags": {}}`
+		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "5", 200, "5", false)
+	}
+    url := server.URL + path
+    response, err := http.Get(url)
+    if err != nil {
+        test.Error(err)
+    }
+    responseData,err := ioutil.ReadAll(response.Body)
+	if err != nil {
+	    test.Error(err)
+	}
+
+	expectedResponseCode := 200
+    if response.StatusCode != expectedResponseCode {
+        test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+    }
+
+	var output []interface{}
+	err = json.Unmarshal(responseData, &output)
+	if err != nil {
+		test.Errorf("Invalid JSON body: %s for %s", err.Error(), path)
+	}
+	if (len(output) != 20) {
+		test.Errorf("Wrong number of tracks.  Expected: 20, Actual: %d", len(output))
+	}
 }

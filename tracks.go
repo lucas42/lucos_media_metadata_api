@@ -3,7 +3,9 @@ package main
 import (
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
+	"errors"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -59,7 +61,14 @@ func (store Datastore) getTrackDataByField(field string, value interface{}) (fou
  *
  */
 func (store Datastore) setTrackWeighting(trackid int, weighting int) (err error) {
-	_, err = store.DB.Exec("UPDATE track SET weighting = $1 WHERE id = $2", weighting, trackid)
+	_, oldWeighting, err := store.getTrackWeighting(trackid)
+	if err != nil { return }
+	diff := weighting - oldWeighting
+	max, err := store.getMaxCumWeighting()
+	if (err != nil) { return }
+	_, err = store.DB.Exec("UPDATE track SET cum_weighting = cum_weighting + $1 WHERE cum_weighting > $2", diff, oldWeighting)
+	if (err != nil) { return }
+	_, err = store.DB.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", weighting, max+diff, trackid)
 	return
 }
 
@@ -76,6 +85,15 @@ func (store Datastore) getTrackWeighting(trackid int) (trackfound bool, weightin
     }
     return
 }
+/**
+ * Gets the highest cumulative weighting value (defaults to 0)
+ *
+ */
+func (store Datastore) getMaxCumWeighting() (maxcumweighting int, err error) {
+	err = store.DB.Get(&maxcumweighting, "SELECT COALESCE((SELECT MAX(cum_weighting) FROM track), 0)")
+	if (maxcumweighting < 0) { err = errors.New("cum_weightings are negative, max: "+strconv.Itoa(maxcumweighting)) }
+	return
+}
 
 /**
  * Gets data about all tracks in the database
@@ -91,6 +109,29 @@ func (store Datastore) getAllTracks() (tracks []Track, err error) {
 		track := &tracks[i]
 		track.Tags, err = store.getAllTagsForTrack(track.ID)
 		if (err != nil) { return }
+	}
+	return
+}
+
+/**
+ * Gets data about a random set of tracks from the database
+ *
+ */
+func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
+	max, err := store.getMaxCumWeighting()
+	if (err != nil) { return }
+
+	tracks = []Track{}
+	if (max == 0) { return }
+	
+	for i := 0; i < count; i++ {
+		track := Track{}
+		weighting := rand.Intn(max)
+	    err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration FROM track WHERE cum_weighting > $1 ORDER BY cum_weighting ASC LIMIT 1", weighting)
+	    if err != nil { return }
+		track.Tags, err = store.getAllTagsForTrack(track.ID)
+		if err != nil { return }
+		tracks = append(tracks, track)
 	}
 	return
 }
@@ -123,6 +164,14 @@ func writeWeighting(store Datastore, w http.ResponseWriter, trackid int) {
 }
 
 /**
+ * Write a http response with a JSON representation of a random 20 tracks
+ */
+func writeRandomTracks(store Datastore, w http.ResponseWriter) {
+	tracks, err := store.getRandomTracks(20)
+	writeResponse(w, true, "Track", tracks, err)
+}
+
+/**
  * Decodes a JSON representation of a track
  */
 func DecodeTrack(r io.Reader) (Track, error) {
@@ -144,13 +193,11 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 	var filterfield string
 	if (len(pathparts) > 1) {
 		id, err := strconv.Atoi(pathparts[1])
-		if err != nil {
-			http.Error(w, "Track ID must be an integer", http.StatusBadRequest)
-			return
+		if err == nil {
+			filterfield = "id"
+			filtervalue = pathparts[1]
+			trackid = id
 		}
-		filterfield = "id"
-		filtervalue = pathparts[1]
-		trackid = id
 	} else if (len(trackurl) > 0) {
 		filterfield = "url"
 		filtervalue = trackurl
@@ -159,10 +206,19 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 		filtervalue = fingerprint
 	}
 	if (filterfield == "") {
-		if (r.Method == "GET") {
-			writeAllTrackData(store, w)
+		if (len(pathparts) <= 1) {
+			if (r.Method == "GET") {
+				writeAllTrackData(store, w)
+			} else {
+				MethodNotAllowed(w, []string{"GET"})
+			}
 		} else {
-			MethodNotAllowed(w, []string{"GET"})
+			switch pathparts[1] {
+				case "random":
+					writeRandomTracks(store, w)
+				default:
+					http.Error(w, "Track Endpoint Not Found", http.StatusNotFound)
+			}
 		}
 	} else if (len(pathparts) > 2) {
 		switch pathparts[2] {
@@ -191,7 +247,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 						MethodNotAllowed(w, []string{"GET", "PUT"})
 				}
 			default:
-				http.Error(w, "Track endpoint Not Found", http.StatusNotFound)
+				http.Error(w, "Track Endpoint Not Found", http.StatusNotFound)
 		}
 	} else {
 		switch r.Method {
