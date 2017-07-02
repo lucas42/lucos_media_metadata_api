@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"path"
@@ -10,28 +11,12 @@ import (
  * Gets data about a global
  *
  */
-func (store Datastore) getGlobal(key string) (found bool, value string, err error) {
-	found = false
-	value = ""
-	stmt, err := store.DB.Prepare("SELECT value FROM global WHERE key = ?")
+func (store Datastore) getGlobal(key string) (value string, err error) {
+	err = store.DB.Get(&value, "SELECT value FROM global WHERE key = $1", key)
 	if err != nil {
-		return
-	}
-	defer stmt.Close()
-	rows, err := stmt.Query(key)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	result := rows.Next()
-	if (result == false) {
-		return
-	}
-	found = true
-	err = rows.Scan(&value)
-	if err != nil {
-		return
+		if (err.Error() == "sql: no rows in result set") {
+			err = errors.New("Global Variable Not Found")
+		}
 	}
 	return
 }
@@ -41,13 +26,8 @@ func (store Datastore) getGlobal(key string) (found bool, value string, err erro
  *
  */
 func (store Datastore) setGlobal(key string, value string) (err error) {
-	stmt, err := store.DB.Prepare("REPLACE INTO global(key, value) values(?, ?)")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(key, value)
-	return err
+	_, err = store.DB.Exec("REPLACE INTO global(key, value) values($1, $2)", key, value)
+	return
 }
 
 
@@ -55,8 +35,8 @@ func (store Datastore) setGlobal(key string, value string) (err error) {
  * Writes a http response with a JSON representation of a global
  */ 
 func writeGlobal(store Datastore, w http.ResponseWriter, key string) {
-	found, value, err := store.getGlobal(key)
-	writePlainResponse(w, found, "Global Variable", value, err)
+	value, err := store.getGlobal(key)
+	writePlainResponse(w, true, "Global Variable", value, err)
 }
 
 /** 
