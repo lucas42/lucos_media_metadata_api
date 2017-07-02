@@ -35,7 +35,7 @@ func restartServer() {
 	if server != nil {
 		server.Close()
 	}
-	store, _ := DBInit("testrouting.sqlite")
+	store := DBInit("testrouting.sqlite")
 	server = httptest.NewServer(FrontController(store))
 }
 

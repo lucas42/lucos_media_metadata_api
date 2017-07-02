@@ -8,10 +8,7 @@ import (
 func TestDatabaseSetup(test *testing.T) {
 	dbpath := "testdb.sqlite"
 	os.Remove(dbpath)
-	db, err := DBInit(dbpath)
-	if (err != nil) {
-		test.Error(err)
-	}
+	db := DBInit(dbpath)
 	if (!db.TableExists("track")) {
 		test.Error("track table not created")
 	}
@@ -23,6 +20,9 @@ func TestDatabaseSetup(test *testing.T) {
 	}
 	if (!db.TableExists("global")) {
 		test.Error("global table not created")
+	}
+	if (db.TableExists("moo-moo head")) {
+		test.Error("Unexpected table created")
 	}
 	os.Remove(dbpath)
 }

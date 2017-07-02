@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
-	"log"
 )
 
 /**
@@ -13,15 +12,10 @@ type Datastore struct {
 	DB *sqlx.DB
 }
 
-
-func DBInit(dbpath string) (database Datastore, err error) {
-	db, err := sqlx.Open("sqlite3", dbpath)
-	if err != nil {
-		return
-	}
+func DBInit(dbpath string) (database Datastore) {
+	db := sqlx.MustConnect("sqlite3", dbpath)
 	database = Datastore{db}
-	_, err = database.DB.Exec("PRAGMA foreign_keys = ON;")
-	if err != nil { return }
+	database.DB.MustExec("PRAGMA foreign_keys = ON;")
 	if (!database.TableExists("track")) {
 		sqlStmt := `
 		CREATE TABLE "track" (
@@ -33,10 +27,8 @@ func DBInit(dbpath string) (database Datastore, err error) {
 			"cum_weighting" INTEGER NOT NULL DEFAULT 0
 		);
 		`
-		_, err = database.DB.Exec(sqlStmt)
-		if err != nil { return }
+		database.DB.MustExec(sqlStmt)
 	}
-
 	if (!database.TableExists("global")) {
 		sqlStmt := `
 		CREATE TABLE "global" (
@@ -44,8 +36,7 @@ func DBInit(dbpath string) (database Datastore, err error) {
 			"value" TEXT
 		);
 		`
-		_, err = database.DB.Exec(sqlStmt)
-		if err != nil { return }
+		database.DB.MustExec(sqlStmt)
 	}
 	if (!database.TableExists("predicate")) {
 		sqlStmt := `
@@ -53,8 +44,7 @@ func DBInit(dbpath string) (database Datastore, err error) {
 			"id" TEXT PRIMARY KEY NOT NULL
 		);
 		`
-		_, err = database.DB.Exec(sqlStmt)
-		if err != nil { return }
+		database.DB.MustExec(sqlStmt)
 	}
 	if (!database.TableExists("tag")) {
 		sqlStmt := `
@@ -67,22 +57,15 @@ func DBInit(dbpath string) (database Datastore, err error) {
 			CONSTRAINT track_predicate_unique UNIQUE (trackid, predicateid)
 		);
 		`
-		_, err = database.DB.Exec(sqlStmt)
-		if err != nil { return }
+		database.DB.MustExec(sqlStmt)
 	}
 	return
 }
 
-func (store Datastore) TableExists(tablename string) bool {
-	var count int
-	stmt, err := store.DB.Prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?")
-	if err != nil {
-		log.Fatal(err)
+func (store Datastore) TableExists(tablename string) (found bool) {
+	err := store.DB.Get(&found, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", tablename)
+	if (err != nil && err.Error() != "sql: no rows in result set") {
+		panic(err)
 	}
-	defer stmt.Close()
-	err = stmt.QueryRow(tablename).Scan(&count)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return (count > 0)
+	return
 }
