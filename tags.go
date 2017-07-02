@@ -70,7 +70,7 @@ func (store Datastore) getAllTagsForTrack(trackid int) (tags map[string]string, 
  */ 
 func writeTag(store Datastore, w http.ResponseWriter, trackid int, predicate string) {
 	value, err := store.getTagValue(trackid, predicate)
-	writePlainResponse(w, true, "Tag", value, err)
+	writePlainResponse(w, value, err)
 }
 
 /**

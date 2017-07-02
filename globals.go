@@ -36,7 +36,7 @@ func (store Datastore) setGlobal(key string, value string) (err error) {
  */ 
 func writeGlobal(store Datastore, w http.ResponseWriter, key string) {
 	value, err := store.getGlobal(key)
-	writePlainResponse(w, true, "Global Variable", value, err)
+	writePlainResponse(w, value, err)
 }
 
 /** 

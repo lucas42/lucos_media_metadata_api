@@ -168,7 +168,7 @@ func writeTrackDataByField(store Datastore, w http.ResponseWriter, field string,
 func writeWeighting(store Datastore, w http.ResponseWriter, trackid int) {
 	weighting, err := store.getTrackWeighting(trackid)
 	weightingval := strconv.Itoa(weighting)
-	writePlainResponse(w, true, "Track", weightingval, err)
+	writePlainResponse(w, weightingval, err)
 }
 
 /**

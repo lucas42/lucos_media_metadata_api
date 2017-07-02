@@ -28,14 +28,14 @@ func FrontController(store Datastore) *http.ServeMux {
 /**
  * Writes a http JSON response based on some data
  */
-func writeResponse(w http.ResponseWriter, found bool, typename string, data interface{}, err error) {
+func writeJSONResponse(w http.ResponseWriter, data interface{}, err error) {
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if (!found) {
-		message := typename + " Not Found"
-		http.Error(w, message, http.StatusNotFound)
+		w.Header().Set("Content-Type", "text/plain")
+		if strings.HasSuffix(err.Error(), " Not Found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -44,25 +44,10 @@ func writeResponse(w http.ResponseWriter, found bool, typename string, data inte
 }
 
 /**
- * Writes a http JSON response based on some data
- */
-func writeJSONResponse(w http.ResponseWriter, data interface{}, err error) {
-	if err != nil {
-		if strings.HasSuffix(err.Error(), " Not Found") {
-			http.Error(w, err.Error(), http.StatusNotFound)
-		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(data)
-}
-/**
  * Writes a http plain text response based on string
  */
-func writePlainResponse(w http.ResponseWriter, found bool, typename string, data string, err error) {
+func writePlainResponse(w http.ResponseWriter, data string, err error) {
+	w.Header().Set("Content-Type", "text/plain")
 	if err != nil {
 		if strings.HasSuffix(err.Error(), " Not Found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -71,12 +56,6 @@ func writePlainResponse(w http.ResponseWriter, found bool, typename string, data
 		}
 		return
 	}
-	if (!found) {
-		message := typename + " Not Found"
-		http.Error(w, message, http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(data))
 }
