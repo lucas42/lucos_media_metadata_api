@@ -66,7 +66,7 @@ func (store Datastore) setTrackWeighting(trackid int, weighting int) (err error)
 	diff := weighting - oldWeighting
 	max, err := store.getMaxCumWeighting()
 	if (err != nil) { return }
-	_, err = store.DB.Exec("UPDATE track SET cum_weighting = cum_weighting + $1 WHERE cum_weighting > $2", diff, oldWeighting)
+	_, err = store.DB.Exec("UPDATE track SET cum_weighting = cum_weighting - $1 WHERE cum_weighting > (SELECT cum_weighting FROM track WHERE id = $2)", oldWeighting, trackid)
 	if (err != nil) { return }
 	_, err = store.DB.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", weighting, max+diff, trackid)
 	return
@@ -123,7 +123,7 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
 
 	tracks = []Track{}
 	if (max == 0) { return }
-	
+
 	for i := 0; i < count; i++ {
 		track := Track{}
 		weighting := rand.Intn(max)
