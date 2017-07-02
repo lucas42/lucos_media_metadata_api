@@ -60,9 +60,9 @@ func (store Datastore) getTrackDataByField(field string, value interface{}) (tra
  */
 func (store Datastore) trackExists(field string, value interface{}) (found bool, err error) {
 	err = store.DB.Get(&found, "SELECT 1 FROM track WHERE "+field+"=$1", value)
-    if (err != nil && err.Error() == "sql: no rows in result set") {
-    	err = nil
-    }
+	if (err != nil && err.Error() == "sql: no rows in result set") {
+		err = nil
+	}
 	return
 }
 

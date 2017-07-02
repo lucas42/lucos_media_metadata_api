@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"path"
 )
@@ -13,20 +14,10 @@ type Predicate struct {
  *
  */
 func (store Datastore) hasPredicate(id string) (found bool, err error) {
-	found = false
-	stmt, err := store.DB.Prepare("SELECT 1 FROM predicate WHERE id = ?")
-	if err != nil {
-		return
+	err = store.DB.Get(&found, "SELECT 1 FROM predicate WHERE id = $1", id)
+	if (err != nil && err.Error() == "sql: no rows in result set") {
+		err = nil
 	}
-	defer stmt.Close()
-	rows, err := stmt.Query(id)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	result := rows.Next()
-	found = (result != false)
 	return
 }
 
@@ -35,39 +26,17 @@ func (store Datastore) hasPredicate(id string) (found bool, err error) {
  *
  */
 func (store Datastore) createPredicate(id string) (err error) {
-	stmt, err := store.DB.Prepare("REPLACE INTO predicate(id) values(?)")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	_, err = stmt.Exec(id)
-	return err
+	_, err = store.DB.Exec("REPLACE INTO predicate(id) values($1)", id)
+	return
 }
 
 /**
  * Gets data about all predicates in the database
  *
  */
-func (store Datastore) getAllPredicates() (predicates []*Predicate, err error) {
-	predicates = []*Predicate{}
-	rows, err := store.DB.Query("SELECT id FROM predicate ORDER BY id")
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		predicate := new(Predicate)
-		err = rows.Scan(&predicate.ID)
-		if err != nil {
-			return
-		}
-		predicates = append(predicates, predicate)
-	}
-	err = rows.Err()
-	if err != nil {
-		return
-	}
+func (store Datastore) getAllPredicates() (predicates []Predicate, err error) {
+	predicates = []Predicate{}
+	err = store.DB.Select(&predicates, "SELECT id FROM predicate ORDER BY id")
 	return
 }
 
@@ -76,7 +45,10 @@ func (store Datastore) getAllPredicates() (predicates []*Predicate, err error) {
  */ 
 func writePredicate(store Datastore, w http.ResponseWriter, id string) {
 	found, err := store.hasPredicate(id)
-	writeResponse(w, found, "Predicate", Predicate{ID: id}, err)
+	if (err == nil && !found) {
+		err = errors.New("Predicate Not Found")
+	}
+	writeJSONResponse(w, Predicate{ID: id}, err)
 }
 
 /**
@@ -84,7 +56,7 @@ func writePredicate(store Datastore, w http.ResponseWriter, id string) {
  */ 
 func writeAllPredicates(store Datastore, w http.ResponseWriter) {
 	predicates, err := store.getAllPredicates()
-	writeResponse(w, true, "Predicate", predicates, err)
+	writeJSONResponse(w, predicates, err)
 }
 
 /** 
