@@ -27,7 +27,7 @@ type Track struct {
  *
  */
 func (store Datastore) updateTrackDataByField(field string, value interface{}, track Track) (err error) {
-	trackExists, _, err := store.getTrackDataByField(field, value)
+	trackExists, err := store.trackExists(field, value)
 	if err != nil { return }
 	if (trackExists) {
 		_, err = store.DB.NamedExec("UPDATE TRACK SET duration = :duration, url = :url, fingerprint = :fingerprint WHERE "+field+" = :"+field, track)
@@ -41,18 +41,28 @@ func (store Datastore) updateTrackDataByField(field string, value interface{}, t
  * Gets data about a track for a given value of a given field
  *
  */
-func (store Datastore) getTrackDataByField(field string, value interface{}) (found bool, track Track, err error) {
-	found = true
+func (store Datastore) getTrackDataByField(field string, value interface{}) (track Track, err error) {
 	track = Track{}
-    err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration FROM track WHERE "+field+"=$1", value)
-    if err != nil {
-    	if (err.Error() == "sql: no rows in result set") { 
-    		found = false
-    		err = nil
-    	}
-    	return
-    }
+	err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration FROM track WHERE "+field+"=$1", value)
+	if err != nil {
+		if (err.Error() == "sql: no rows in result set") {
+			err = errors.New("Track Not Found")
+		}
+		return
+	}
 	track.Tags, err = store.getAllTagsForTrack(track.ID)
+	return
+}
+
+/**
+ * Checks whether a track exists based on a given field
+ *
+ */
+func (store Datastore) trackExists(field string, value interface{}) (found bool, err error) {
+	err = store.DB.Get(&found, "SELECT 1 FROM track WHERE "+field+"=$1", value)
+    if (err != nil && err.Error() == "sql: no rows in result set") {
+    	err = nil
+    }
 	return
 }
 
@@ -61,7 +71,7 @@ func (store Datastore) getTrackDataByField(field string, value interface{}) (fou
  *
  */
 func (store Datastore) setTrackWeighting(trackid int, weighting int) (err error) {
-	_, oldWeighting, err := store.getTrackWeighting(trackid)
+	oldWeighting, err := store.getTrackWeighting(trackid)
 	if err != nil { return }
 	diff := weighting - oldWeighting
 	max, err := store.getMaxCumWeighting()
@@ -76,13 +86,11 @@ func (store Datastore) setTrackWeighting(trackid int, weighting int) (err error)
  * Gets the weighting of a given track
  *
  */
-func (store Datastore) getTrackWeighting(trackid int) (trackfound bool, weighting int, err error) {
-	trackfound = true
+func (store Datastore) getTrackWeighting(trackid int) (weighting int, err error) {
     err = store.DB.Get(&weighting, "SELECT weighting FROM track WHERE id=$1", trackid)
-    if (err != nil  && err.Error() == "sql: no rows in result set") { 
-		trackfound = false
-		err = nil
-    }
+	if (err != nil && err.Error() == "sql: no rows in result set") {
+		err = errors.New("Track Not Found")
+	}
     return
 }
 /**
@@ -143,24 +151,24 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
  */
 func writeAllTrackData(store Datastore, w http.ResponseWriter) {
 	tracks, err := store.getAllTracks()
-	writeResponse(w, true, "Track", tracks, err)
+	writeJSONResponse(w, tracks, err)
 }
 
 /**
  * Writes a http response with a JSON representation of a given track
  */
 func writeTrackDataByField(store Datastore, w http.ResponseWriter, field string, value interface{}) {
-	trackfound, track, err := store.getTrackDataByField(field, value)
-	writeResponse(w, trackfound, "Track", track, err)
+	track, err := store.getTrackDataByField(field, value)
+	writeJSONResponse(w, track, err)
 }
 
 /**
  * Writes a http response with the weighting of a given track
  */
 func writeWeighting(store Datastore, w http.ResponseWriter, trackid int) {
-	trackfound, weighting, err := store.getTrackWeighting(trackid)
+	weighting, err := store.getTrackWeighting(trackid)
 	weightingval := strconv.Itoa(weighting)
-	writePlainResponse(w, trackfound, "Track", weightingval, err)
+	writePlainResponse(w, true, "Track", weightingval, err)
 }
 
 /**
@@ -168,7 +176,7 @@ func writeWeighting(store Datastore, w http.ResponseWriter, trackid int) {
  */
 func writeRandomTracks(store Datastore, w http.ResponseWriter) {
 	tracks, err := store.getRandomTracks(20)
-	writeResponse(w, true, "Track", tracks, err)
+	writeJSONResponse(w, tracks, err)
 }
 
 /**

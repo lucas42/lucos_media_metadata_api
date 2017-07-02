@@ -42,12 +42,33 @@ func writeResponse(w http.ResponseWriter, found bool, typename string, data inte
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(data)
 }
+
+/**
+ * Writes a http JSON response based on some data
+ */
+func writeJSONResponse(w http.ResponseWriter, data interface{}, err error) {
+	if err != nil {
+		if strings.HasSuffix(err.Error(), " Not Found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(data)
+}
 /**
  * Writes a http plain text response based on string
  */
 func writePlainResponse(w http.ResponseWriter, found bool, typename string, data string, err error) {
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if strings.HasSuffix(err.Error(), " Not Found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 	if (!found) {

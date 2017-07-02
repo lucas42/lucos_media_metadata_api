@@ -42,7 +42,7 @@ func (store Datastore) getTagValue(trackid int, predicate string) (found bool, v
  *
  */
 func (store Datastore) updateTag(trackid int, predicate string, value string) (err error) {
-	trackFound, _ , err := store.getTrackDataByField("id", trackid)
+	trackFound, err := store.trackExists("id", trackid)
 	if err != nil { return }
 	if (!trackFound) {
 		err = errors.New("Unknown Track")
