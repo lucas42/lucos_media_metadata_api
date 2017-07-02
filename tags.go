@@ -8,31 +8,22 @@ import (
 	"strings"
 )
 
+type Tag struct {
+	TrackID int
+	PredicateID string
+	Value string
+}
+
 /**
  * Get the value for a given tag
  *
  */
-func (store Datastore) getTagValue(trackid int, predicate string) (found bool, value string, err error) {
-	found = false
-	stmt, err := store.DB.Prepare("SELECT value FROM tag WHERE trackid = ? AND predicateid = ?")
+func (store Datastore) getTagValue(trackid int, predicate string) (value string, err error) {
+	err = store.DB.Get(&value, "SELECT value FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, predicate)
 	if err != nil {
-		return
-	}
-	defer stmt.Close()
-	rows, err := stmt.Query(trackid, predicate)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	result := rows.Next()
-	if (result == false) {
-		return
-	}
-	found = true
-	err = rows.Scan(&value)
-	if err != nil {
-		return
+		if (err.Error() == "sql: no rows in result set") {
+			err = errors.New("Tag Not Found")
+		}
 	}
 	return
 }
@@ -54,42 +45,21 @@ func (store Datastore) updateTag(trackid int, predicate string, value string) (e
 		err = store.createPredicate(predicate)
 		if err != nil { return }
 	}
-	stmt, err := store.DB.Prepare("REPLACE INTO tag(trackid, predicateid, value) values(?,?,?)")
-	if err != nil { return }
-	defer stmt.Close()
-	_, err = stmt.Exec(trackid, predicate, value)
-	return err
+	_, err = store.DB.Exec("REPLACE INTO tag(trackid, predicateid, value) values($1, $2, $3)", trackid, predicate, value)
+	return
 }
 
 /**
- * Gets all the tags for a given track
+ * Gets all the tags for a given track (in a map of key/value pairs)
  *
  */
 func (store Datastore) getAllTagsForTrack(trackid int) (tags map[string]string, err error) {
 	tags = make(map[string]string)
-	stmt, err := store.DB.Prepare("SELECT predicateid, value FROM tag WHERE trackid = ?")
-	if err != nil {
-		return
-	}
-	defer stmt.Close()
-	rows, err := stmt.Query(trackid)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var predicateid string
-		var value string
-		err = rows.Scan(&predicateid, &value)
-		if err != nil {
-			return
-		}
-		tags[predicateid] = value
-	}
-	err = rows.Err()
-	if err != nil {
-		return
+	tagList := []Tag{}
+	err = store.DB.Select(&tagList, "SELECT * FROM tag WHERE trackid = ?", trackid)
+	if err != nil { return }
+	for _, tag := range tagList {
+		tags[tag.PredicateID] = tag.Value
 	}
 	return
 }
@@ -99,8 +69,8 @@ func (store Datastore) getAllTagsForTrack(trackid int) (tags map[string]string, 
  * Writes a http response with the value of a tag
  */ 
 func writeTag(store Datastore, w http.ResponseWriter, trackid int, predicate string) {
-	found, value, err := store.getTagValue(trackid, predicate)
-	writePlainResponse(w, found, "Tag", value, err)
+	value, err := store.getTagValue(trackid, predicate)
+	writePlainResponse(w, true, "Tag", value, err)
 }
 
 /**
@@ -108,7 +78,7 @@ func writeTag(store Datastore, w http.ResponseWriter, trackid int, predicate str
  */
 func writeAllTagsForTrack(store Datastore, w http.ResponseWriter, trackid int) {
 	tags, err := store.getAllTagsForTrack(trackid)
-	writeResponse(w, true, "Tag", tags, err)
+	writeJSONResponse(w, tags, err)
 }
 
 /** 
@@ -141,26 +111,23 @@ func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			bypassUpdate := false
 			if (r.Header.Get("If-None-Match") == "*") {
-				bypassUpdate, _, err = store.getTagValue(trackid, predicate)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
+				_, err = store.getTagValue(trackid, predicate)
+				if (err != nil && err.Error() == "Tag Not Found") {
+					err = store.updateTag(trackid, predicate, string(value))
 				}
-			}
-			if (!bypassUpdate) {
+			} else {
 				err = store.updateTag(trackid, predicate, string(value))
-				if err != nil {
-					var status int
-					if (err.Error() == "Unknown Track") {
-						status = http.StatusNotFound
-					} else {
-						status = http.StatusInternalServerError
-					}
-					http.Error(w, err.Error(), status)
-					return
+			}
+			if err != nil {
+				var status int
+				if (err.Error() == "Unknown Track") {
+					status = http.StatusNotFound
+				} else {
+					status = http.StatusInternalServerError
 				}
+				http.Error(w, err.Error(), status)
+				return
 			}
 			fallthrough
 		case "GET":
