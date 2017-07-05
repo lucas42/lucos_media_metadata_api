@@ -115,6 +115,45 @@ func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode in
 		}
 	}
 }
+/**
+ * Constructs a http request with a method which shouldn't be allowed
+ *
+ */
+func makeRequestWithUnallowedMethod(t *testing.T, path string, unallowedMethod string, allowedMethods []string) {
+	url := server.URL + path
+	request, err := http.NewRequest(unallowedMethod, url, nil)
+	if err != nil { t.Error(err) }
+	response, err := http.DefaultClient.Do(request)
+	if err != nil { t.Error(err) }
+	responseData, err := ioutil.ReadAll(response.Body)
+	if err != nil { t.Error(err) }
+	actualResponseBody := string(responseData)
+	if response.StatusCode != 405 {
+		t.Errorf("Got response code %d, expected %d for %s", response.StatusCode, 405, url)
+	}
+	if (!strings.HasPrefix(actualResponseBody, "Method Not Allowed")) {
+		t.Errorf("Repsonse body for %s doesn't begin with \"Method Not Allowed\"", url)
+	}
+	for _, method := range allowedMethods {
+		if (!strings.Contains(response.Header.Get("allow"), method)) {
+			t.Errorf("Allow header doesn't include method %s for %s", method, url)
+		}
+	}
+}
+/**
+ * Constructs a http request which should do a redirect
+ *
+ */
+func checkRedirect(t *testing.T, initialPath string, expectedPath string) {
+	initialURL := server.URL + initialPath
+	expectedDestination := server.URL + expectedPath
+	response, err := http.Get(initialURL)
+	if err != nil { t.Error(err) }
+	actualDestination := response.Request.URL.String()
+	if (actualDestination != expectedDestination) {
+		t.Errorf("Unexpected redirect destination: \"%s\", expected: \"%s\", from \"%s\"", actualDestination, expectedDestination, initialURL)
+	}
+}
 
 /**
  * Checks whether a track can be edited based on its url and retrieved later
@@ -131,6 +170,7 @@ func TestCanEditTrackByUrl(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
+	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET"})
 }
 /**
  * Checks whether a track can have its duration updated
@@ -191,6 +231,7 @@ func TestCanUpdateById(test *testing.T) {
 	makeRequest(test, "PUT", path, inputBJson, 200, outputBJson, true)
 	makeRequest(test, "GET", path1, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "GET", path2, "", 200, outputBJson, true)
+	makeRequest(test, "PUT", path, `{"start": "some JSON"`, 400, "unexpected EOF\n", false)
 	makeRequest(test, "GET", path, "", 200, outputBJson, true)
 }
 
@@ -201,6 +242,7 @@ func TestInvalidTrackIDs(test *testing.T) {
 	clearData()
 	makeRequest(test, "GET", "/tracks/blah", "", 404, "Track Endpoint Not Found\n", false)
 	makeRequest(test, "GET", "/tracks/blah/weighting", "", 404, "Track Endpoint Not Found\n", false)
+	makeRequest(test, "GET", "/tracks/1/blahing", "", 404, "Track Endpoint Not Found\n", false)
 	makeRequest(test, "GET", "/tags/four/artist", "", 400, "Track ID must be an integer\n", false)
 }
 
@@ -228,6 +270,8 @@ func TestGetAllTracks(test *testing.T) {
 	makeRequest(test, "PUT", path2, input2Json, 200, output2Json, true)
 	makeRequest(test, "GET", path2, "", 200, output2Json, true)
 	makeRequest(test, "GET", pathall, "", 200, alloutputJson2, true)
+
+	makeRequestWithUnallowedMethod(test, pathall, "PUT", []string{"GET"})
 }
 
 /**
@@ -243,6 +287,7 @@ func TestGlobals(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, "yes", false)
 	makeRequest(test, "PUT", path, "notyet", 200, "notyet", false)
 	makeRequest(test, "GET", path, "", 200, "notyet", false)
+	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET"})
 }
 
 /**
@@ -250,7 +295,7 @@ func TestGlobals(test *testing.T) {
  */
 func TestAddPredicate(test *testing.T) {
 	clearData()
-	allpath := "/predicates"
+	allpath := "/predicates/"
 	path1 := "/predicates/artist"
 	inputJson := `{}`
 	output1Json := `{"id":"artist"}`
@@ -261,7 +306,8 @@ func TestAddPredicate(test *testing.T) {
 	makeRequest(test, "GET", allpath, "", 200, list1Json, true)
 	restartServer()
 	makeRequest(test, "GET", path1, "", 200, output1Json, true)
-
+	makeRequestWithUnallowedMethod(test, allpath, "PUT", []string{"GET"})
+	makeRequestWithUnallowedMethod(test, path1, "POST", []string{"PUT", "GET"})
 }
 
 /**
@@ -307,6 +353,10 @@ func TestAddTag(test *testing.T) {
 	makeRequest(test, "GET", trackpath, "", 200, trackOutputTagged, true)
 	makeRequest(test, "GET", "/tracks", "", 200, "["+trackOutputTagged+"]", true)
 
+	makeRequestWithUnallowedMethod(test, alltagsfortrack, "PUT", []string{"GET"})
+	makeRequestWithUnallowedMethod(test, path1, "POST", []string{"PUT", "GET"})
+
+	checkRedirect(test, "/tags", "/tracks")
 }
 /**
  * Checks whether new tags can be added
@@ -378,6 +428,7 @@ func TestCanUpdateWeighting(test *testing.T) {
 	makeRequest(test, "PUT", path, "5", 200, "5", false)
 	makeRequest(test, "GET", path, "", 200, "5", false)
 
+	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET"})
 }
 
 /**
