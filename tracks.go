@@ -98,7 +98,7 @@ func (store Datastore) getTrackWeighting(trackid int) (weighting float64, err er
  *
  */
 func (store Datastore) getMaxCumWeighting() (maxcumweighting float64, err error) {
-	err = store.DB.Get(&maxcumweighting, "SELECT COALESCE((SELECT MAX(cum_weighting) FROM track), 0)")
+	err = store.DB.Get(&maxcumweighting, "SELECT IFNULL(MAX(cum_weighting), 0) FROM track")
 	if (maxcumweighting < 0) { err = errors.New("cum_weightings are negative, max: "+strconv.FormatFloat(maxcumweighting, 'f', -1, 64)) }
 	return
 }
