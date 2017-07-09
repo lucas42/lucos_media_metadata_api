@@ -420,13 +420,13 @@ func TestCanUpdateWeighting(test *testing.T) {
 	makeRequest(test, "PUT", trackpath, `{"fingerprint": "aoecu1234", "duration": 300}`, 200, outputJson, true)
 	
 	makeRequest(test, "GET", path, "", 200, "0", false)
-	makeRequest(test, "PUT", path, "bob", 400, "Weighting must be an integer\n", false)
+	makeRequest(test, "PUT", path, "bob", 400, "Weighting must be a number\n", false)
 	makeRequest(test, "PUT", path, "3", 200, "3", false)
 	makeRequest(test, "GET", path, "", 200, "3", false)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, "3", false)
-	makeRequest(test, "PUT", path, "5", 200, "5", false)
-	makeRequest(test, "GET", path, "", 200, "5", false)
+	makeRequest(test, "PUT", path, "5.22", 200, "5.22", false)
+	makeRequest(test, "GET", path, "", 200, "5.22", false)
 
 	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET"})
 }
@@ -448,7 +448,7 @@ func TestRandomTracks(test *testing.T) {
 		inputJson := `{"fingerprint": "abcde`+id+`", "duration": 350}`
 		outputJson := `{"fingerprint": "abcde`+id+`", "duration": 350, "url": "`+trackurl+`", "trackid": `+id+`, "tags": {}}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
-		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "5", 200, "5", false)
+		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
     url := server.URL + path
     response, err := http.Get(url)

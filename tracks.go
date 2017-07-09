@@ -70,7 +70,7 @@ func (store Datastore) trackExists(field string, value interface{}) (found bool,
  * Sets the weighting for a given track
  *
  */
-func (store Datastore) setTrackWeighting(trackid int, weighting int) (err error) {
+func (store Datastore) setTrackWeighting(trackid int, weighting float64) (err error) {
 	oldWeighting, err := store.getTrackWeighting(trackid)
 	if err != nil { return }
 	diff := weighting - oldWeighting
@@ -86,7 +86,7 @@ func (store Datastore) setTrackWeighting(trackid int, weighting int) (err error)
  * Gets the weighting of a given track
  *
  */
-func (store Datastore) getTrackWeighting(trackid int) (weighting int, err error) {
+func (store Datastore) getTrackWeighting(trackid int) (weighting float64, err error) {
     err = store.DB.Get(&weighting, "SELECT weighting FROM track WHERE id=$1", trackid)
 	if (err != nil && err.Error() == "sql: no rows in result set") {
 		err = errors.New("Track Not Found")
@@ -97,9 +97,9 @@ func (store Datastore) getTrackWeighting(trackid int) (weighting int, err error)
  * Gets the highest cumulative weighting value (defaults to 0)
  *
  */
-func (store Datastore) getMaxCumWeighting() (maxcumweighting int, err error) {
+func (store Datastore) getMaxCumWeighting() (maxcumweighting float64, err error) {
 	err = store.DB.Get(&maxcumweighting, "SELECT COALESCE((SELECT MAX(cum_weighting) FROM track), 0)")
-	if (maxcumweighting < 0) { err = errors.New("cum_weightings are negative, max: "+strconv.Itoa(maxcumweighting)) }
+	if (maxcumweighting < 0) { err = errors.New("cum_weightings are negative, max: "+strconv.FormatFloat(maxcumweighting, 'f', -1, 64)) }
 	return
 }
 
@@ -134,7 +134,7 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
 
 	for i := 0; i < count; i++ {
 		track := Track{}
-		weighting := rand.Intn(max)
+		weighting := rand.Float64() * max
 	    err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration FROM track WHERE cum_weighting > $1 ORDER BY cum_weighting ASC LIMIT 1", weighting)
 	    if err != nil { return }
 		track.Tags, err = store.getAllTagsForTrack(track.ID)
@@ -167,7 +167,7 @@ func writeTrackDataByField(store Datastore, w http.ResponseWriter, field string,
  */
 func writeWeighting(store Datastore, w http.ResponseWriter, trackid int) {
 	weighting, err := store.getTrackWeighting(trackid)
-	weightingval := strconv.Itoa(weighting)
+	weightingval := strconv.FormatFloat(weighting, 'f', -1, 64)
 	writePlainResponse(w, weightingval, err)
 }
 
@@ -238,9 +238,9 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 							http.Error(w, err.Error(), http.StatusInternalServerError)
 							return
 						}
-						weighting, err := strconv.Atoi(string(body))
+						weighting, err := strconv.ParseFloat(string(body), 64)
 						if err != nil {
-							http.Error(w, "Weighting must be an integer", http.StatusBadRequest)
+							http.Error(w, "Weighting must be a number", http.StatusBadRequest)
 							return
 						}
 						err = store.setTrackWeighting(trackid, weighting)
