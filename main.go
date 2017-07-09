@@ -29,6 +29,7 @@ func FrontController(store Datastore) *http.ServeMux {
  * Writes a http JSON response based on some data
  */
 func writeJSONResponse(w http.ResponseWriter, data interface{}, err error) {
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain")
 		if strings.HasSuffix(err.Error(), " Not Found") {
@@ -48,6 +49,7 @@ func writeJSONResponse(w http.ResponseWriter, data interface{}, err error) {
  */
 func writePlainResponse(w http.ResponseWriter, data string, err error) {
 	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	if err != nil {
 		if strings.HasSuffix(err.Error(), " Not Found") {
 			http.Error(w, err.Error(), http.StatusNotFound)
