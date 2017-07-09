@@ -23,8 +23,8 @@ func DBInit(dbpath string) (database Datastore) {
 			"fingerprint" TEXT UNIQUE, 
 			"url" TEXT UNIQUE, 
 			"duration" INTEGER,
-			"weighting" INTEGER NOT NULL DEFAULT 0,
-			"cum_weighting" INTEGER NOT NULL DEFAULT 0
+			"weighting" FLOAT NOT NULL DEFAULT 0,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0
 		);
 		`
 		database.DB.MustExec(sqlStmt)
