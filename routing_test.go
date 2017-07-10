@@ -100,7 +100,7 @@ func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode in
         t.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
     }
 	if (expectJSON) {
-		if (response.Header.Get("content-type") != "application/json") {
+		if (!strings.HasPrefix(response.Header.Get("content-type"), "application/json;")) {
 			t.Errorf("Expected JSON Content Type, received: \"%s\"", request.Header.Get("Content-type"))
 		}
 		isEqual, err := AreEqualJSON(actualResponseBody, expectedResponseBody)
@@ -472,5 +472,11 @@ func TestRandomTracks(test *testing.T) {
 	}
 	if (len(output) != 20) {
 		test.Errorf("Wrong number of tracks.  Expected: 20, Actual: %d", len(output))
+	}
+	if (!strings.Contains(response.Header.Get("Cache-Control"), "no-cache")) {
+		test.Errorf("Random track list is cachable")
+	}
+	if (!strings.Contains(response.Header.Get("Cache-Control"), "max-age=0")) {
+		test.Errorf("Random track missing max-age of 0")
 	}
 }
