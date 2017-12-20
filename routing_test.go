@@ -274,6 +274,57 @@ func TestGetAllTracks(test *testing.T) {
 	makeRequestWithUnallowedMethod(test, pathall, "PUT", []string{"GET"})
 }
 
+
+/**
+ * Checks the pagination of the /tracks endpoint
+ */
+func TestPagination(test *testing.T) {
+	clearData()
+
+	// Create 45 Tracks
+	for i := 1; i <= 45; i++ {
+		id := strconv.Itoa(i)
+		trackurl := "http://example.org/track/id"+id
+		escapedTrackUrl := url.QueryEscape(trackurl)
+		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+		inputJson := `{"fingerprint": "abcde`+id+`", "duration": 350}`
+		outputJson := `{"fingerprint": "abcde`+id+`", "duration": 350, "url": "`+trackurl+`", "trackid": `+id+`, "tags": {}}`
+		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
+	}
+	pages := map[string]int{
+		"1": 20,
+		"2": 20,
+		"3": 5,
+	}
+	for page, count := range pages {
+
+	    url := server.URL + "/tracks/?page=" + page
+	    response, err := http.Get(url)
+	    if err != nil {
+	        test.Error(err)
+	    }
+	    responseData,err := ioutil.ReadAll(response.Body)
+		if err != nil {
+		    test.Error(err)
+		}
+
+		expectedResponseCode := 200
+	    if response.StatusCode != expectedResponseCode {
+	        test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+	    }
+
+		var output []interface{}
+		err = json.Unmarshal(responseData, &output)
+		if err != nil {
+			test.Errorf("Invalid JSON body: %s for %s", err.Error(), "/tracks/?page=" + page)
+		}
+		if (len(output) != count) {
+			test.Errorf("Wrong number of tracks.  Expected: %d, Actual: %d", count, len(output))
+		}
+	}
+}
+
 /**
  * Checks whether a global value can be set and read
  */

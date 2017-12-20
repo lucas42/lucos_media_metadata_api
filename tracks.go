@@ -108,9 +108,11 @@ func (store Datastore) getMaxCumWeighting() (maxcumweighting float64, err error)
  * Gets data about all tracks in the database
  *
  */
-func (store Datastore) getAllTracks() (tracks []Track, err error) {
+func (store Datastore) getAllTracks(page int) (tracks []Track, err error) {
+	limit := 20
+	startid := limit * (page - 1)
 	tracks = []Track{}
-	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM track")
+	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM track ORDER BY id LIMIT $1, $2", startid, limit)
 	if (err != nil) { return }
 
 	// Loop through all the tracks and add tags for each one
@@ -148,10 +150,11 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
 /**
  * Write a http response with a JSON representation of all tracks
  *
- * TODO: pagination
  */
-func writeAllTrackData(store Datastore, w http.ResponseWriter) {
-	tracks, err := store.getAllTracks()
+func writeAllTrackData(store Datastore, w http.ResponseWriter, r *http.Request) {
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if (err != nil) { page = 1 } // If there's any doubt about page number, start at page 1
+	tracks, err := store.getAllTracks(page)
 	writeJSONResponse(w, tracks, err)
 }
 
@@ -217,7 +220,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 	if (filterfield == "") {
 		if (len(pathparts) <= 1) {
 			if (r.Method == "GET") {
-				writeAllTrackData(store, w)
+				writeAllTrackData(store, w, r)
 			} else {
 				MethodNotAllowed(w, []string{"GET"})
 			}
