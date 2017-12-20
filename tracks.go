@@ -20,6 +20,7 @@ type Track struct {
 	URL         string `json:"url"`
 	ID          int `json:"trackid"`
 	Tags        map[string]string `json:"tags"`
+	Weighting   float64 `json:"weighting,omitempty"`
 }
 
 /**
@@ -109,7 +110,7 @@ func (store Datastore) getMaxCumWeighting() (maxcumweighting float64, err error)
  */
 func (store Datastore) getAllTracks() (tracks []Track, err error) {
 	tracks = []Track{}
-	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration FROM track")
+	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM track")
 	if (err != nil) { return }
 
 	// Loop through all the tracks and add tags for each one

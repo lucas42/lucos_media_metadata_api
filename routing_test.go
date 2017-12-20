@@ -428,6 +428,11 @@ func TestCanUpdateWeighting(test *testing.T) {
 	makeRequest(test, "PUT", path, "5.22", 200, "5.22", false)
 	makeRequest(test, "GET", path, "", 200, "5.22", false)
 
+
+	pathall := "/tracks"
+	alloutputJson := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/eui4536", "trackid": 1, "tags": {}, "weighting": 5.22}]`
+	makeRequest(test, "GET", pathall, "", 200, alloutputJson, true)
+
 	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET"})
 }
 
