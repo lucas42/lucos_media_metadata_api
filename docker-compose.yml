@@ -1,0 +1,13 @@
+version: '3'
+services:
+  media_metadata_api:
+    build: .
+    container_name: media_metadata_api
+    ports: 
+      - "3002:3002"
+    image: lucas42/lucos_media_metadata_api
+    volumes:
+      - "db:/var/lib/media-metadata/"
+
+volumes:
+  db:

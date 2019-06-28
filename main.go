@@ -70,7 +70,7 @@ func writePlainResponse(w http.ResponseWriter, data string, err error) {
  * Uses the PORT environment variable to specify which tcp port to listen on (defaults to 8080)
  */
 func main() {
-	store := DBInit("media.sqlite")
+	store := DBInit("/var/lib/media-metadata/media.sqlite")
 	var port string
 	if (len(os.Getenv("PORT")) > 0) {
 		port = os.Getenv("PORT")

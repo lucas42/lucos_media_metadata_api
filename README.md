@@ -1,17 +1,29 @@
 # lucos_media_metadata_api
 An API for managing media metadata.
 
-## Requirments
+
+## Dependencies
+
+* docker
+* docker-compose
+
+## Build-time Dependencies
 
 * [Golang](https://golang.org/)
 * github.com/mattn/go-sqlite3
 * github.com/jmoiron/sqlx
 
-## Installing
-Run `go install`
-
 ## Running
-Run `lucos_media_metadata_api`
+`nice -19 docker-compose up -d --no-build`
+
+## Building
+The build is configured to run in Dockerhub when a commit is pushed to the master branch in github.
+
+## Running locally
+
+* Install the build-time dependencies (see above)
+* Run `go install`
+* Run `lucos_media_metadata_api`
 
 (The install command should add this to your $GOBIN.  Make sure you've added this to your $PATH correctly to find the command)
 
