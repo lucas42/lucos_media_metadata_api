@@ -536,3 +536,16 @@ func TestRandomTracks(test *testing.T) {
 		test.Errorf("Random track missing max-age of 0")
 	}
 }
+
+
+/**
+ * Checks whether the /_info endpoint returns expected data
+ */
+func TestInfoEndpoint(test *testing.T) {
+	clearData()
+
+	expectedOutput := `{"system": "lucos_media_metadata_api", "checks": {}, "metrics": {}}`
+	makeRequest(test, "GET", "/_info", "", 200, expectedOutput, true)
+
+	makeRequestWithUnallowedMethod(test, "/_info", "POST", []string{"GET"})
+}
