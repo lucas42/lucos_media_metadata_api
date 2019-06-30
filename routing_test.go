@@ -544,7 +544,7 @@ func TestRandomTracks(test *testing.T) {
 func TestInfoEndpoint(test *testing.T) {
 	clearData()
 
-	expectedOutput := `{"system": "lucos_media_metadata_api", "checks": {}, "metrics": {}}`
+	expectedOutput := `{"system": "lucos_media_metadata_api", "checks": {"db": {"techDetail":"Does basic SELECT query from database", "ok": true}}, "metrics": {}}`
 	makeRequest(test, "GET", "/_info", "", 200, expectedOutput, true)
 
 	makeRequestWithUnallowedMethod(test, "/_info", "POST", []string{"GET"})
