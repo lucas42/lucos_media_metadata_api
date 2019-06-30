@@ -544,7 +544,19 @@ func TestRandomTracks(test *testing.T) {
 func TestInfoEndpoint(test *testing.T) {
 	clearData()
 
-	expectedOutput := `{"system": "lucos_media_metadata_api", "checks": {"db": {"techDetail":"Does basic SELECT query from database", "ok": true}}, "metrics": {}}`
+	// Create 37 Tracks
+	for i := 1; i <= 37; i++ {
+		id := strconv.Itoa(i)
+		trackurl := "http://example.org/track/id"+id
+		escapedTrackUrl := url.QueryEscape(trackurl)
+		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+		inputJson := `{"fingerprint": "abcde`+id+`", "duration": 350}`
+		outputJson := `{"fingerprint": "abcde`+id+`", "duration": 350, "url": "`+trackurl+`", "trackid": `+id+`, "tags": {}}`
+		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
+	}
+
+	expectedOutput := `{"system": "lucos_media_metadata_api", "checks": {"db": {"techDetail":"Does basic SELECT query from database", "ok": true}}, "metrics": {"trackCount":{"techDetail":"Number of tracks in database", "value": 37}}}`
 	makeRequest(test, "GET", "/_info", "", 200, expectedOutput, true)
 
 	makeRequestWithUnallowedMethod(test, "/_info", "POST", []string{"GET"})
