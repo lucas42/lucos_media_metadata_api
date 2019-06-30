@@ -8,6 +8,9 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Install Dependencies
+          command: go get ./...
+      - run:
           name: Unit Tests
           command: go test
 workflows:
