@@ -1,16 +1,8 @@
 version: 2.1
-executors:
-  docker-build:
-    environment:
-      IMAGE_NAME: lucas42/lucos_media_metadata_api
-    docker:
-      - image: circleci/buildpack-deps:buster
-  go-test:
-    docker:
-      - image: circleci/golang:1
 jobs:
   test:
-    executor: go-test
+    docker:
+      - image: circleci/golang:1
     working_directory: /go/src/github.com/lucas42/lucos_media_metadata_api
     steps:
       - checkout
@@ -21,7 +13,10 @@ jobs:
           name: Unit Tests
           command: go test
   build:
-    executor: docker-build
+    environment:
+      IMAGE_NAME: lucas42/lucos_media_metadata_api
+    docker:
+      - image: circleci/buildpack-deps:buster
     steps:
       - checkout
       - setup_remote_docker
