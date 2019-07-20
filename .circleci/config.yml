@@ -35,7 +35,7 @@ jobs:
       - checkout
       - add_ssh_keys:
           fingerprints:
-            - "SHA256:d/G+EQUvFJ4eeDb30/fH3MXUot/tCNHZYb61zGZ0qZU"
+            - "3b:d2:84:bc:c8:2e:09:b7:2f:e7:50:23:46:41:cf:23"
       - run:
           name: Populate known_hosts
           command: ssh-keyscan -H $PRODUCTION_HOST >> ~/.ssh/known_hosts
