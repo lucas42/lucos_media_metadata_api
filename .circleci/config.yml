@@ -34,9 +34,7 @@ jobs:
     steps:
       - run:
           name: Check $PRODUCTION_HOST is set
-          command: |
-            '[ -z "$PRODUCTION_HOST" ] && echo "Need to set PRODUCTION_HOST" && exit 1'
-            echo "Deploy onto $PRODUCTION_HOST"
+          command: echo "Deploying onto host \"$PRODUCTION_HOST\""
       - run:
           name: Pull container onto remote box
           command: DOCKER_HOST=ssh://$PRODUCTION_HOST docker-compose pull
