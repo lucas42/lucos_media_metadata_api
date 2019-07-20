@@ -37,6 +37,9 @@ jobs:
           fingerprints:
             - "SHA256:d/G+EQUvFJ4eeDb30/fH3MXUot/tCNHZYb61zGZ0qZU"
       - run:
+          name: Populate known_hosts
+          command: ssh-keyscan -H $PRODUCTION_HOST >> ~/.ssh/known_hosts
+      - run:
           name: Check $PRODUCTION_HOST is set
           command: echo "Deploying onto host \"$PRODUCTION_HOST\""
       - run:
