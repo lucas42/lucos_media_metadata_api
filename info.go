@@ -8,7 +8,7 @@ type InfoStruct struct {
 	System  string            `json:"system"`
 	Checks  map[string]Check  `json:"checks"`
 	Metrics map[string]Metric `json:"metrics"`
-	Badges  []string          `json:"badges"`
+	CI      map[string]string `json:"ci"`
 }
 
 type Check struct {
@@ -45,7 +45,9 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 		info.Metrics = map[string]Metric{
 			"trackCount": trackCount,
 		}
-		info.Badges = []string{"https://circleci.com/gh/lucas42/lucos_media_metadata_api.svg?style=shield"}
+		info.CI = map[string]string{
+			"circle": "gh/lucas42/lucos_media_metadata_api",
+		}
 		writeJSONResponse(w, info, nil)
 	} else {
 		MethodNotAllowed(w, []string{"GET"})

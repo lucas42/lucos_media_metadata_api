@@ -556,7 +556,7 @@ func TestInfoEndpoint(test *testing.T) {
 		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
 
-	expectedOutput := `{"system": "lucos_media_metadata_api", "checks": {"db": {"techDetail":"Does basic SELECT query from database", "ok": true}}, "metrics": {"trackCount":{"techDetail":"Number of tracks in database", "value": 37}}, "badges":["https://circleci.com/gh/lucas42/lucos_media_metadata_api.svg?style=shield"]}`
+	expectedOutput := `{"system": "lucos_media_metadata_api", "checks": {"db": {"techDetail":"Does basic SELECT query from database", "ok": true}}, "metrics": {"trackCount":{"techDetail":"Number of tracks in database", "value": 37}}, "ci":{"circle":"gh/lucas42/lucos_media_metadata_api"}}`
 	makeRequest(test, "GET", "/_info", "", 200, expectedOutput, true)
 
 	makeRequestWithUnallowedMethod(test, "/_info", "POST", []string{"GET"})
