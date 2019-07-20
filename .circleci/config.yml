@@ -32,6 +32,7 @@ jobs:
     docker:
       - image: circleci/buildpack-deps:buster
     steps:
+      - checkout
       - run:
           name: Check $PRODUCTION_HOST is set
           command: echo "Deploying onto host \"$PRODUCTION_HOST\""
