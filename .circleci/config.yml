@@ -1,10 +1,17 @@
-version: 2.0
-jobs:
-  test:
+version: 2.1
+executors:
+  docker-build:
+    environment:
+      IMAGE_NAME: lucas42/lucos_media_metadata_api
+    docker:
+      - image: circleci/buildpack-deps:buster
+  go-test:
     docker:
       - image: circleci/golang:1
+jobs:
+  test:
+    executor: go-test
     working_directory: /go/src/github.com/lucas42/lucos_media_metadata_api
-
     steps:
       - checkout
       - run:
@@ -13,8 +20,24 @@ jobs:
       - run:
           name: Unit Tests
           command: go test
+  build:
+    executor: docker-build
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+        name: Build Docker image
+        command: docker build -t $IMAGE_NAME:latest .
+      - run:
+        name: Publish Docker Image to Docker Hub
+        command: |
+          echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          docker push $IMAGE_NAME:latest
 workflows:
  version: 2
- Test:
+ build-deploy:
    jobs:
     - test
+    - build:
+      requires:
+        - test
