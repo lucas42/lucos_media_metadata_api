@@ -17,7 +17,6 @@ jobs:
       IMAGE_NAME: lucas42/lucos_media_metadata_api
     docker:
       - image: circleci/buildpack-deps:buster
-    context: docker
     steps:
       - checkout
       - setup_remote_docker
@@ -32,7 +31,6 @@ jobs:
   deploy:
     docker:
       - image: circleci/buildpack-deps:buster
-    context: docker
     steps:
       - run:
           name: Deploy using docker-compose
@@ -42,8 +40,10 @@ workflows:
   build-deploy:
     jobs:
       - test
-      - build
+      - build:
+          context: docker
       - deploy:
+          context: docker
           requires:
             - test
             - build
