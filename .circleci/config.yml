@@ -28,12 +28,20 @@ jobs:
           command: |
             echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
             docker push $IMAGE_NAME:latest
-
+  deploy:
+    docker:
+      - image: circleci/buildpack-deps:buster
+    steps:
+      - run:
+          name: Deploy using docker-compose
+          command: docker-compose --version
 workflows:
   version: 2
   build-deploy:
     jobs:
       - test
-      - build:
+      - build
+      - deploy:
           requires:
             - test
+            - build
