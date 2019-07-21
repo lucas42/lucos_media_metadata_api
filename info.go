@@ -43,7 +43,7 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 			"db": dbCheck,
 		}
 		info.Metrics = map[string]Metric{
-			"trackCount": trackCount,
+			"track-count": trackCount,
 		}
 		info.CI = map[string]string{
 			"circle": "gh/lucas42/lucos_media_metadata_api",
