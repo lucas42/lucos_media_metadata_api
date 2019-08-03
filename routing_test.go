@@ -274,6 +274,31 @@ func TestCanUpdateById(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, outputBJson, true)
 }
 
+/**
+ * Checks whether a PUT request with missing fields causes an error
+ */
+func TestCantPutIncompleteData(test *testing.T) {
+	clearData()
+	inputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/334"}`
+	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/334", "trackid": 1, "tags": {}}`
+	missingFingerprint := `{"duration": 150, "url": "http://example.org/track/13"}`
+	missingUrl := `{"fingerprint": "aoecu9876", "duration": 240}`
+	missingDuration := `{"fingerprint": "aoecu2468", "url": "http://example.org/track/87987"}`
+	missingFingerprintAndUrl := `{"duration": 17}`
+	path := "/tracks/1"
+	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
+	makeRequest(test, "PUT", path, inputJson, 200, outputJson, true)
+	makeRequest(test, "PUT", path, missingFingerprint, 400, "Missing fields \"fingerprint\"\n", false)
+	makeRequest(test, "GET", path, "", 200, outputJson, true)
+	makeRequest(test, "PUT", path, missingUrl, 400, "Missing fields \"url\"\n", false)
+	makeRequest(test, "GET", path, "", 200, outputJson, true)
+	makeRequest(test, "PUT", path, missingDuration, 400, "Missing fields \"duration\"\n", false)
+	makeRequest(test, "GET", path, "", 200, outputJson, true)
+	makeRequest(test, "PUT", path, missingFingerprintAndUrl, 400, "Missing fields \"fingerprint\" and \"url\"\n", false)
+	makeRequest(test, "GET", path, "", 200, outputJson, true)
+	makeRequest(test, "PUT", path, "{}", 400, "Missing fields \"fingerprint\" and \"url\" and \"duration\"\n", false)
+	makeRequest(test, "GET", path, "", 200, outputJson, true)
+}
 
 /**
  * Checks whether non-integer track IDs are handled correctly

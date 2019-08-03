@@ -330,6 +330,20 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 			if r.Method == "PATCH" {
 				err = store.partialUpdateTrackDataByField(filterfield, filtervalue, track)
 			} else {
+				missingFields := []string{}
+				if track.Fingerprint == "" {
+					missingFields = append(missingFields, "fingerprint")
+				}
+				if track.URL == "" {
+					missingFields = append(missingFields, "url")
+				}
+				if track.Duration == 0 {
+					missingFields = append(missingFields, "duration")
+				}
+				if len(missingFields) > 0 {
+					http.Error(w, "Missing fields \""+strings.Join(missingFields, "\" and \"")+"\"", http.StatusBadRequest)
+					return
+				}
 				err = store.updateCreateTrackDataByField(filterfield, filtervalue, track)
 			}
 			if err != nil {
