@@ -16,7 +16,7 @@ func DBInit(dbpath string) (database Datastore) {
 	db := sqlx.MustConnect("sqlite3", dbpath)
 	database = Datastore{db}
 	database.DB.MustExec("PRAGMA foreign_keys = ON;")
-	if (!database.TableExists("track")) {
+	if !database.TableExists("track") {
 		sqlStmt := `
 		CREATE TABLE "track" (
 			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
@@ -29,7 +29,7 @@ func DBInit(dbpath string) (database Datastore) {
 		`
 		database.DB.MustExec(sqlStmt)
 	}
-	if (!database.TableExists("global")) {
+	if !database.TableExists("global") {
 		sqlStmt := `
 		CREATE TABLE "global" (
 			"key" TEXT PRIMARY KEY NOT NULL, 
@@ -38,7 +38,7 @@ func DBInit(dbpath string) (database Datastore) {
 		`
 		database.DB.MustExec(sqlStmt)
 	}
-	if (!database.TableExists("predicate")) {
+	if !database.TableExists("predicate") {
 		sqlStmt := `
 		CREATE TABLE "predicate" (
 			"id" TEXT PRIMARY KEY NOT NULL
@@ -46,7 +46,7 @@ func DBInit(dbpath string) (database Datastore) {
 		`
 		database.DB.MustExec(sqlStmt)
 	}
-	if (!database.TableExists("tag")) {
+	if !database.TableExists("tag") {
 		sqlStmt := `
 		CREATE TABLE "tag" (
 			"trackid" TEXT NOT NULL,
@@ -64,7 +64,7 @@ func DBInit(dbpath string) (database Datastore) {
 
 func (store Datastore) TableExists(tablename string) (found bool) {
 	err := store.DB.Get(&found, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", tablename)
-	if (err != nil && err.Error() != "sql: no rows in result set") {
+	if err != nil && err.Error() != "sql: no rows in result set" {
 		panic(err)
 	}
 	return

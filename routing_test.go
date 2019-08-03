@@ -1,17 +1,17 @@
 package main
 
 import (
-    "fmt"
-    "net/http"
-    "net/http/httptest"
-    "net/url"
-    "strings"
-    "strconv"
-    "testing"
-    "io/ioutil"
-    "encoding/json"
-    "reflect"
-    "os"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"reflect"
+	"strconv"
+	"strings"
+	"testing"
 )
 
 var server *httptest.Server
@@ -22,7 +22,7 @@ var server *httptest.Server
  */
 func clearData() {
 	os.Remove("testrouting.sqlite")
-    restartServer()
+	restartServer()
 }
 func TestMain(m *testing.M) {
 	clearData()
@@ -66,14 +66,15 @@ func AreEqualJSON(s1, s2 string) (bool, error) {
  *
  */
 func makeRequest(t *testing.T, method string, path string, requestBody string, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
-    reader := strings.NewReader(requestBody)
-    url := server.URL + path
-    request, err := http.NewRequest(method, url, reader)
-    if err != nil {
-        t.Error(err)
-    }
-    makeRawRequest(t, request, expectedResponseCode, expectedResponseBody, expectJSON)
+	reader := strings.NewReader(requestBody)
+	url := server.URL + path
+	request, err := http.NewRequest(method, url, reader)
+	if err != nil {
+		t.Error(err)
+	}
+	makeRawRequest(t, request, expectedResponseCode, expectedResponseBody, expectJSON)
 }
+
 /**
  * Makes a http request and compares the response to some expected values
  *
@@ -81,40 +82,41 @@ func makeRequest(t *testing.T, method string, path string, requestBody string, e
  */
 func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
 	url := request.URL.String()
-    response, err := http.DefaultClient.Do(request)
-    if err != nil {
-        t.Error(err)
-    }
-    responseData,err := ioutil.ReadAll(response.Body)
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-	    t.Error(err)
+		t.Error(err)
+	}
+	responseData, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		t.Error(err)
 	}
 	actualResponseBody := string(responseData)
 
-	if (response.StatusCode >= 500) {
+	if response.StatusCode >= 500 {
 		t.Errorf("Error code %d returned for %s, message: %s", response.StatusCode, url, actualResponseBody)
 		return
 	}
 
-    if response.StatusCode != expectedResponseCode {
-        t.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
-    }
-	if (expectJSON) {
-		if (!strings.HasPrefix(response.Header.Get("content-type"), "application/json;")) {
+	if response.StatusCode != expectedResponseCode {
+		t.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+	}
+	if expectJSON {
+		if !strings.HasPrefix(response.Header.Get("content-type"), "application/json;") {
 			t.Errorf("Expected JSON Content Type, received: \"%s\"", request.Header.Get("Content-type"))
 		}
 		isEqual, err := AreEqualJSON(actualResponseBody, expectedResponseBody)
 		if err != nil {
 			t.Errorf("Invalid JSON body: %s, expected: %s from %s", actualResponseBody, expectedResponseBody, url)
-		} else if (!isEqual) {
+		} else if !isEqual {
 			t.Errorf("Unexpected JSON body: %s, expected: %s", actualResponseBody, expectedResponseBody)
 		}
 	} else {
-		if (actualResponseBody != expectedResponseBody) {
+		if actualResponseBody != expectedResponseBody {
 			t.Errorf("Unexpected body: \"%s\", expected: \"%s\"", actualResponseBody, expectedResponseBody)
 		}
 	}
 }
+
 /**
  * Constructs a http request with a method which shouldn't be allowed
  *
@@ -122,24 +124,31 @@ func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode in
 func makeRequestWithUnallowedMethod(t *testing.T, path string, unallowedMethod string, allowedMethods []string) {
 	url := server.URL + path
 	request, err := http.NewRequest(unallowedMethod, url, nil)
-	if err != nil { t.Error(err) }
+	if err != nil {
+		t.Error(err)
+	}
 	response, err := http.DefaultClient.Do(request)
-	if err != nil { t.Error(err) }
+	if err != nil {
+		t.Error(err)
+	}
 	responseData, err := ioutil.ReadAll(response.Body)
-	if err != nil { t.Error(err) }
+	if err != nil {
+		t.Error(err)
+	}
 	actualResponseBody := string(responseData)
 	if response.StatusCode != 405 {
 		t.Errorf("Got response code %d, expected %d for %s", response.StatusCode, 405, url)
 	}
-	if (!strings.HasPrefix(actualResponseBody, "Method Not Allowed")) {
+	if !strings.HasPrefix(actualResponseBody, "Method Not Allowed") {
 		t.Errorf("Repsonse body for %s doesn't begin with \"Method Not Allowed\"", url)
 	}
 	for _, method := range allowedMethods {
-		if (!strings.Contains(response.Header.Get("allow"), method)) {
+		if !strings.Contains(response.Header.Get("allow"), method) {
 			t.Errorf("Allow header doesn't include method %s for %s", method, url)
 		}
 	}
 }
+
 /**
  * Constructs a http request which should do a redirect
  *
@@ -148,9 +157,11 @@ func checkRedirect(t *testing.T, initialPath string, expectedPath string) {
 	initialURL := server.URL + initialPath
 	expectedDestination := server.URL + expectedPath
 	response, err := http.Get(initialURL)
-	if err != nil { t.Error(err) }
+	if err != nil {
+		t.Error(err)
+	}
 	actualDestination := response.Request.URL.String()
-	if (actualDestination != expectedDestination) {
+	if actualDestination != expectedDestination {
 		t.Errorf("Unexpected redirect destination: \"%s\", expected: \"%s\", from \"%s\"", actualDestination, expectedDestination, initialURL)
 	}
 }
@@ -170,8 +181,9 @@ func TestCanEditTrackByUrl(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
-	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET", "PATCH"})
+	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET", ""})
 }
+
 /**
  * Checks whether a track can have its duration updated
  */
@@ -248,7 +260,7 @@ func TestCanUpdateById(test *testing.T) {
 	inputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334"}`
 	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}}`
 	outputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 1, "tags": {}}`
-	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)	
+	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)
 	path2 := fmt.Sprintf("/tracks?url=%s", escapedTrack2Url)
 	path := "/tracks/1"
 	makeRequest(test, "GET", path1, "", 404, "Track Not Found\n", false)
@@ -261,6 +273,7 @@ func TestCanUpdateById(test *testing.T) {
 	makeRequest(test, "PUT", path, `{"start": "some JSON"`, 400, "unexpected EOF\n", false)
 	makeRequest(test, "GET", path, "", 200, outputBJson, true)
 }
+
 
 /**
  * Checks whether non-integer track IDs are handled correctly
@@ -288,7 +301,7 @@ func TestGetAllTracks(test *testing.T) {
 	output2Json := `{"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {}}`
 	alloutputJson1 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}]`
 	alloutputJson2 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}, {"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {}}]`
-	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)	
+	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)
 	path2 := fmt.Sprintf("/tracks?url=%s", escapedTrack2Url)
 	pathall := "/tracks"
 	makeRequest(test, "PUT", path1, input1Json, 200, output1Json, true)
@@ -301,7 +314,6 @@ func TestGetAllTracks(test *testing.T) {
 	makeRequestWithUnallowedMethod(test, pathall, "PUT", []string{"GET"})
 }
 
-
 /**
  * Checks the pagination of the /tracks endpoint
  */
@@ -311,11 +323,11 @@ func TestPagination(test *testing.T) {
 	// Create 45 Tracks
 	for i := 1; i <= 45; i++ {
 		id := strconv.Itoa(i)
-		trackurl := "http://example.org/track/id"+id
+		trackurl := "http://example.org/track/id" + id
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
-		inputJson := `{"fingerprint": "abcde`+id+`", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde`+id+`", "duration": 350, "url": "`+trackurl+`", "trackid": `+id+`, "tags": {}}`
+		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
@@ -326,27 +338,27 @@ func TestPagination(test *testing.T) {
 	}
 	for page, count := range pages {
 
-	    url := server.URL + "/tracks/?page=" + page
-	    response, err := http.Get(url)
-	    if err != nil {
-	        test.Error(err)
-	    }
-	    responseData,err := ioutil.ReadAll(response.Body)
+		url := server.URL + "/tracks/?page=" + page
+		response, err := http.Get(url)
 		if err != nil {
-		    test.Error(err)
+			test.Error(err)
+		}
+		responseData, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			test.Error(err)
 		}
 
 		expectedResponseCode := 200
-	    if response.StatusCode != expectedResponseCode {
-	        test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
-	    }
+		if response.StatusCode != expectedResponseCode {
+			test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+		}
 
 		var output []interface{}
 		err = json.Unmarshal(responseData, &output)
 		if err != nil {
-			test.Errorf("Invalid JSON body: %s for %s", err.Error(), "/tracks/?page=" + page)
+			test.Errorf("Invalid JSON body: %s for %s", err.Error(), "/tracks/?page="+page)
 		}
-		if (len(output) != count) {
+		if len(output) != count {
 			test.Errorf("Wrong number of tracks.  Expected: %d, Actual: %d", count, len(output))
 		}
 	}
@@ -436,6 +448,7 @@ func TestAddTag(test *testing.T) {
 
 	checkRedirect(test, "/tags", "/tracks")
 }
+
 /**
  * Checks whether new tags can be added
  */
@@ -454,25 +467,26 @@ func TestAddTagIfMissing(test *testing.T) {
 	// Add Tag (this should work as tag doesn't yet exist)
 	path := "/tags/1/rating"
 	reader := strings.NewReader("5")
-    request, err := http.NewRequest("PUT", server.URL + path, reader)
-    if err != nil {
-        test.Error(err)
-    }
-    request.Header.Add("If-None-Match", "*")
-    makeRawRequest(test, request, 200, "5", false)
+	request, err := http.NewRequest("PUT", server.URL+path, reader)
+	if err != nil {
+		test.Error(err)
+	}
+	request.Header.Add("If-None-Match", "*")
+	makeRawRequest(test, request, 200, "5", false)
 	makeRequest(test, "GET", path, "", 200, "5", false)
 
 	// Update Tag (this shouldn't have any effect as tag already exists)
 	reader = strings.NewReader("2")
-    request, err = http.NewRequest("PUT", server.URL + path, reader)
-    if err != nil {
-        test.Error(err)
-    }
-    request.Header.Add("If-None-Match", "*")
-    makeRawRequest(test, request, 200, "5", false)
+	request, err = http.NewRequest("PUT", server.URL+path, reader)
+	if err != nil {
+		test.Error(err)
+	}
+	request.Header.Add("If-None-Match", "*")
+	makeRawRequest(test, request, 200, "5", false)
 	makeRequest(test, "GET", path, "", 200, "5", false)
 	makeRequest(test, "GET", trackpath, "", 200, trackOutputTagged, true)
 }
+
 /**
  * Checks whether we error correctly for tags being added to unknown tracks
  */
@@ -480,7 +494,6 @@ func TestAddTagForUnknownTrack(test *testing.T) {
 	clearData()
 	makeRequest(test, "PUT", "/tags/1/artist", "The Corrs", 404, "Unknown Track\n", false)
 }
-
 
 /**
  * Checks whether a track can have its weighting updated
@@ -496,7 +509,7 @@ func TestCanUpdateWeighting(test *testing.T) {
 	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/eui4536", "trackid": 1, "tags": {}}`
 	makeRequest(test, "PUT", trackpath, `{"fingerprint": "aoecu1234", "duration": 300}`, 200, outputJson, true)
-	
+
 	makeRequest(test, "GET", path, "", 200, "0", false)
 	makeRequest(test, "PUT", path, "bob", 400, "Weighting must be a number\n", false)
 	makeRequest(test, "PUT", path, "3", 200, "3", false)
@@ -505,7 +518,6 @@ func TestCanUpdateWeighting(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, "3", false)
 	makeRequest(test, "PUT", path, "5.22", 200, "5.22", false)
 	makeRequest(test, "GET", path, "", 200, "5.22", false)
-
 
 	pathall := "/tracks"
 	alloutputJson := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/eui4536", "trackid": 1, "tags": {}, "weighting": 5.22}]`
@@ -525,45 +537,44 @@ func TestRandomTracks(test *testing.T) {
 	// Create 40 Tracks
 	for i := 1; i <= 40; i++ {
 		id := strconv.Itoa(i)
-		trackurl := "http://example.org/track/id"+id
+		trackurl := "http://example.org/track/id" + id
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
-		inputJson := `{"fingerprint": "abcde`+id+`", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde`+id+`", "duration": 350, "url": "`+trackurl+`", "trackid": `+id+`, "tags": {}}`
+		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
-    url := server.URL + path
-    response, err := http.Get(url)
-    if err != nil {
-        test.Error(err)
-    }
-    responseData,err := ioutil.ReadAll(response.Body)
+	url := server.URL + path
+	response, err := http.Get(url)
 	if err != nil {
-	    test.Error(err)
+		test.Error(err)
+	}
+	responseData, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		test.Error(err)
 	}
 
 	expectedResponseCode := 200
-    if response.StatusCode != expectedResponseCode {
-        test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
-    }
+	if response.StatusCode != expectedResponseCode {
+		test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+	}
 
 	var output []interface{}
 	err = json.Unmarshal(responseData, &output)
 	if err != nil {
 		test.Errorf("Invalid JSON body: %s for %s", err.Error(), path)
 	}
-	if (len(output) != 20) {
+	if len(output) != 20 {
 		test.Errorf("Wrong number of tracks.  Expected: 20, Actual: %d", len(output))
 	}
-	if (!strings.Contains(response.Header.Get("Cache-Control"), "no-cache")) {
+	if !strings.Contains(response.Header.Get("Cache-Control"), "no-cache") {
 		test.Errorf("Random track list is cachable")
 	}
-	if (!strings.Contains(response.Header.Get("Cache-Control"), "max-age=0")) {
+	if !strings.Contains(response.Header.Get("Cache-Control"), "max-age=0") {
 		test.Errorf("Random track missing max-age of 0")
 	}
 }
-
 
 /**
  * Checks whether the /_info endpoint returns expected data
@@ -574,11 +585,11 @@ func TestInfoEndpoint(test *testing.T) {
 	// Create 37 Tracks
 	for i := 1; i <= 37; i++ {
 		id := strconv.Itoa(i)
-		trackurl := "http://example.org/track/id"+id
+		trackurl := "http://example.org/track/id" + id
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
-		inputJson := `{"fingerprint": "abcde`+id+`", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde`+id+`", "duration": 350, "url": "`+trackurl+`", "trackid": `+id+`, "tags": {}}`
+		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}

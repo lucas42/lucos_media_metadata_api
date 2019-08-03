@@ -22,15 +22,15 @@ type Metric struct {
 	Value      int    `json:"value"`
 }
 
-/** 
+/**
  * A controller for serving /_info
  */
 func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		info := InfoStruct{System: "lucos_media_metadata_api"}
 
-		dbCheck := Check{TechDetail:"Does basic SELECT query from database"}
-		trackCount := Metric{TechDetail:"Number of tracks in database"}
+		dbCheck := Check{TechDetail: "Does basic SELECT query from database"}
+		trackCount := Metric{TechDetail: "Number of tracks in database"}
 		err := store.DB.Get(&trackCount.Value, "SELECT COUNT(*) FROM track")
 		if err != nil {
 			dbCheck.OK = false

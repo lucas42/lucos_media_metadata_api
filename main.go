@@ -9,7 +9,6 @@ import (
 	"strings"
 )
 
-
 /**
  * The front controller for all incoming requests
  */
@@ -63,7 +62,6 @@ func writePlainResponse(w http.ResponseWriter, data string, err error) {
 	w.Write([]byte(data))
 }
 
-
 /**
  * Listens for incoming http requests
  * and serve the appropriate response based on the front controller
@@ -73,7 +71,7 @@ func writePlainResponse(w http.ResponseWriter, data string, err error) {
 func main() {
 	store := DBInit("/var/lib/media-metadata/media.sqlite")
 	var port string
-	if (len(os.Getenv("PORT")) > 0) {
+	if len(os.Getenv("PORT")) > 0 {
 		port = os.Getenv("PORT")
 	} else {
 		port = "8080"

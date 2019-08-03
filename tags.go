@@ -9,9 +9,9 @@ import (
 )
 
 type Tag struct {
-	TrackID int
+	TrackID     int
 	PredicateID string
-	Value string
+	Value       string
 }
 
 /**
@@ -21,7 +21,7 @@ type Tag struct {
 func (store Datastore) getTagValue(trackid int, predicate string) (value string, err error) {
 	err = store.DB.Get(&value, "SELECT value FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, predicate)
 	if err != nil {
-		if (err.Error() == "sql: no rows in result set") {
+		if err.Error() == "sql: no rows in result set" {
 			err = errors.New("Tag Not Found")
 		}
 	}
@@ -34,16 +34,22 @@ func (store Datastore) getTagValue(trackid int, predicate string) (value string,
  */
 func (store Datastore) updateTag(trackid int, predicate string, value string) (err error) {
 	trackFound, err := store.trackExists("id", trackid)
-	if err != nil { return }
-	if (!trackFound) {
+	if err != nil {
+		return
+	}
+	if !trackFound {
 		err = errors.New("Unknown Track")
 		return
 	}
 	hasPredicate, err := store.hasPredicate(predicate)
-	if err != nil { return }
-	if (!hasPredicate) {
+	if err != nil {
+		return
+	}
+	if !hasPredicate {
 		err = store.createPredicate(predicate)
-		if err != nil { return }
+		if err != nil {
+			return
+		}
 	}
 	_, err = store.DB.Exec("REPLACE INTO tag(trackid, predicateid, value) values($1, $2, $3)", trackid, predicate, value)
 	return
@@ -57,17 +63,18 @@ func (store Datastore) getAllTagsForTrack(trackid int) (tags map[string]string, 
 	tags = make(map[string]string)
 	tagList := []Tag{}
 	err = store.DB.Select(&tagList, "SELECT * FROM tag WHERE trackid = ?", trackid)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	for _, tag := range tagList {
 		tags[tag.PredicateID] = tag.Value
 	}
 	return
 }
 
-
 /**
  * Writes a http response with the value of a tag
- */ 
+ */
 func writeTag(store Datastore, w http.ResponseWriter, trackid int, predicate string) {
 	value, err := store.getTagValue(trackid, predicate)
 	writePlainResponse(w, value, err)
@@ -81,12 +88,12 @@ func writeAllTagsForTrack(store Datastore, w http.ResponseWriter, trackid int) {
 	writeJSONResponse(w, tags, err)
 }
 
-/** 
+/**
  * A controller for handling all requests dealing with tags
  */
 func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
-	pathparts := strings.Split(strings.Trim(r.URL.Path,"/"), "/")
-	if (len(pathparts) < 2) {
+	pathparts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathparts) < 2 {
 		http.Redirect(w, r, "/tracks", http.StatusFound)
 		return
 	}
@@ -95,8 +102,8 @@ func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Track ID must be an integer", http.StatusBadRequest)
 		return
 	}
-	if (len(pathparts) < 3) {
-		if (r.Method == "GET") {
+	if len(pathparts) < 3 {
+		if r.Method == "GET" {
 			writeAllTagsForTrack(store, w, trackid)
 		} else {
 			MethodNotAllowed(w, []string{"GET"})
@@ -105,34 +112,34 @@ func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
 	}
 	predicate := pathparts[2]
 	switch r.Method {
-		case "PUT":
-			value, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if (r.Header.Get("If-None-Match") == "*") {
-				_, err = store.getTagValue(trackid, predicate)
-				if (err != nil && err.Error() == "Tag Not Found") {
-					err = store.updateTag(trackid, predicate, string(value))
-				}
-			} else {
+	case "PUT":
+		value, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if r.Header.Get("If-None-Match") == "*" {
+			_, err = store.getTagValue(trackid, predicate)
+			if err != nil && err.Error() == "Tag Not Found" {
 				err = store.updateTag(trackid, predicate, string(value))
 			}
-			if err != nil {
-				var status int
-				if (err.Error() == "Unknown Track") {
-					status = http.StatusNotFound
-				} else {
-					status = http.StatusInternalServerError
-				}
-				http.Error(w, err.Error(), status)
-				return
+		} else {
+			err = store.updateTag(trackid, predicate, string(value))
+		}
+		if err != nil {
+			var status int
+			if err.Error() == "Unknown Track" {
+				status = http.StatusNotFound
+			} else {
+				status = http.StatusInternalServerError
 			}
-			fallthrough
-		case "GET":
-			writeTag(store, w, trackid, predicate)
-		default:
-			MethodNotAllowed(w, []string{"GET", "PUT"})
+			http.Error(w, err.Error(), status)
+			return
+		}
+		fallthrough
+	case "GET":
+		writeTag(store, w, trackid, predicate)
+	default:
+		MethodNotAllowed(w, []string{"GET", "PUT"})
 	}
 }
