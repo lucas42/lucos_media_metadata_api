@@ -170,7 +170,7 @@ func TestCanEditTrackByUrl(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
-	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET"})
+	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET", "PATCH"})
 }
 /**
  * Checks whether a track can have its duration updated
@@ -206,6 +206,33 @@ func TestCanEditTrackByFingerprint(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, outputJson1, true)
 	makeRequest(test, "PUT", path, `{"url": "http://example.org/track/cdef", "duration": 300}`, 200, outputJson2, true)
 	makeRequest(test, "GET", path, "", 200, outputJson2, true)
+}
+
+/**
+ * Checks whether a track can be partially edited based on its fingerprint
+ */
+func TestCanPatchTrackByFingerprint(test *testing.T) {
+	clearData()
+	inputJson := `{"url": "http://example.org/track/1256", "duration": 300}`
+	outputJson1 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}`
+	outputJson2 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/cdef", "trackid": 1, "tags": {}}`
+	path := "/tracks?fingerprint=aoecu1234"
+	makeRequest(test, "PUT", path, inputJson, 200, outputJson1, true)
+	makeRequest(test, "GET", path, "", 200, outputJson1, true)
+	makeRequest(test, "PATCH", path, `{"url": "http://example.org/track/cdef"}`, 200, outputJson2, true)
+	makeRequest(test, "GET", path, "", 200, outputJson2, true)
+	restartServer()
+	makeRequest(test, "GET", path, "", 200, outputJson2, true)
+}
+
+/**
+ * Checks that non-existant tracks aren't created using PATCH
+ */
+func TestPatchOnlyUpdatesExistingTracks(test *testing.T) {
+	path := "/tracks?fingerprint=aoecu1234"
+	clearData()
+	makeRequest(test, "PATCH", path, `{"url": "http://example.org/track/cdef"}`, 404, "Track Not Found\n", false)
+	makeRequest(test, "GET", "/tracks", "", 200, "[]", true)
 }
 
 /**

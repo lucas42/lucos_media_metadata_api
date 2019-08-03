@@ -24,10 +24,10 @@ type Track struct {
 }
 
 /**
- * Updates data about a track based on a given field
+ * Updates or Creates a track based on a given field
  *
  */
-func (store Datastore) updateTrackDataByField(field string, value interface{}, track Track) (err error) {
+func (store Datastore) updateCreateTrackDataByField(field string, value interface{}, track Track) (err error) {
 	trackExists, err := store.trackExists(field, value)
 	if err != nil { return }
 	if (trackExists) {
@@ -35,6 +35,27 @@ func (store Datastore) updateTrackDataByField(field string, value interface{}, t
 	} else {
 		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
 	}
+	return
+}
+
+/**
+ * Updates given fields about a track based on a given field
+ *
+ */
+func (store Datastore) partialUpdateTrackDataByField(filterField string, value interface{}, track Track) (err error) {
+	trackExists, err := store.trackExists(filterField, value)
+	if err != nil || !trackExists { return }
+	updateFields := []string{}
+	if track.Duration != 0 {
+		updateFields = append(updateFields, "duration = :duration")
+	}
+	if track.URL != "" {
+		updateFields = append(updateFields, "url = :url")
+	}
+	if track.Fingerprint != "" {
+		updateFields = append(updateFields, "fingerprint = :fingerprint")
+	}
+	_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
 	return
 }
 
@@ -263,6 +284,8 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 		}
 	} else {
 		switch r.Method {
+			case "PATCH":
+				fallthrough
 			case "PUT":
 				track, err := DecodeTrack(r.Body)
 				if err != nil {
@@ -277,7 +300,11 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 					case "fingerprint":
 						track.Fingerprint = fingerprint
 				}
-				err = store.updateTrackDataByField(filterfield, filtervalue, track)
+				if r.Method == "PATCH" {
+					err = store.partialUpdateTrackDataByField(filterfield, filtervalue, track)
+				} else {
+					err = store.updateCreateTrackDataByField(filterfield, filtervalue, track)
+				}
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
@@ -286,7 +313,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 			case "GET":
 				writeTrackDataByField(store, w, filterfield, filtervalue)
 			default:
-				MethodNotAllowed(w, []string{"GET", "PUT"})
+				MethodNotAllowed(w, []string{"GET", "PUT", "PATCH"})
 		}
 	}
 }
