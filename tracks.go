@@ -33,7 +33,7 @@ func (store Datastore) updateCreateTrackDataByField(field string, value interfac
 		return
 	}
 	if trackExists {
-		_, err = store.DB.NamedExec("UPDATE TRACK SET duration = :duration, url = :url, fingerprint = :fingerprint WHERE "+field+" = :"+field, track)
+		err = store.updateTrackDataByField(field, value, track)
 	} else {
 		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
 	}
@@ -44,7 +44,7 @@ func (store Datastore) updateCreateTrackDataByField(field string, value interfac
  * Updates given fields about a track based on a given field
  *
  */
-func (store Datastore) partialUpdateTrackDataByField(filterField string, value interface{}, track Track) (err error) {
+func (store Datastore) updateTrackDataByField(filterField string, value interface{}, track Track) (err error) {
 	trackExists, err := store.trackExists(filterField, value)
 	if err != nil || !trackExists {
 		return
@@ -328,7 +328,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 				track.Fingerprint = fingerprint
 			}
 			if r.Method == "PATCH" {
-				err = store.partialUpdateTrackDataByField(filterfield, filtervalue, track)
+				err = store.updateTrackDataByField(filterfield, filtervalue, track)
 			} else {
 				missingFields := []string{}
 				if track.Fingerprint == "" {
