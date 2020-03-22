@@ -24,42 +24,33 @@ type Track struct {
 }
 
 /**
- * Updates or Creates a track based on a given field
+ * Updates or Creates fields about a track based on a given field
  *
  */
-func (store Datastore) updateCreateTrackDataByField(field string, value interface{}, track Track) (err error) {
-	trackExists, err := store.trackExists(field, value)
-	if err != nil {
-		return
-	}
-	if trackExists {
-		err = store.updateTrackDataByField(field, value, track)
-	} else {
-		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
-	}
-	return
-}
-
-/**
- * Updates given fields about a track based on a given field
- *
- */
-func (store Datastore) updateTrackDataByField(filterField string, value interface{}, track Track) (err error) {
-	trackExists, err := store.trackExists(filterField, value)
-	if err != nil || !trackExists {
-		return
-	}
+func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, trackExists bool) (err error) {
 	updateFields := []string{}
 	if track.Duration != 0 {
 		updateFields = append(updateFields, "duration = :duration")
 	}
 	if track.URL != "" {
+		err = store.checkForDuplicate("url", track.URL, filterField, value)
+		if err != nil {
+			return
+		}
 		updateFields = append(updateFields, "url = :url")
 	}
 	if track.Fingerprint != "" {
+		err = store.checkForDuplicate("fingerprint", track.Fingerprint, filterField, value)
+		if err != nil {
+			return
+		}
 		updateFields = append(updateFields, "fingerprint = :fingerprint")
 	}
-	_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
+	if trackExists {
+		_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
+	} else {
+		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
+	}
 	return
 }
 
@@ -91,6 +82,22 @@ func (store Datastore) trackExists(field string, value interface{}) (found bool,
 	}
 	return
 }
+/**
+ * Checks whether any other tracks are duplicating a given field
+ *
+ */
+func (store Datastore) checkForDuplicate(compareField string, compareValue interface{}, filterField string, filterValue interface{}) (err error) {
+	var trackid int
+	err = store.DB.Get(&trackid, "SELECT id FROM track WHERE "+compareField+" = $1 AND "+filterField+" != $2", compareValue, filterValue)
+	if err != nil && err.Error() == "sql: no rows in result set" {
+		err = nil
+	}
+	if (trackid != 0) {
+		err = errors.New("Duplicate: track "+strconv.Itoa(trackid)+" has same "+compareField)
+	}
+	return
+}
+
 
 /**
  * Sets the weighting for a given track
@@ -327,8 +334,13 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 			case "fingerprint":
 				track.Fingerprint = fingerprint
 			}
+			trackExists, err := store.trackExists(filterfield, filtervalue)
 			if r.Method == "PATCH" {
-				err = store.updateTrackDataByField(filterfield, filtervalue, track)
+
+				// Take no action for non-exsistent tracks (those will return a 404 when we fallthrough to GET below)
+				if trackExists {
+					err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, trackExists)
+				}
 			} else {
 				missingFields := []string{}
 				if track.Fingerprint == "" {
@@ -344,10 +356,14 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 					http.Error(w, "Missing fields \""+strings.Join(missingFields, "\" and \"")+"\"", http.StatusBadRequest)
 					return
 				}
-				err = store.updateCreateTrackDataByField(filterfield, filtervalue, track)
+				err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, trackExists)
 			}
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				statusCode := http.StatusInternalServerError
+				if strings.HasPrefix(err.Error(), "Duplicate:") {
+					statusCode = http.StatusBadRequest
+				}
+				http.Error(w, err.Error(), statusCode)
 				return
 			}
 			fallthrough

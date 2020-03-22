@@ -552,6 +552,61 @@ func TestCanUpdateWeighting(test *testing.T) {
 }
 
 /**
+ * Checks whether tracks with duplicate trackurls are handled nicely
+ */
+func TestDuplicateURL(test *testing.T) {
+	clearData()
+	oldTrackUrl := "http://example.org/oldurl"
+	newTrackUrl := "http://example.org/newurl"
+	track1Path := "/tracks?fingerprint=track1"
+	track2Path := "/tracks?fingerprint=track2"
+	track3Path := "/tracks?fingerprint=track3"
+
+	// Set up 2 tracks with different URLs
+	makeRequest(test, "PUT", track1Path, `{"url":"` + oldTrackUrl + `", "duration": 7}`, 200, `{"fingerprint":"track1","duration":7,"url":"` + oldTrackUrl + `","trackid":1,"tags":{}}`, true)
+	makeRequest(test, "PUT", track2Path, `{"url":"` + newTrackUrl + `", "duration": 17}`, 200, `{"fingerprint":"track2","duration":17,"url":"` + newTrackUrl + `","trackid":2,"tags":{}}`, true)
+
+	// Try to update first track to have same URL as second using PATCH
+	makeRequest(test, "PATCH", track1Path, `{"url":"` + newTrackUrl + `"}`, 400, "Duplicate: track 2 has same url\n", false)
+
+	// Try to update first track to have same URL as second using PUT
+	makeRequest(test, "PUT", track1Path, `{"url":"` + newTrackUrl + `", "duration": 7}`, 400, "Duplicate: track 2 has same url\n", false)
+
+	// Try to create a new track with the same URL as the either of the others
+	makeRequest(test, "PUT", track3Path, `{"url":"` + oldTrackUrl + `", "duration": 27}`, 400, "Duplicate: track 1 has same url\n", false)
+	makeRequest(test, "PUT", track3Path, `{"url":"` + newTrackUrl + `", "duration": 27}`, 400, "Duplicate: track 2 has same url\n", false)
+
+}
+
+/**
+ * Checks whether tracks with duplicate fingerprints are handled nicely
+ */
+func TestDuplicateFingerprint(test *testing.T) {
+	clearData()
+	fingerprint1 := "ascorc562hsrch"
+	fingerprint2 := "lhlacehu43rcphalc"
+
+	track1Path := "/tracks?url="+url.QueryEscape("http://example.org/track1")
+	track2Path := "/tracks?url="+url.QueryEscape("http://example.org/track2")
+	track3Path := "/tracks?url="+url.QueryEscape("http://example.org/track3")
+
+	// Set up 2 tracks with different fingerprints
+	makeRequest(test, "PUT", track1Path, `{"fingerprint":"` + fingerprint1 + `", "duration": 7}`, 200, `{"fingerprint":"` + fingerprint1 + `","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{}}`, true)
+	makeRequest(test, "PUT", track2Path, `{"fingerprint":"` + fingerprint2 + `", "duration": 17}`, 200, `{"fingerprint":"` + fingerprint2 + `","duration":17,"url":"http://example.org/track2","trackid":2,"tags":{}}`, true)
+
+	// Try to update first track to have same fingerprint as second using PUT
+	makeRequest(test, "PUT", track2Path, `{"fingerprint":"` + fingerprint1 + `", "duration": 17}`, 400, "Duplicate: track 1 has same fingerprint\n", false)
+
+	// Try to update first track to have same fingerprint as second using PUT
+	makeRequest(test, "PATCH", track2Path, `{"fingerprint":"` + fingerprint1 + `"}`, 400, "Duplicate: track 1 has same fingerprint\n", false)
+
+	// Try to create a new track with the same fingerprint as the either of the others
+	makeRequest(test, "PUT", track3Path, `{"fingerprint":"` + fingerprint2 + `", "duration": 17}`, 400, "Duplicate: track 2 has same fingerprint\n", false)
+	makeRequest(test, "PUT", track3Path, `{"fingerprint":"` + fingerprint1 + `", "duration": 17}`, 400, "Duplicate: track 1 has same fingerprint\n", false)
+
+}
+
+/**
  * Checks random tracks endpoint
  */
 func TestRandomTracks(test *testing.T) {
