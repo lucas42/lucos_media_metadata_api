@@ -35,3 +35,6 @@ Accepts the following environment variables:
 Run `go test`
 
 [![CircleCI](https://circleci.com/gh/lucas42/lucos_media_metadata_api.svg?style=shield)](https://circleci.com/gh/lucas42/lucos_media_metadata_api)
+
+## Backing Up
+Copy the file from the docker host at /var/lib/docker/volumes/lucos_media_metadata_api_db/_data/media.sqlite
