@@ -201,6 +201,23 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
 }
 
 /**
+ * Gets the weighting of a given track
+ *
+ */
+func (store Datastore) deleteTrack(trackid int) (err error) {
+	_, err = store.DB.Exec("DELETE FROM tag WHERE trackid=$1", trackid)
+	if (err != nil) {
+		return
+	}
+	_, err = store.DB.Exec("DELETE FROM track WHERE id=$1", trackid)
+	if err != nil && err.Error() == "sql: no rows in result set" {
+		err = errors.New("Track Not Found")
+		return
+	}
+	return
+}
+
+/**
  * Write a http response with a JSON representation of all tracks
  *
  */
@@ -236,6 +253,15 @@ func writeWeighting(store Datastore, w http.ResponseWriter, trackid int) {
 func writeRandomTracks(store Datastore, w http.ResponseWriter) {
 	tracks, err := store.getRandomTracks(20)
 	writeJSONResponse(w, tracks, err)
+}
+
+
+/**
+ * Deletes a given track and writes a response with no content
+ */
+func deleteTrackHandler(store Datastore, w http.ResponseWriter, trackid int) {
+	err := store.deleteTrack(trackid)
+	writeContentlessResponse(w, err)
 }
 
 /**
@@ -369,8 +395,10 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 			fallthrough
 		case "GET":
 			writeTrackDataByField(store, w, filterfield, filtervalue)
+		case "DELETE":
+			deleteTrackHandler(store, w, trackid)
 		default:
-			MethodNotAllowed(w, []string{"GET", "PUT", "PATCH"})
+			MethodNotAllowed(w, []string{"GET", "PUT", "PATCH", "DELETE"})
 		}
 	}
 }

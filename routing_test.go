@@ -181,7 +181,7 @@ func TestCanEditTrackByUrl(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
-	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET", ""})
+	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET", "DELETE"})
 }
 
 /**
@@ -387,6 +387,42 @@ func TestPagination(test *testing.T) {
 			test.Errorf("Wrong number of tracks.  Expected: %d, Actual: %d", count, len(output))
 		}
 	}
+}
+
+/**
+ * Checks whether a track can be updated using its trackid
+ */
+func TestTrackDeletion(test *testing.T) {
+	clearData()
+	input1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333"}`
+	input2Json := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334"}`
+	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}}`
+	output2Json := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {}}`
+	output1TagsJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {"title":"Track One"}}`
+	output2TagsJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {"title": "Track Two"}}`
+	makeRequest(test, "PUT", "/tracks/1", input1Json, 200, output1Json, true)
+	makeRequest(test, "PUT", "/tags/1/title", "Track One", 200, "Track One", false)
+	makeRequest(test, "GET", "/tracks/1", "", 200, output1TagsJson, true)
+	makeRequest(test, "PUT", "/tracks/2", input2Json, 200, output2Json, true)
+	makeRequest(test, "PUT", "/tags/2/title", "Track Two", 200, "Track Two", false)
+	makeRequest(test, "GET", "/tracks/2", "", 200, output2TagsJson, true)
+	makeRequest(test, "DELETE", "/tracks/2", "", 204, "", false)
+	makeRequest(test, "GET", "/tracks/2", "", 404, "Track Not Found\n", false)
+	makeRequest(test, "GET", "/tags/2", "", 200, "{}", true)
+	makeRequest(test, "GET", "/tracks/1", "", 200, output1TagsJson, true)
+}
+
+func TestCantDeleteAll(test *testing.T) {
+	clearData()
+	inputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333"}`
+	inputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334"}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}}`
+	outputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {}}`
+	makeRequest(test, "PUT", "/tracks/1", inputAJson, 200, outputAJson, true)
+	makeRequest(test, "PUT", "/tracks/2", inputBJson, 200, outputBJson, true)
+	makeRequestWithUnallowedMethod(test, "/tracks", "DELETE", []string{"GET"})
+	makeRequest(test, "GET", "/tracks/2", "", 200, outputBJson, true)
+	makeRequest(test, "GET", "/tracks/1", "", 200, outputAJson, true)
 }
 
 /**

@@ -63,6 +63,23 @@ func writePlainResponse(w http.ResponseWriter, data string, err error) {
 }
 
 /**
+ * Writes a http response with no content
+ */
+func writeContentlessResponse(w http.ResponseWriter, err error) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, max-age=0, no-store, must-revalidate")
+	if err != nil {
+		if strings.HasSuffix(err.Error(), " Not Found") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+/**
  * Listens for incoming http requests
  * and serve the appropriate response based on the front controller
  *
