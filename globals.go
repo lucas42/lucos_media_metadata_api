@@ -4,8 +4,16 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
-	"path"
+	"strings"
 )
+
+/**
+ * A struct for holding data about a global
+ */
+type Global struct {
+	Key   string            `json:"key"`
+	Value string            `json:"value"`
+}
 
 /**
  * Gets data about a global
@@ -31,34 +39,73 @@ func (store Datastore) setGlobal(key string, value string) (err error) {
 }
 
 /**
- * Writes a http response with a JSON representation of a global
+ * Gets data about all global in store
+ *
+ */
+func (store Datastore) getAllGlobals() (globalMap map[string]string, err error) {
+
+	globals := []Global{}
+	err = store.DB.Select(&globals, "SELECT key, value FROM global ORDER BY key")
+	if err != nil {
+		return
+	}
+	globalMap = make(map[string]string)
+
+	// Loop through all the globals and add them to the map
+	for i := range globals {
+		global := &globals[i]
+		globalMap[global.Key] = global.Value
+	}
+	return
+}
+
+/**
+ * Writes a http response with a string representation of a global
  */
 func writeGlobal(store Datastore, w http.ResponseWriter, key string) {
 	value, err := store.getGlobal(key)
 	writePlainResponse(w, value, err)
 }
 
+
+/**
+ * Writes a http response with a JSON representation of all globals
+ */
+func writeAllGlobals(store Datastore, w http.ResponseWriter) {
+	globalMap, err := store.getAllGlobals()
+	writeJSONResponse(w, globalMap, err)
+}
+
 /**
  * A controller for handling all requests dealing with globals
  */
 func (store Datastore) GlobalsController(w http.ResponseWriter, r *http.Request) {
-	key := path.Base(r.URL.Path)
-	switch r.Method {
-	case "PUT":
-		value, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+	pathparts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathparts) > 1 {
+		key := pathparts[1]
+		switch r.Method {
+		case "PUT":
+			value, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			err = store.setGlobal(key, string(value))
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			fallthrough
+		case "GET":
+			writeGlobal(store, w, key)
+		default:
+			MethodNotAllowed(w, []string{"GET", "PUT"})
 		}
-		err = store.setGlobal(key, string(value))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+	} else {
+		if r.Method == "GET" {
+			writeAllGlobals(store, w)
+		} else {
+			MethodNotAllowed(w, []string{"GET"})
 		}
-		fallthrough
-	case "GET":
-		writeGlobal(store, w, key)
-	default:
-		MethodNotAllowed(w, []string{"GET", "PUT"})
 	}
 }

@@ -442,6 +442,19 @@ func TestGlobals(test *testing.T) {
 }
 
 /**
+ * Checks whether a list of all globals is returned from /globals
+ */
+func TestGetAllGlobals(test *testing.T) {
+	clearData()
+	makeRequest(test, "PUT", "/globals/isXmas", "yes", 200, "yes", false)
+	makeRequest(test, "PUT", "/globals/recent_errors", "17", 200, "17", false)
+	makeRequest(test, "PUT", "/globals/weather", "sunny", 200, "sunny", false)
+	makeRequest(test, "GET", "/globals", "", 200, `{"isXmas":"yes","recent_errors":"17","weather":"sunny"}`, true)
+	makeRequestWithUnallowedMethod(test, "/globals?abc", "PUT", []string{"GET"})
+}
+
+
+/**
  * Checks whether new predicates can be added
  */
 func TestAddPredicate(test *testing.T) {
