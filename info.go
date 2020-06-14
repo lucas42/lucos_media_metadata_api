@@ -49,7 +49,9 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 			importRecencyCheck.Debug = err.Error()
 			sinceImport.Value = -1
 		} else {
-			latestImportTime, err := time.Parse(time.RFC3339, latestImportTimestamp)
+
+			// Expect format outputted by python datetime's isoformat() function (with no timezone)
+			latestImportTime, err := time.Parse("2006-01-02T15:04:05.000000", latestImportTimestamp)
 			if err != nil {
 				importRecencyCheck.OK = false
 				importRecencyCheck.Debug = err.Error()

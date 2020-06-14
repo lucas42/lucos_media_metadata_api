@@ -723,7 +723,7 @@ func TestInfoEndpoint(test *testing.T) {
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
-	fiveMinsAgo := time.Now().Add(time.Minute * -5).Format(time.RFC3339)
+	fiveMinsAgo := time.Now().UTC().Add(time.Minute * -5).Format("2006-01-02T15:04:05.000000")
 	makeRequest(test, "PUT", "/globals/latest_import-timestamp", fiveMinsAgo, 200, fiveMinsAgo, false)
 	makeRequest(test, "PUT", "/globals/latest_import-errors", "12", 200, "12", false)
 
