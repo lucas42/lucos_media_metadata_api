@@ -36,5 +36,10 @@ Run `go test`
 
 [![CircleCI](https://circleci.com/gh/lucas42/lucos_media_metadata_api.svg?style=shield)](https://circleci.com/gh/lucas42/lucos_media_metadata_api)
 
+For code coverage, run tests with:
+`go test -coverprofile=coverage.out`
+Then, to view coverage report in browser, run:
+`go tool cover -html=coverage.out`
+
 ## Backing Up
 Copy the file from the docker host at /var/lib/docker/volumes/lucos_media_metadata_api_db/_data/media.sqlite

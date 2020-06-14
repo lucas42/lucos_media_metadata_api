@@ -11,7 +11,12 @@ jobs:
           command: go get ./...
       - run:
           name: Unit Tests
-          command: go test
+          command: go test -coverprofile=coverage.out
+      - run:
+          name: Generate Code Coverage
+          command: go tool cover -html=coverage.out -o coverage.html
+      - store_artifacts:
+          path: coverage.html
   build:
     environment:
       IMAGE_NAME: lucas42/lucos_media_metadata_api

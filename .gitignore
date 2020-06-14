@@ -27,3 +27,5 @@ _testmain.go
 c.out
 
 media.sqlite~*
+
+coverage.*
