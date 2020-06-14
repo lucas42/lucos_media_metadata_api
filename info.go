@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+	"strconv"
+	"time"
 )
 
 type InfoStruct struct {
@@ -39,11 +41,40 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 			dbCheck.OK = true
 		}
 
+		importRecencyCheck := Check{TechDetail:"Checks whether 'latest_import-timestamp' is within the past fortnight"}
+		sinceImport := Metric{TechDetail:"Seconds since latest completion of import script"}
+		latestImportTimestamp, err := store.getGlobal("latest_import-timestamp")
+		if err != nil {
+			importRecencyCheck.OK = false
+			importRecencyCheck.Debug = err.Error()
+			sinceImport.Value = -1
+		} else {
+			latestImportTime, err := time.Parse(time.RFC3339, latestImportTimestamp)
+			if err != nil {
+				importRecencyCheck.OK = false
+				importRecencyCheck.Debug = err.Error()
+				sinceImport.Value = -1
+			} else {
+				sinceImport.Value = int(time.Since(latestImportTime).Seconds())
+				importRecencyCheck.OK = latestImportTime.After(time.Now().Add(time.Hour * 24 * -14))
+			}
+		}
+
+		importErrors := Metric{TechDetail:"Number of errors from latest completed run of import script"}
+		importErrorsString, _ := store.getGlobal("latest_import-errors")
+		importErrorsInt, _ := strconv.Atoi(importErrorsString)
+		importErrors.Value = importErrorsInt
+
+
+
 		info.Checks = map[string]Check{
 			"db": dbCheck,
+			"import": importRecencyCheck,
 		}
 		info.Metrics = map[string]Metric{
 			"track-count": trackCount,
+			"since-import": sinceImport,
+			"import-errors": importErrors,
 		}
 		info.CI = map[string]string{
 			"circle": "gh/lucas42/lucos_media_metadata_api",
