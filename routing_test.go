@@ -731,7 +731,7 @@ func TestInfoEndpoint(test *testing.T) {
 		"system": "lucos_media_metadata_api",
 		"checks": {
 			"db": {"techDetail":"Does basic SELECT query from database", "ok": true},
-			"import": {"techDetail": "Checks whether 'latest_import-timestamp' is within the past fortnight", "ok": true}
+			"import": {"techDetail": "Checks whether 'latest_import-timestamp' is within the past 14 days", "ok": true}
 		},
 		"metrics": {
 			"track-count":{"techDetail":"Number of tracks in database", "value": 37},
