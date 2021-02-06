@@ -60,7 +60,7 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
  */
 func (store Datastore) getTrackDataByField(field string, value interface{}) (track Track, err error) {
 	track = Track{}
-	err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration FROM track WHERE "+field+"=$1", value)
+	err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration, weighting FROM track WHERE "+field+"=$1", value)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			err = errors.New("Track Not Found")
@@ -187,7 +187,7 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
 	for i := 0; i < count; i++ {
 		track := Track{}
 		weighting := rand.Float64() * max
-		err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration FROM track WHERE cum_weighting > $1 ORDER BY cum_weighting ASC LIMIT 1", weighting)
+		err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration, weighting FROM track WHERE cum_weighting > $1 ORDER BY cum_weighting ASC LIMIT 1", weighting)
 		if err != nil {
 			return
 		}
@@ -201,7 +201,7 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
 }
 
 /**
- * Gets the weighting of a given track
+ * Deletes a given track and all its tags
  *
  */
 func (store Datastore) deleteTrack(trackid int) (err error) {
