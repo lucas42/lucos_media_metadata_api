@@ -73,6 +73,19 @@ func (store Datastore) getAllTagsForTrack(trackid int) (tags map[string]string, 
 }
 
 /**
+ * Deletes a given tag
+ *
+ */
+func (store Datastore) deleteTag(trackid int, predicate string) (err error) {
+	_, err = store.DB.Exec("DELETE FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, predicate)
+	if err != nil && err.Error() == "sql: no rows in result set" {
+		err = errors.New("Tag Not Found")
+		return
+	}
+	return
+}
+
+/**
  * Writes a http response with the value of a tag
  */
 func writeTag(store Datastore, w http.ResponseWriter, trackid int, predicate string) {
@@ -86,6 +99,15 @@ func writeTag(store Datastore, w http.ResponseWriter, trackid int, predicate str
 func writeAllTagsForTrack(store Datastore, w http.ResponseWriter, trackid int) {
 	tags, err := store.getAllTagsForTrack(trackid)
 	writeJSONResponse(w, tags, err)
+}
+
+
+/**
+ * Deletes a given tag and writes a response with no content
+ */
+func deleteTagHandler(store Datastore, w http.ResponseWriter, trackid int, predicate string) {
+	err := store.deleteTag(trackid, predicate)
+	writeContentlessResponse(w, err)
 }
 
 /**
@@ -139,7 +161,9 @@ func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
 		fallthrough
 	case "GET":
 		writeTag(store, w, trackid, predicate)
+	case "DELETE":
+		deleteTagHandler(store, w, trackid, predicate)
 	default:
-		MethodNotAllowed(w, []string{"GET", "PUT"})
+		MethodNotAllowed(w, []string{"GET", "PUT", "DELETE"})
 	}
 }

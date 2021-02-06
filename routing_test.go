@@ -519,7 +519,7 @@ func TestAddTag(test *testing.T) {
 	makeRequest(test, "GET", "/tracks", "", 200, "["+trackOutputTagged+"]", true)
 
 	makeRequestWithUnallowedMethod(test, alltagsfortrack, "PUT", []string{"GET"})
-	makeRequestWithUnallowedMethod(test, path1, "POST", []string{"PUT", "GET"})
+	makeRequestWithUnallowedMethod(test, path1, "POST", []string{"PUT", "GET", "DELETE"})
 
 	checkRedirect(test, "/tags", "/tracks")
 }
@@ -560,6 +560,31 @@ func TestAddTagIfMissing(test *testing.T) {
 	makeRawRequest(test, request, 200, "5", false)
 	makeRequest(test, "GET", path, "", 200, "5", false)
 	makeRequest(test, "GET", trackpath, "", 200, trackOutputTagged, true)
+}
+
+
+/**
+ * Checks whether tags can be deleted
+ */
+func TestDeleteTag(test *testing.T) {
+	clearData()
+	artistpath := "/tags/1/artist"
+	albumpath := "/tags/1/album"
+
+	trackurl := "http://example.org/track/98765"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	trackInput := `{"fingerprint": "aoecu1234", "duration": 300}`
+	trackOutput := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {}}`
+	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+	makeRequest(test, "PUT", trackpath, trackInput, 200, trackOutput, true)
+	makeRequest(test, "PUT", artistpath, "Chumbawamba", 200, "Chumbawamba", false)
+	makeRequest(test, "PUT", albumpath, "wysiwyg", 200, "wysiwyg", false)
+
+	makeRequest(test, "DELETE", albumpath, "whatever", 204, "", false)
+	makeRequest(test, "GET", artistpath, "Chumbawamba", 200, "Chumbawamba", false)
+	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
+
+	makeRequest(test, "GET", trackpath, "", 200, `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {"artist":"Chumbawamba"}}`, true)
 }
 
 /**
