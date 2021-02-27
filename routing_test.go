@@ -175,7 +175,7 @@ func TestCanEditTrackByUrl(test *testing.T) {
 	trackurl := "http://example.org/track/1256"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	inputJson := `{"fingerprint": "aoecu1234", "duration": 300}`
-	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}`
+	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}`
 	path := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path, inputJson, 200, outputJson, true)
@@ -194,8 +194,8 @@ func TestCanUpdateDuration(test *testing.T) {
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	inputAJson := `{"fingerprint": "aoecu1234", "duration": 300}`
 	inputBJson := `{"fingerprint": "aoecu1234", "duration": 150}`
-	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}}`
-	outputBJson := `{"fingerprint": "aoecu1234", "duration": 150, "url": "http://example.org/track/333", "trackid": 1, "tags": {}}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}, "weighting": 0}`
+	outputBJson := `{"fingerprint": "aoecu1234", "duration": 150, "url": "http://example.org/track/333", "trackid": 1, "tags": {}, "weighting": 0}`
 	path := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path, inputAJson, 200, outputAJson, true)
@@ -209,8 +209,8 @@ func TestCanUpdateDuration(test *testing.T) {
 func TestCanEditTrackByFingerprint(test *testing.T) {
 	clearData()
 	inputJson := `{"url": "http://example.org/track/1256", "duration": 300}`
-	outputJson1 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}`
-	outputJson2 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/cdef", "trackid": 1, "tags": {}}`
+	outputJson1 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}`
+	outputJson2 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/cdef", "trackid": 1, "tags": {}, "weighting": 0}`
 	path := "/tracks?fingerprint=aoecu1234"
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path, inputJson, 200, outputJson1, true)
@@ -227,8 +227,8 @@ func TestCanEditTrackByFingerprint(test *testing.T) {
 func TestCanPatchTrackByFingerprint(test *testing.T) {
 	clearData()
 	inputJson := `{"url": "http://example.org/track/1256", "duration": 300}`
-	outputJson1 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}`
-	outputJson2 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/cdef", "trackid": 1, "tags": {}}`
+	outputJson1 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}`
+	outputJson2 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/cdef", "trackid": 1, "tags": {}, "weighting": 0}`
 	path := "/tracks?fingerprint=aoecu1234"
 	makeRequest(test, "PUT", path, inputJson, 200, outputJson1, true)
 	makeRequest(test, "GET", path, "", 200, outputJson1, true)
@@ -259,8 +259,8 @@ func TestCanUpdateById(test *testing.T) {
 	escapedTrack2Url := url.QueryEscape(track2url)
 	inputAJson := `{"fingerprint": "aoecu1234", "duration": 300}`
 	inputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334"}`
-	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}}`
-	outputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 1, "tags": {}}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}, "weighting": 0}`
+	outputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 1, "tags": {}, "weighting": 0}`
 	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)
 	path2 := fmt.Sprintf("/tracks?url=%s", escapedTrack2Url)
 	path := "/tracks/1"
@@ -281,7 +281,7 @@ func TestCanUpdateById(test *testing.T) {
 func TestCantPutIncompleteData(test *testing.T) {
 	clearData()
 	inputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/334"}`
-	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/334", "trackid": 1, "tags": {}}`
+	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/334", "trackid": 1, "tags": {}, "weighting": 0}`
 	missingFingerprint := `{"duration": 150, "url": "http://example.org/track/13"}`
 	missingUrl := `{"fingerprint": "aoecu9876", "duration": 240}`
 	missingDuration := `{"fingerprint": "aoecu2468", "url": "http://example.org/track/87987"}`
@@ -323,10 +323,10 @@ func TestGetAllTracks(test *testing.T) {
 	escapedTrack2Url := url.QueryEscape(track2url)
 	input1Json := `{"fingerprint": "aoecu1234", "duration": 300}`
 	input2Json := `{"fingerprint": "blahdebo", "duration": 150}`
-	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}`
-	output2Json := `{"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {}}`
-	alloutputJson1 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}]`
-	alloutputJson2 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}}, {"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {}}]`
+	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}`
+	output2Json := `{"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {}, "weighting": 0}`
+	alloutputJson1 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}]`
+	alloutputJson2 := `[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}, {"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {}, "weighting": 0}]`
 	path1 := fmt.Sprintf("/tracks?url=%s", escapedTrack1Url)
 	path2 := fmt.Sprintf("/tracks?url=%s", escapedTrack2Url)
 	pathall := "/tracks"
@@ -353,7 +353,7 @@ func TestPagination(test *testing.T) {
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}, "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
@@ -397,10 +397,10 @@ func TestTrackDeletion(test *testing.T) {
 	clearData()
 	input1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333"}`
 	input2Json := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334"}`
-	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}}`
-	output2Json := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {}}`
-	output1TagsJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {"title":"Track One"}}`
-	output2TagsJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {"title": "Track Two"}}`
+	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}, "weighting": 0}`
+	output2Json := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {}, "weighting": 0}`
+	output1TagsJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {"title":"Track One"}, "weighting": 0}`
+	output2TagsJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {"title": "Track Two"}, "weighting": 0}`
 	makeRequest(test, "PUT", "/tracks/1", input1Json, 200, output1Json, true)
 	makeRequest(test, "PUT", "/tags/1/title", "Track One", 200, "Track One", false)
 	makeRequest(test, "GET", "/tracks/1", "", 200, output1TagsJson, true)
@@ -417,8 +417,8 @@ func TestCantDeleteAll(test *testing.T) {
 	clearData()
 	inputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333"}`
 	inputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334"}`
-	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}}`
-	outputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {}}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}, "weighting": 0}`
+	outputBJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {}, "weighting": 0}`
 	makeRequest(test, "PUT", "/tracks/1", inputAJson, 200, outputAJson, true)
 	makeRequest(test, "PUT", "/tracks/2", inputBJson, 200, outputBJson, true)
 	makeRequestWithUnallowedMethod(test, "/tracks", "DELETE", []string{"GET"})
@@ -494,8 +494,8 @@ func TestAddTag(test *testing.T) {
 	trackurl := "http://example.org/track/98765"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	trackInput := `{"fingerprint": "aoecu1234", "duration": 300}`
-	trackOutput := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {}}`
-	trackOutputTagged := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {"album": "un","artist":"Chumbawamba"}}`
+	trackOutput := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {}, "weighting": 0}`
+	trackOutputTagged := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {"album": "un","artist":"Chumbawamba"}, "weighting": 0}`
 	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	makeRequest(test, "PUT", trackpath, trackInput, 200, trackOutput, true)
 	makeRequest(test, "PUT", predicate1path, `{"id":"artist"}`, 200, `{"id":"artist"}`, true)
@@ -534,8 +534,8 @@ func TestAddTagIfMissing(test *testing.T) {
 	trackurl := "http://example.org/track/98765"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	trackInput := `{"fingerprint": "aoecu1234", "duration": 300}`
-	trackOutput := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {}}`
-	trackOutputTagged := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {"rating":"5"}}`
+	trackOutput := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {}, "weighting": 0}`
+	trackOutputTagged := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {"rating":"5"}, "weighting": 0}`
 	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	makeRequest(test, "PUT", trackpath, trackInput, 200, trackOutput, true)
 
@@ -574,7 +574,7 @@ func TestDeleteTag(test *testing.T) {
 	trackurl := "http://example.org/track/98765"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	trackInput := `{"fingerprint": "aoecu1234", "duration": 300}`
-	trackOutput := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {}}`
+	trackOutput := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {}, "weighting": 0}`
 	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	makeRequest(test, "PUT", trackpath, trackInput, 200, trackOutput, true)
 	makeRequest(test, "PUT", artistpath, "Chumbawamba", 200, "Chumbawamba", false)
@@ -584,7 +584,7 @@ func TestDeleteTag(test *testing.T) {
 	makeRequest(test, "GET", artistpath, "Chumbawamba", 200, "Chumbawamba", false)
 	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
 
-	makeRequest(test, "GET", trackpath, "", 200, `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {"artist":"Chumbawamba"}}`, true)
+	makeRequest(test, "GET", trackpath, "", 200, `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/98765", "trackid": 1, "tags": {"artist":"Chumbawamba"}, "weighting": 0}`, true)
 }
 
 /**
@@ -596,7 +596,7 @@ func TestAddTagForUnknownTrack(test *testing.T) {
 }
 
 /**
- * Checks whether a track can have its weighting updated
+ * Checks whether a track can have its g updated
  */
 func TestCanUpdateWeighting(test *testing.T) {
 	clearData()
@@ -607,7 +607,7 @@ func TestCanUpdateWeighting(test *testing.T) {
 	trackurl := "http://example.org/track/eui4536"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
-	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/eui4536", "trackid": 1, "tags": {}}`
+	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/eui4536", "trackid": 1, "tags": {}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, `{"fingerprint": "aoecu1234", "duration": 300}`, 200, outputJson, true)
 
 	makeRequest(test, "GET", path, "", 200, "0", false)
@@ -628,6 +628,11 @@ func TestCanUpdateWeighting(test *testing.T) {
 	makeRequest(test, "GET", pathall, "", 200, alloutputJson, true)
 
 	makeRequestWithUnallowedMethod(test, path, "POST", []string{"PUT", "GET"})
+
+	// Test that zeroes are handled as a valid weighting, and not just null
+	makeRequest(test, "PUT", path, "0", 200, "0", false)
+	zeroTrackOutputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/eui4536", "trackid": 1, "tags": {}, "weighting": 0}`
+	makeRequest(test, "GET", trackpath, "", 200, zeroTrackOutputJson, true)
 }
 
 /**
@@ -642,8 +647,8 @@ func TestDuplicateURL(test *testing.T) {
 	track3Path := "/tracks?fingerprint=track3"
 
 	// Set up 2 tracks with different URLs
-	makeRequest(test, "PUT", track1Path, `{"url":"` + oldTrackUrl + `", "duration": 7}`, 200, `{"fingerprint":"track1","duration":7,"url":"` + oldTrackUrl + `","trackid":1,"tags":{}}`, true)
-	makeRequest(test, "PUT", track2Path, `{"url":"` + newTrackUrl + `", "duration": 17}`, 200, `{"fingerprint":"track2","duration":17,"url":"` + newTrackUrl + `","trackid":2,"tags":{}}`, true)
+	makeRequest(test, "PUT", track1Path, `{"url":"` + oldTrackUrl + `", "duration": 7}`, 200, `{"fingerprint":"track1","duration":7,"url":"` + oldTrackUrl + `","trackid":1,"tags":{},"weighting": 0}`, true)
+	makeRequest(test, "PUT", track2Path, `{"url":"` + newTrackUrl + `", "duration": 17}`, 200, `{"fingerprint":"track2","duration":17,"url":"` + newTrackUrl + `","trackid":2,"tags":{},"weighting": 0}`, true)
 
 	// Try to update first track to have same URL as second using PATCH
 	makeRequest(test, "PATCH", track1Path, `{"url":"` + newTrackUrl + `"}`, 400, "Duplicate: track 2 has same url\n", false)
@@ -670,8 +675,8 @@ func TestDuplicateFingerprint(test *testing.T) {
 	track3Path := "/tracks?url="+url.QueryEscape("http://example.org/track3")
 
 	// Set up 2 tracks with different fingerprints
-	makeRequest(test, "PUT", track1Path, `{"fingerprint":"` + fingerprint1 + `", "duration": 7}`, 200, `{"fingerprint":"` + fingerprint1 + `","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{}}`, true)
-	makeRequest(test, "PUT", track2Path, `{"fingerprint":"` + fingerprint2 + `", "duration": 17}`, 200, `{"fingerprint":"` + fingerprint2 + `","duration":17,"url":"http://example.org/track2","trackid":2,"tags":{}}`, true)
+	makeRequest(test, "PUT", track1Path, `{"fingerprint":"` + fingerprint1 + `", "duration": 7}`, 200, `{"fingerprint":"` + fingerprint1 + `","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{},"weighting": 0}`, true)
+	makeRequest(test, "PUT", track2Path, `{"fingerprint":"` + fingerprint2 + `", "duration": 17}`, 200, `{"fingerprint":"` + fingerprint2 + `","duration":17,"url":"http://example.org/track2","trackid":2,"tags":{},"weighting": 0}`, true)
 
 	// Try to update first track to have same fingerprint as second using PUT
 	makeRequest(test, "PUT", track2Path, `{"fingerprint":"` + fingerprint1 + `", "duration": 17}`, 400, "Duplicate: track 1 has same fingerprint\n", false)
@@ -700,7 +705,7 @@ func TestRandomTracks(test *testing.T) {
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}, "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
@@ -748,7 +753,7 @@ func TestInfoEndpoint(test *testing.T) {
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}, "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}

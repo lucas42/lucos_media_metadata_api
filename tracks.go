@@ -20,7 +20,7 @@ type Track struct {
 	URL         string            `json:"url"`
 	ID          int               `json:"trackid"`
 	Tags        map[string]string `json:"tags"`
-	Weighting   float64           `json:"weighting,omitempty"`
+	Weighting   float64           `json:"weighting"`
 }
 
 /**
