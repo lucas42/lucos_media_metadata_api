@@ -2,6 +2,8 @@ FROM golang:1
 
 WORKDIR /go/src/lucos_media_metadata_api
 
+ENV GO111MODULE=auto
+
 RUN go get github.com/mattn/go-sqlite3
 RUN go get github.com/jmoiron/sqlx
 

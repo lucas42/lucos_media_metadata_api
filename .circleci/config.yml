@@ -6,6 +6,8 @@ jobs:
     docker:
       - image: circleci/golang:1
     working_directory: /go/src/github.com/lucas42/lucos_media_metadata_api
+    environment:
+      GO111MODULE: auto
     steps:
       - checkout
       - run:
