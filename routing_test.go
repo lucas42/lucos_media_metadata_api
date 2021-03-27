@@ -237,6 +237,23 @@ func TestCanPatchTrackByFingerprint(test *testing.T) {
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson2, true)
 }
+/**
+ * Checks whether a track can be partially edited based on its id
+ */
+func TestCanPatchTrackById(test *testing.T) {
+	clearData()
+	inputJson := `{"fingerprint": "aoecu1235", "url": "http://example.org/track/1256", "duration": 300}`
+	outputJson1 := `{"fingerprint": "aoecu1235", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}`
+	outputJson2 := `{"fingerprint": "aoecu1235", "duration": 300, "url": "http://example.org/track/cdef", "trackid": 1, "tags": {}, "weighting": 0}`
+	pathByUrl := "/tracks?fingerprint=aoecu1235"
+	path := "/tracks/1"
+	makeRequest(test, "PUT", pathByUrl, inputJson, 200, outputJson1, true)
+	makeRequest(test, "GET", path, "", 200, outputJson1, true)
+	makeRequest(test, "PATCH", path, `{"url": "http://example.org/track/cdef"}`, 200, outputJson2, true)
+	makeRequest(test, "GET", path, "", 200, outputJson2, true)
+	restartServer()
+	makeRequest(test, "GET", path, "", 200, outputJson2, true)
+}
 
 /**
  * Checks that non-existant tracks aren't created using PATCH
@@ -246,6 +263,21 @@ func TestPatchOnlyUpdatesExistingTracks(test *testing.T) {
 	clearData()
 	makeRequest(test, "PATCH", path, `{"url": "http://example.org/track/cdef"}`, 404, "Track Not Found\n", false)
 	makeRequest(test, "GET", "/tracks", "", 200, "[]", true)
+}
+
+/**
+ * Checks that an patch call with an empty object doesn't change anything
+ */
+func TestEmptyPatchIsInert(test *testing.T) {
+	clearData()
+	trackpath := "/tracks/1"
+	inputJson := `{"fingerprint": "aoecu4321", "url": "http://example.org/track/444", "duration": 300}`
+	outputJson := `{"fingerprint": "aoecu4321", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {}, "weighting": 0}`
+	makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
+	emptyInput := `{}`
+	makeRequest(test, "PATCH", trackpath, emptyInput, 200, outputJson, true)
+	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
 }
 
 /**
@@ -596,7 +628,7 @@ func TestAddTagForUnknownTrack(test *testing.T) {
 }
 
 /**
- * Checks whether a track can have its g updated
+ * Checks whether a track can have its weighting updated
  */
 func TestCanUpdateWeighting(test *testing.T) {
 	clearData()

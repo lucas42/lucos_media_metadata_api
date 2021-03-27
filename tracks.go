@@ -47,6 +47,9 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		updateFields = append(updateFields, "fingerprint = :fingerprint")
 	}
 	if trackExists {
+		if len(updateFields) == 0 {
+			return
+		}
 		_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
 	} else {
 		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
