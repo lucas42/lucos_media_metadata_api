@@ -628,6 +628,49 @@ func TestAddTagForUnknownTrack(test *testing.T) {
 }
 
 /**
+ * Checks whether multiple tags can be updated at once when track is identified by track ID
+ */
+func TestUpdateMultipleTags(test *testing.T) {
+	clearData()
+	trackpath := "/tracks/1"
+	artistpath := "/tags/1/artist"
+	albumpath := "/tags/1/album"
+	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {}, "weighting": 0}`
+	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
+	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
+	makeRequest(test, "GET", artistpath, "", 404, "Tag Not Found\n", false)
+	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
+	inputBJson := `{"tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}}`
+	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}, "weighting": 0}`
+	makeRequest(test, "PATCH", trackpath, inputBJson, 200, outputBJson, true)
+	makeRequest(test, "GET", artistpath, "", 200, "Beautiful South", false)
+	makeRequest(test, "GET", albumpath, "", 200, "Carry On Up The Charts", false)
+}
+/**
+ * Checks whether multiple tags can be updated at once when track is identified by URL
+ */
+func TestUpdateMultipleTagsByURL(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/track/444"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+	artistpath := "/tags/1/artist"
+	albumpath := "/tags/1/album"
+	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {}, "weighting": 0}`
+	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
+	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
+	makeRequest(test, "GET", artistpath, "", 404, "Tag Not Found\n", false)
+	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
+	inputBJson := `{"tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}}`
+	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}, "weighting": 0}`
+	makeRequest(test, "PATCH", trackpath, inputBJson, 200, outputBJson, true)
+	makeRequest(test, "GET", artistpath, "", 200, "Beautiful South", false)
+	makeRequest(test, "GET", albumpath, "", 200, "Carry On Up The Charts", false)
+}
+
+/**
  * Checks whether a track can have its weighting updated
  */
 func TestCanUpdateWeighting(test *testing.T) {

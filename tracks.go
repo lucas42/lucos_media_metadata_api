@@ -27,7 +27,7 @@ type Track struct {
  * Updates or Creates fields about a track based on a given field
  *
  */
-func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, trackExists bool) (err error) {
+func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, trackExists bool) (storedTrack Track, err error) {
 	updateFields := []string{}
 	if track.Duration != 0 {
 		updateFields = append(updateFields, "duration = :duration")
@@ -47,12 +47,25 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		updateFields = append(updateFields, "fingerprint = :fingerprint")
 	}
 	if trackExists {
-		if len(updateFields) == 0 {
-			return
+		if len(updateFields) > 0 {
+			_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
 		}
-		_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
 	} else {
 		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
+	}
+	if err != nil {
+		return
+	}
+	storedTrack, err = store.getTrackDataByField(filterField, value)
+	if err != nil {
+		return
+	}
+	for predicate, tagValue := range track.Tags {
+		err = store.updateTag(storedTrack.ID, predicate, tagValue)
+		if err != nil {
+			return
+		}
+		storedTrack, err = store.getTrackDataByField(filterField, value)
 	}
 	return
 }
@@ -350,6 +363,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 		case "PATCH":
 			fallthrough
 		case "PUT":
+			var savedTrack Track
 			track, err := DecodeTrack(r.Body)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -365,11 +379,11 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 			}
 			trackExists, err := store.trackExists(filterfield, filtervalue)
 			if r.Method == "PATCH" {
-
-				// Take no action for non-exsistent tracks (those will return a 404 when we fallthrough to GET below)
-				if trackExists {
-					err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, trackExists)
+				if !trackExists {
+					http.Error(w, "Track Not Found", http.StatusNotFound)
+					return
 				}
+				savedTrack, err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, trackExists)
 			} else {
 				missingFields := []string{}
 				if track.Fingerprint == "" {
@@ -385,7 +399,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 					http.Error(w, "Missing fields \""+strings.Join(missingFields, "\" and \"")+"\"", http.StatusBadRequest)
 					return
 				}
-				err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, trackExists)
+				savedTrack, err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, trackExists)
 			}
 			if err != nil {
 				statusCode := http.StatusInternalServerError
@@ -395,7 +409,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 				http.Error(w, err.Error(), statusCode)
 				return
 			}
-			fallthrough
+			writeJSONResponse(w, savedTrack, err)
 		case "GET":
 			writeTrackDataByField(store, w, filterfield, filtervalue)
 		case "DELETE":
