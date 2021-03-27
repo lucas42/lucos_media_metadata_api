@@ -10,11 +10,12 @@ import (
  */
 type Datastore struct {
 	DB *sqlx.DB
+	Loganne LoganneInterface
 }
 
-func DBInit(dbpath string) (database Datastore) {
+func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 	db := sqlx.MustConnect("sqlite3", dbpath)
-	database = Datastore{db}
+	database = Datastore{db, loganne}
 	database.DB.MustExec("PRAGMA foreign_keys = ON;")
 	if !database.TableExists("track") {
 		sqlStmt := `

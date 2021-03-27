@@ -8,7 +8,7 @@ import (
 func TestDatabaseSetup(test *testing.T) {
 	dbpath := "testdb.sqlite"
 	os.Remove(dbpath)
-	db := DBInit(dbpath)
+	db := DBInit(dbpath, MockLoganne{})
 	if !db.TableExists("track") {
 		test.Error("track table not created")
 	}

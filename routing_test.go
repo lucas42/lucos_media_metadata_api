@@ -16,11 +16,8 @@ import (
 )
 
 var server *httptest.Server
+var mockLoganne MockLoganne
 
-/**
- * Creats a test http server, using the FrontController under test
- * Stores the URL of the server in a global variable
- */
 func clearData() {
 	os.Remove("testrouting.sqlite")
 	restartServer()
@@ -32,11 +29,16 @@ func TestMain(m *testing.M) {
 	os.Exit(result)
 }
 
+/**
+ * Creates a test http server, using the FrontController under test
+ * Stores the URL of the server in a global variable
+ */
 func restartServer() {
 	if server != nil {
 		server.Close()
 	}
-	store := DBInit("testrouting.sqlite")
+	mockLoganne = MockLoganne{}
+	store := DBInit("testrouting.sqlite", mockLoganne)
 	server = httptest.NewServer(FrontController(store))
 }
 
