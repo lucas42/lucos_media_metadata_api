@@ -708,6 +708,34 @@ func TestUpdateMultipleTagsByURL(test *testing.T) {
 	makeRequest(test, "GET", artistpath, "", 200, "Beautiful South", false)
 	makeRequest(test, "GET", albumpath, "", 200, "Carry On Up The Charts", false)
 }
+/**
+ * Checks whether a tag can be deleted whilst others are updated
+ */
+func TestDeleteTagInMultiple(test *testing.T) {
+	clearData()
+	trackpath := "/tracks/1"
+	titlepath := "/tags/1/title"
+	artistpath := "/tags/1/artist"
+	albumpath := "/tags/1/album"
+	genrepath := "/tags/1/genre"
+	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts", "genre": "pop"}}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts", "genre": "pop"}, "weighting": 0}`
+	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
+	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
+	makeRequest(test, "GET", titlepath, "", 404, "Tag Not Found\n", false)
+	makeRequest(test, "GET", artistpath, "", 200, "Beautiful South", false)
+	makeRequest(test, "GET", albumpath, "", 200, "Carry On Up The Charts", false)
+	makeRequest(test, "GET", genrepath, "", 200, "pop", false)
+	inputBJson := `{"tags": {"artist":"The Beautiful South", "album": null, "title": "Good As Gold"}}`
+	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"The Beautiful South", "title": "Good As Gold", "genre": "pop"}, "weighting": 0}`
+	makeRequest(test, "PATCH", trackpath, inputBJson, 200, outputBJson, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
+	makeRequest(test, "GET", titlepath, "", 200, "Good As Gold", false)
+	makeRequest(test, "GET", artistpath, "", 200, "The Beautiful South", false)
+	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
+	makeRequest(test, "GET", genrepath, "", 200, "pop", false)
+}
 
 /**
  * Checks whether a track can have its weighting updated

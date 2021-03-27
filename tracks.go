@@ -61,7 +61,11 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		return
 	}
 	for predicate, tagValue := range track.Tags {
-		err = store.updateTag(storedTrack.ID, predicate, tagValue)
+		if tagValue != "" {
+			err = store.updateTag(storedTrack.ID, predicate, tagValue)
+		} else {
+			err = store.deleteTag(storedTrack.ID, predicate)
+		}
 		if err != nil {
 			return
 		}
