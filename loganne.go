@@ -30,14 +30,3 @@ func (loganne Loganne) post(eventType string, humanReadable string, track Track)
 		log.Printf("Error occured whilst posting to Loganne %v", err)
 	}
 }
-
-type MockLoganne struct {
-	lastType string
-	lastHumanReadable string
-	lastTrack Track
-}
-func (mock MockLoganne) post(eventType string, humanReadable string, track Track) {
-	mock.lastType = eventType
-	mock.lastHumanReadable = humanReadable
-	mock.lastTrack = track
-}

@@ -16,7 +16,16 @@ import (
 )
 
 var server *httptest.Server
-var mockLoganne MockLoganne
+var lastLoganneType string
+var lastLoganneMessage string
+var lastLoganneTrack Track
+
+type MockLoganne struct {}
+func (mock MockLoganne) post(eventType string, humanReadable string, track Track) {
+	lastLoganneType = eventType
+	lastLoganneMessage = humanReadable
+	lastLoganneTrack = track
+}
 
 func clearData() {
 	os.Remove("testrouting.sqlite")
@@ -37,8 +46,10 @@ func restartServer() {
 	if server != nil {
 		server.Close()
 	}
-	mockLoganne = MockLoganne{}
-	store := DBInit("testrouting.sqlite", mockLoganne)
+	lastLoganneType = ""
+	lastLoganneMessage = ""
+	lastLoganneTrack = Track{}
+	store := DBInit("testrouting.sqlite", MockLoganne{})
 	server = httptest.NewServer(FrontController(store))
 }
 
@@ -181,6 +192,9 @@ func TestCanEditTrackByUrl(test *testing.T) {
 	path := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path, inputJson, 200, outputJson, true)
+	assertEqual(test, "Loganne event type", "trackAdded", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable", "New Track #1 added", lastLoganneMessage)
+	assertEqual(test, "Loganne track ID", 1, lastLoganneTrack.ID)
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
@@ -201,7 +215,11 @@ func TestCanUpdateDuration(test *testing.T) {
 	path := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path, inputAJson, 200, outputAJson, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "PUT", path, inputBJson, 200, outputBJson, true)
+	assertEqual(test, "Loganne event type", "trackUpdated", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable", "Track #1 updated", lastLoganneMessage)
+	assertEqual(test, "Loganne track ID", 1, lastLoganneTrack.ID)
 	makeRequest(test, "GET", path, "", 200, outputBJson, true)
 }
 
@@ -216,10 +234,12 @@ func TestCanEditTrackByFingerprint(test *testing.T) {
 	path := "/tracks?fingerprint=aoecu1234"
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path, inputJson, 200, outputJson1, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", path, "", 200, outputJson1, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson1, true)
 	makeRequest(test, "PUT", path, `{"url": "http://example.org/track/cdef", "duration": 300}`, 200, outputJson2, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
 	makeRequest(test, "GET", path, "", 200, outputJson2, true)
 }
 
@@ -233,8 +253,10 @@ func TestCanPatchTrackByFingerprint(test *testing.T) {
 	outputJson2 := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/cdef", "trackid": 1, "tags": {}, "weighting": 0}`
 	path := "/tracks?fingerprint=aoecu1234"
 	makeRequest(test, "PUT", path, inputJson, 200, outputJson1, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", path, "", 200, outputJson1, true)
 	makeRequest(test, "PATCH", path, `{"url": "http://example.org/track/cdef"}`, 200, outputJson2, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
 	makeRequest(test, "GET", path, "", 200, outputJson2, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson2, true)
@@ -250,8 +272,10 @@ func TestCanPatchTrackById(test *testing.T) {
 	pathByUrl := "/tracks?fingerprint=aoecu1235"
 	path := "/tracks/1"
 	makeRequest(test, "PUT", pathByUrl, inputJson, 200, outputJson1, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", path, "", 200, outputJson1, true)
 	makeRequest(test, "PATCH", path, `{"url": "http://example.org/track/cdef"}`, 200, outputJson2, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
 	makeRequest(test, "GET", path, "", 200, outputJson2, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson2, true)
@@ -264,6 +288,7 @@ func TestPatchOnlyUpdatesExistingTracks(test *testing.T) {
 	path := "/tracks?fingerprint=aoecu1234"
 	clearData()
 	makeRequest(test, "PATCH", path, `{"url": "http://example.org/track/cdef"}`, 404, "Track Not Found\n", false)
+	assertEqual(test, "Loganne shouldn't be called", "", lastLoganneType)
 	makeRequest(test, "GET", "/tracks", "", 200, "[]", true)
 }
 
@@ -276,9 +301,11 @@ func TestEmptyPatchIsInert(test *testing.T) {
 	inputJson := `{"fingerprint": "aoecu4321", "url": "http://example.org/track/444", "duration": 300}`
 	outputJson := `{"fingerprint": "aoecu4321", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
 	emptyInput := `{}`
 	makeRequest(test, "PATCH", trackpath, emptyInput, 200, outputJson, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType) // In future might want to avoid logging in this case
 	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
 }
 
@@ -301,8 +328,10 @@ func TestCanUpdateById(test *testing.T) {
 	makeRequest(test, "GET", path1, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "PUT", path1, inputAJson, 200, outputAJson, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", path1, "", 200, outputAJson, true)
 	makeRequest(test, "PUT", path, inputBJson, 200, outputBJson, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
 	makeRequest(test, "GET", path1, "", 404, "Track Not Found\n", false)
 	makeRequest(test, "GET", path2, "", 200, outputBJson, true)
 	makeRequest(test, "PUT", path, `{"start": "some JSON"`, 400, "unexpected EOF\n", false)
@@ -436,12 +465,16 @@ func TestTrackDeletion(test *testing.T) {
 	output1TagsJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {"title":"Track One"}, "weighting": 0}`
 	output2TagsJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {"title": "Track Two"}, "weighting": 0}`
 	makeRequest(test, "PUT", "/tracks/1", input1Json, 200, output1Json, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "PUT", "/tags/1/title", "Track One", 200, "Track One", false)
 	makeRequest(test, "GET", "/tracks/1", "", 200, output1TagsJson, true)
 	makeRequest(test, "PUT", "/tracks/2", input2Json, 200, output2Json, true)
 	makeRequest(test, "PUT", "/tags/2/title", "Track Two", 200, "Track Two", false)
 	makeRequest(test, "GET", "/tracks/2", "", 200, output2TagsJson, true)
 	makeRequest(test, "DELETE", "/tracks/2", "", 204, "", false)
+	assertEqual(test, "Loganne event type", "trackDeleted", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable", "Track #2 deleted", lastLoganneMessage)
+	assertEqual(test, "Loganne track ID", 2, lastLoganneTrack.ID)
 	makeRequest(test, "GET", "/tracks/2", "", 404, "Track Not Found\n", false)
 	makeRequest(test, "GET", "/tags/2", "", 200, "{}", true)
 	makeRequest(test, "GET", "/tracks/1", "", 200, output1TagsJson, true)
@@ -640,12 +673,14 @@ func TestUpdateMultipleTags(test *testing.T) {
 	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300}`
 	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
 	makeRequest(test, "GET", artistpath, "", 404, "Tag Not Found\n", false)
 	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
 	inputBJson := `{"tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}}`
 	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}, "weighting": 0}`
 	makeRequest(test, "PATCH", trackpath, inputBJson, 200, outputBJson, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
 	makeRequest(test, "GET", artistpath, "", 200, "Beautiful South", false)
 	makeRequest(test, "GET", albumpath, "", 200, "Carry On Up The Charts", false)
 }
@@ -662,12 +697,14 @@ func TestUpdateMultipleTagsByURL(test *testing.T) {
 	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300}`
 	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
 	makeRequest(test, "GET", artistpath, "", 404, "Tag Not Found\n", false)
 	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
 	inputBJson := `{"tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}}`
 	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}, "weighting": 0}`
 	makeRequest(test, "PATCH", trackpath, inputBJson, 200, outputBJson, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
 	makeRequest(test, "GET", artistpath, "", 200, "Beautiful South", false)
 	makeRequest(test, "GET", albumpath, "", 200, "Carry On Up The Charts", false)
 }

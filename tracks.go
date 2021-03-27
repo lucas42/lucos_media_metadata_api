@@ -67,6 +67,12 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		}
 		storedTrack, err = store.getTrackDataByField(filterField, value)
 	}
+	if trackExists {
+		store.Loganne.post("trackUpdated", "Track #"+strconv.Itoa(storedTrack.ID)+" updated", storedTrack)
+	} else {
+		store.Loganne.post("trackAdded", "New Track #"+strconv.Itoa(storedTrack.ID)+" added", storedTrack)
+
+	}
 	return
 }
 
@@ -230,6 +236,7 @@ func (store Datastore) deleteTrack(trackid int) (err error) {
 		err = errors.New("Track Not Found")
 		return
 	}
+	store.Loganne.post("trackDeleted", "Track #"+strconv.Itoa(trackid)+" deleted", Track{ID:trackid})
 	return
 }
 
