@@ -181,6 +181,20 @@ func checkRedirect(t *testing.T, initialPath string, expectedPath string) {
 }
 
 /**
+ * Checks that the homepage redirects to /tracks
+ */
+func TestHomepage(t *testing.T) {
+	checkRedirect(t, "/", "/tracks")
+}
+
+/**
+ * Checks that unknown urls return a 404
+ */
+func TestNotFound(t *testing.T) {
+	makeRequest(t, "GET", "/404", "", 404, "404 page not found\n", false)
+}
+
+/**
  * Checks whether a track can be edited based on its url and retrieved later
  */
 func TestCanEditTrackByUrl(test *testing.T) {

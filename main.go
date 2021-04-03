@@ -21,9 +21,16 @@ func FrontController(store Datastore) *http.ServeMux {
 	router.HandleFunc("/predicates/", store.PredicatesController)
 	router.HandleFunc("/tags/", store.TagsController)
 	router.HandleFunc("/_info", store.InfoController)
-	redirect := http.RedirectHandler("/tracks", 307)
-	router.Handle("/", redirect)
+	router.HandleFunc("/", HomepageController)
 	return router
+}
+
+func HomepageController(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" {
+		http.Redirect(w, r, "/tracks", http.StatusTemporaryRedirect)
+	} else {
+		http.NotFound(w, r)
+	}
 }
 
 /**
