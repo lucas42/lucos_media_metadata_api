@@ -20,6 +20,7 @@ func FrontController(store Datastore) *http.ServeMux {
 	router.HandleFunc("/globals/", store.GlobalsController)
 	router.HandleFunc("/predicates/", store.PredicatesController)
 	router.HandleFunc("/tags/", store.TagsController)
+	router.HandleFunc("/search", store.SearchController)
 	router.HandleFunc("/_info", store.InfoController)
 	router.HandleFunc("/", HomepageController)
 	return router
