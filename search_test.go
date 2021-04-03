@@ -1,6 +1,12 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
+	"strconv"
 	"testing"
 )
 
@@ -30,4 +36,54 @@ func TestInvalidRequestsToSearch(test *testing.T) {
 	makeRequestWithUnallowedMethod(test, "/search?q=blue", "POST", []string{"GET"})
 	makeRequest(test, "GET", "/search", "", 400, "No query given\n", false)
 	makeRequest(test, "GET", "/search?q=", "", 400, "No query given\n", false)
+}
+
+/**
+ * Checks the pagination of the search endpoint
+ */
+func TestSearchPagination(test *testing.T) {
+	clearData()
+
+	// Create 45 Tracks
+	for i := 1; i <= 45; i++ {
+		id := strconv.Itoa(i)
+		trackurl := "http://example.org/track/id" + id
+		escapedTrackUrl := url.QueryEscape(trackurl)
+		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "tags":{"title":"test"}}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {"title":"test"}, "weighting": 0}`
+		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
+	}
+	pages := map[string]int{
+		"1": 20,
+		"2": 20,
+		"3": 5,
+	}
+	for page, count := range pages {
+
+		url := server.URL + "/search?q=test&page=" + page
+		response, err := http.Get(url)
+		if err != nil {
+			test.Error(err)
+		}
+		responseData, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			test.Error(err)
+		}
+
+		expectedResponseCode := 200
+		if response.StatusCode != expectedResponseCode {
+			test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+		}
+
+		var output SearchResult
+		err = json.Unmarshal(responseData, &output)
+		if err != nil {
+			test.Errorf("Invalid JSON body: %s for %s", err.Error(), "/search?q=test&page="+page)
+		}
+		if len(output.Tracks) != count {
+			test.Errorf("Wrong number of tracks.  Expected: %d, Actual: %d", count, len(output.Tracks))
+		}
+	}
 }
