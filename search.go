@@ -21,7 +21,7 @@ func (store Datastore) trackSearch(query string, page int) (tracks []Track, err 
 	startid := limit * (page - 1)
 	tracks = []Track{}
 	query = "%"+query+"%"
-	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM tag LEFT JOIN track ON tag.trackid = track.id WHERE value LIKE $1 GROUP BY trackid ORDER BY trackid LIMIT $2, $3", query, startid, limit)
+	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM tag LEFT JOIN track ON tag.trackid = track.id WHERE value LIKE $1 UNION SELECT id, url, fingerprint, duration, weighting FROM track WHERE url LIKE $1 GROUP BY id ORDER BY id LIMIT $2, $3", query, startid, limit)
 	if err != nil {
 		return
 	}
