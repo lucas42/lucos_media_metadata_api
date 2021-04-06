@@ -29,12 +29,36 @@ func (track Track) getName() (string) {
 	}
 	return "#"+strconv.Itoa(track.ID)
 }
+func (original Track) updateNeeded (changeSet Track) bool {
+	if changeSet.Fingerprint != "" && changeSet.Fingerprint != original.Fingerprint{
+		return true
+	}
+	if changeSet.Duration != 0 && changeSet.Duration != original.Duration{
+		return true
+	}
+	if changeSet.URL != "" && changeSet.URL != original.URL{
+		return true
+	}
+	if changeSet.Weighting != 0 && changeSet.Weighting != original.Weighting{
+		return true
+	}
+	for predicate, changeValue := range changeSet.Tags {
+		if original.Tags[predicate] != changeValue {
+			return true
+		}
+	}
+	return false
+}
 
 /**
  * Updates or Creates fields about a track based on a given field
  *
  */
 func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, existingTrack Track) (storedTrack Track, err error) {
+	// If no changes are needed, return the existing track
+	if !existingTrack.updateNeeded(track) {
+		return existingTrack, nil
+	}
 	updateFields := []string{}
 	if track.Duration != 0 {
 		updateFields = append(updateFields, "duration = :duration")

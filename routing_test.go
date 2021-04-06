@@ -323,8 +323,9 @@ func TestEmptyPatchIsInert(test *testing.T) {
 	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
 	emptyInput := `{}`
+	lastLoganneType = ""
 	makeRequest(test, "PATCH", trackpath, emptyInput, 200, outputJson, true)
-	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType) // In future might want to avoid logging in this case
+	assertEqual(test, "Loganne call", "", lastLoganneType) // Shouldn't have logged in this case
 	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
 }
 
