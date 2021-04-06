@@ -72,9 +72,9 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		storedTrack, err = store.getTrackDataByField(filterField, value)
 	}
 	if existingTrack.ID > 0 {
-		store.Loganne.post("trackUpdated", "Track #"+strconv.Itoa(storedTrack.ID)+" updated", storedTrack)
+		store.Loganne.post("trackUpdated", "Track #"+strconv.Itoa(storedTrack.ID)+" updated", storedTrack, existingTrack)
 	} else {
-		store.Loganne.post("trackAdded", "New Track #"+strconv.Itoa(storedTrack.ID)+" added", storedTrack)
+		store.Loganne.post("trackAdded", "New Track #"+strconv.Itoa(storedTrack.ID)+" added", storedTrack, existingTrack)
 
 	}
 	return
@@ -231,16 +231,19 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
  *
  */
 func (store Datastore) deleteTrack(trackid int) (err error) {
+	existingTrack, err := store.getTrackDataByField("id", trackid)
+	if (err != nil) {
+		return
+	}
 	_, err = store.DB.Exec("DELETE FROM tag WHERE trackid=$1", trackid)
 	if (err != nil) {
 		return
 	}
 	_, err = store.DB.Exec("DELETE FROM track WHERE id=$1", trackid)
-	if err != nil && err.Error() == "sql: no rows in result set" {
-		err = errors.New("Track Not Found")
+	if (err != nil) {
 		return
 	}
-	store.Loganne.post("trackDeleted", "Track #"+strconv.Itoa(trackid)+" deleted", Track{ID:trackid})
+	store.Loganne.post("trackDeleted", "Track #"+strconv.Itoa(trackid)+" deleted", Track{}, existingTrack)
 	return
 }
 

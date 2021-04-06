@@ -8,7 +8,7 @@ import (
 )
 
 type LoganneInterface interface {
-    post(string, string, Track)
+    post(string, string, Track, Track)
 }
 
 type Loganne struct {
@@ -16,9 +16,13 @@ type Loganne struct {
 	host   string
 }
 
-func (loganne Loganne) post(eventType string, humanReadable string, track Track) {
+func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack Track, existingTrack Track) {
 	url := loganne.host + "/events"
 
+	track := updatedTrack
+	if track.ID == 0 {
+		track = existingTrack
+	}
 	postData, _ := json.Marshal(map[string]interface{}{
 		"source":  loganne.source,
 		"type": eventType,

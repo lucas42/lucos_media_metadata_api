@@ -19,12 +19,14 @@ var server *httptest.Server
 var lastLoganneType string
 var lastLoganneMessage string
 var lastLoganneTrack Track
+var lastLoganneExistingTrack Track
 
 type MockLoganne struct {}
-func (mock MockLoganne) post(eventType string, humanReadable string, track Track) {
+func (mock MockLoganne) post(eventType string, humanReadable string, track Track, existingTrack Track) {
 	lastLoganneType = eventType
 	lastLoganneMessage = humanReadable
 	lastLoganneTrack = track
+	lastLoganneExistingTrack = existingTrack
 }
 
 func clearData() {
@@ -49,6 +51,7 @@ func restartServer() {
 	lastLoganneType = ""
 	lastLoganneMessage = ""
 	lastLoganneTrack = Track{}
+	lastLoganneExistingTrack = Track{}
 	store := DBInit("testrouting.sqlite", MockLoganne{})
 	server = httptest.NewServer(FrontController(store))
 }
@@ -209,6 +212,7 @@ func TestCanEditTrackByUrl(test *testing.T) {
 	assertEqual(test, "Loganne event type", "trackAdded", lastLoganneType)
 	assertEqual(test, "Loganne humanReadable", "New Track #1 added", lastLoganneMessage)
 	assertEqual(test, "Loganne track ID", 1, lastLoganneTrack.ID)
+	assertEqual(test, "Loganne existingTrack ID", 0, lastLoganneExistingTrack.ID)
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, outputJson, true)
@@ -234,6 +238,7 @@ func TestCanUpdateDuration(test *testing.T) {
 	assertEqual(test, "Loganne event type", "trackUpdated", lastLoganneType)
 	assertEqual(test, "Loganne humanReadable", "Track #1 updated", lastLoganneMessage)
 	assertEqual(test, "Loganne track ID", 1, lastLoganneTrack.ID)
+	assertEqual(test, "Loganne existingTrack ID", 1, lastLoganneExistingTrack.ID)
 	makeRequest(test, "GET", path, "", 200, outputBJson, true)
 }
 
@@ -488,7 +493,8 @@ func TestTrackDeletion(test *testing.T) {
 	makeRequest(test, "DELETE", "/tracks/2", "", 204, "", false)
 	assertEqual(test, "Loganne event type", "trackDeleted", lastLoganneType)
 	assertEqual(test, "Loganne humanReadable", "Track #2 deleted", lastLoganneMessage)
-	assertEqual(test, "Loganne track ID", 2, lastLoganneTrack.ID)
+	assertEqual(test, "Loganne track ID", 0, lastLoganneTrack.ID)
+	assertEqual(test, "Loganne existingTrack ID", 2, lastLoganneExistingTrack.ID)
 	makeRequest(test, "GET", "/tracks/2", "", 404, "Track Not Found\n", false)
 	makeRequest(test, "GET", "/tags/2", "", 200, "{}", true)
 	makeRequest(test, "GET", "/tracks/1", "", 200, output1TagsJson, true)
