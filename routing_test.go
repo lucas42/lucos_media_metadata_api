@@ -492,7 +492,7 @@ func TestTrackDeletion(test *testing.T) {
 	makeRequest(test, "GET", "/tracks/2", "", 200, output2TagsJson, true)
 	makeRequest(test, "DELETE", "/tracks/2", "", 204, "", false)
 	assertEqual(test, "Loganne event type", "trackDeleted", lastLoganneType)
-	assertEqual(test, "Loganne humanReadable", "Track #2 deleted", lastLoganneMessage)
+	assertEqual(test, "Loganne humanReadable", "Track \"Track Two\" deleted", lastLoganneMessage)
 	assertEqual(test, "Loganne track ID", 0, lastLoganneTrack.ID)
 	assertEqual(test, "Loganne existingTrack ID", 2, lastLoganneExistingTrack.ID)
 	makeRequest(test, "GET", "/tracks/2", "", 404, "Track Not Found\n", false)

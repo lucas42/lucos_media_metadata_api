@@ -23,6 +23,13 @@ type Track struct {
 	Weighting   float64           `json:"weighting"`
 }
 
+func (track Track) getName() (string) {
+	if track.Tags["title"] != "" {
+		return "\""+track.Tags["title"]+"\""
+	}
+	return "#"+strconv.Itoa(track.ID)
+}
+
 /**
  * Updates or Creates fields about a track based on a given field
  *
@@ -72,9 +79,9 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		storedTrack, err = store.getTrackDataByField(filterField, value)
 	}
 	if existingTrack.ID > 0 {
-		store.Loganne.post("trackUpdated", "Track #"+strconv.Itoa(storedTrack.ID)+" updated", storedTrack, existingTrack)
+		store.Loganne.post("trackUpdated", "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
 	} else {
-		store.Loganne.post("trackAdded", "New Track #"+strconv.Itoa(storedTrack.ID)+" added", storedTrack, existingTrack)
+		store.Loganne.post("trackAdded", "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack)
 
 	}
 	return
@@ -243,7 +250,7 @@ func (store Datastore) deleteTrack(trackid int) (err error) {
 	if (err != nil) {
 		return
 	}
-	store.Loganne.post("trackDeleted", "Track #"+strconv.Itoa(trackid)+" deleted", Track{}, existingTrack)
+	store.Loganne.post("trackDeleted", "Track "+existingTrack.getName()+" deleted", Track{}, existingTrack)
 	return
 }
 
