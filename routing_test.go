@@ -83,13 +83,23 @@ func AreEqualJSON(s1, s2 string) (bool, error) {
  *
  */
 func makeRequest(t *testing.T, method string, path string, requestBody string, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
+	request := basicRequest(t, method, path, requestBody)
+	makeRawRequest(t, request, expectedResponseCode, expectedResponseBody, expectJSON)
+}
+
+/**
+ * Constructs a http request against the test server
+ *
+ */
+func basicRequest(t *testing.T, method string, path string, requestBody string) (request *http.Request) {
 	reader := strings.NewReader(requestBody)
 	url := server.URL + path
-	request, err := http.NewRequest(method, url, reader)
+	var err error
+	request, err = http.NewRequest(method, url, reader)
 	if err != nil {
 		t.Error(err)
 	}
-	makeRawRequest(t, request, expectedResponseCode, expectedResponseBody, expectJSON)
+	return
 }
 
 /**
@@ -97,7 +107,7 @@ func makeRequest(t *testing.T, method string, path string, requestBody string, e
  *
  * (Probably not the most go-eque way to do this, but it works for me)
  */
-func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
+func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode int, expectedResponseBody string, expectJSON bool) (response *http.Response) {
 	url := request.URL.String()
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
@@ -132,6 +142,7 @@ func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode in
 			t.Errorf("Unexpected body: \"%s\", expected: \"%s\"", actualResponseBody, expectedResponseBody)
 		}
 	}
+	return
 }
 
 /**
@@ -139,11 +150,7 @@ func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode in
  *
  */
 func makeRequestWithUnallowedMethod(t *testing.T, path string, unallowedMethod string, allowedMethods []string) {
-	url := server.URL + path
-	request, err := http.NewRequest(unallowedMethod, url, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	request := basicRequest(t, unallowedMethod, path, "")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Error(err)
@@ -154,14 +161,14 @@ func makeRequestWithUnallowedMethod(t *testing.T, path string, unallowedMethod s
 	}
 	actualResponseBody := string(responseData)
 	if response.StatusCode != 405 {
-		t.Errorf("Got response code %d, expected %d for %s", response.StatusCode, 405, url)
+		t.Errorf("Got response code %d, expected %d for %s", response.StatusCode, 405, path)
 	}
 	if !strings.HasPrefix(actualResponseBody, "Method Not Allowed") {
-		t.Errorf("Repsonse body for %s doesn't begin with \"Method Not Allowed\"", url)
+		t.Errorf("Repsonse body for %s doesn't begin with \"Method Not Allowed\"", path)
 	}
 	for _, method := range allowedMethods {
 		if !strings.Contains(response.Header.Get("allow"), method) {
-			t.Errorf("Allow header doesn't include method %s for %s", method, url)
+			t.Errorf("Allow header doesn't include method %s for %s", method, path)
 		}
 	}
 }
@@ -629,21 +636,13 @@ func TestAddTagIfMissing(test *testing.T) {
 
 	// Add Tag (this should work as tag doesn't yet exist)
 	path := "/tags/1/rating"
-	reader := strings.NewReader("5")
-	request, err := http.NewRequest("PUT", server.URL+path, reader)
-	if err != nil {
-		test.Error(err)
-	}
+	request := basicRequest(test, "PUT", path, "5")
 	request.Header.Add("If-None-Match", "*")
 	makeRawRequest(test, request, 200, "5", false)
 	makeRequest(test, "GET", path, "", 200, "5", false)
 
 	// Update Tag (this shouldn't have any effect as tag already exists)
-	reader = strings.NewReader("2")
-	request, err = http.NewRequest("PUT", server.URL+path, reader)
-	if err != nil {
-		test.Error(err)
-	}
+	request = basicRequest(test, "PUT", path, "2")
 	request.Header.Add("If-None-Match", "*")
 	makeRawRequest(test, request, 200, "5", false)
 	makeRequest(test, "GET", path, "", 200, "5", false)
@@ -776,11 +775,7 @@ func TestUpdateMissingInMultipleTags(test *testing.T) {
 	inputBJson := `{"tags":{"title":"Original", "artist": "Old Artist", "album": "Brand New Album"}}}`
 	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"title":"Original", "artist": "Has Been Changed", "album": "Brand New Album"}, "weighting": 0}`
 
-	reader := strings.NewReader(inputBJson)
-	request, err := http.NewRequest("PATCH", server.URL+trackpath, reader)
-	if err != nil {
-		test.Error(err)
-	}
+	request := basicRequest(test, "PATCH", trackpath, inputBJson)
 	request.Header.Add("If-None-Match", "*")
 	makeRawRequest(test, request, 200, outputBJson, true)
 	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
@@ -808,11 +803,7 @@ func TestNoMissingTagsDoesntPostToLogann(test *testing.T) {
 
 	inputBJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300, "tags":{"title":"Original", "artist": "Has Been Changed"}}}`
 	lastLoganneType = ""
-	reader := strings.NewReader(inputBJson)
-	request, err := http.NewRequest("PUT", server.URL+trackpath, reader)
-	if err != nil {
-		test.Error(err)
-	}
+	request := basicRequest(test, "PUT", trackpath, inputBJson)
 	request.Header.Add("If-None-Match", "*")
 	makeRawRequest(test, request, 200, outputJson, true)
 	assertEqual(test, "Loganne call", "", lastLoganneType) // Shouldn't have logged in this case
