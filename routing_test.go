@@ -613,7 +613,7 @@ func TestAddTag(test *testing.T) {
 }
 
 /**
- * Checks whether new tags can be added
+ * Checks whether tags can be conditionally added
  */
 func TestAddTagIfMissing(test *testing.T) {
 	clearData()
@@ -649,7 +649,6 @@ func TestAddTagIfMissing(test *testing.T) {
 	makeRequest(test, "GET", path, "", 200, "5", false)
 	makeRequest(test, "GET", trackpath, "", 200, trackOutputTagged, true)
 }
-
 
 /**
  * Checks whether tags can be deleted
@@ -756,6 +755,38 @@ func TestDeleteTagInMultiple(test *testing.T) {
 	makeRequest(test, "GET", artistpath, "", 200, "The Beautiful South", false)
 	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
 	makeRequest(test, "GET", genrepath, "", 200, "pop", false)
+}
+/**
+ * Checks whether only the missing tags can be added when multiple are specified
+ */
+func TestUpdateMissingInMultipleTags(test *testing.T) {
+	clearData()
+	trackpath := "/tracks/1"
+	titlepath := "/tags/1/title"
+	artistpath := "/tags/1/artist"
+	albumpath := "/tags/1/album"
+	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300, "tags": {"title":"Original", "artist": "Has Been Changed"}}`
+	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"title":"Original", "artist": "Has Been Changed"}, "weighting": 0}`
+	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
+	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
+	makeRequest(test, "GET", titlepath, "", 200, "Original", false)
+	makeRequest(test, "GET", artistpath, "", 200, "Has Been Changed", false)
+	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
+	inputBJson := `{"tags":{"title":"Original", "artist": "Old Artist", "album": "Brand New Album"}}}`
+	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"title":"Original", "artist": "Has Been Changed", "album": "Brand New Album"}, "weighting": 0}`
+
+	reader := strings.NewReader(inputBJson)
+	request, err := http.NewRequest("PATCH", server.URL+trackpath, reader)
+	if err != nil {
+		test.Error(err)
+	}
+	request.Header.Add("If-None-Match", "*")
+	makeRawRequest(test, request, 200, outputBJson, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
+	makeRequest(test, "GET", titlepath, "", 200, "Original", false)
+	makeRequest(test, "GET", artistpath, "", 200, "Has Been Changed", false)
+	makeRequest(test, "GET", albumpath, "", 200, "Brand New Album", false)
 }
 
 /**

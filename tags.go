@@ -56,6 +56,53 @@ func (store Datastore) updateTag(trackid int, predicate string, value string) (e
 }
 
 /**
+ * Creates a tag if the track doesn't already have one with the given predicate
+ *
+ */
+func (store Datastore) updateTagIfMissing(trackid int, predicate string, value string) (err error) {
+	_, err = store.getTagValue(trackid, predicate)
+	if err != nil && err.Error() == "Tag Not Found" {
+		err = store.updateTag(trackid, predicate, string(value))
+	}
+	return
+}
+
+
+/**
+ * Creates or updates a map of tags
+ *
+ */
+ func (store Datastore) updateTags(trackid int, tags map[string]string) (err error) {
+	for predicate, tagValue := range tags {
+		if tagValue != "" {
+			err = store.updateTag(trackid, predicate, tagValue)
+		} else {
+			err = store.deleteTag(trackid, predicate)
+		}
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+/**
+ * Creates only the given tags which the given track doesn't already have
+ *
+ */
+ func (store Datastore) updateTagsIfMissing(trackid int, tags map[string]string) (err error) {
+	for predicate, tagValue := range tags {
+		if tagValue != "" {
+			err = store.updateTagIfMissing(trackid, predicate, tagValue)
+		}
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+
+/**
  * Gets all the tags for a given track (in a map of key/value pairs)
  *
  */
@@ -141,10 +188,7 @@ func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if r.Header.Get("If-None-Match") == "*" {
-			_, err = store.getTagValue(trackid, predicate)
-			if err != nil && err.Error() == "Tag Not Found" {
-				err = store.updateTag(trackid, predicate, string(value))
-			}
+			err = store.updateTagIfMissing(trackid, predicate, string(value))
 		} else {
 			err = store.updateTag(trackid, predicate, string(value))
 		}

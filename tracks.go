@@ -54,7 +54,7 @@ func (original Track) updateNeeded (changeSet Track) bool {
  * Updates or Creates fields about a track based on a given field
  *
  */
-func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, existingTrack Track) (storedTrack Track, err error) {
+func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, existingTrack Track, onlyMissing bool) (storedTrack Track, err error) {
 	// If no changes are needed, return the existing track
 	if !existingTrack.updateNeeded(track) {
 		return existingTrack, nil
@@ -91,17 +91,15 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 	if err != nil {
 		return
 	}
-	for predicate, tagValue := range track.Tags {
-		if tagValue != "" {
-			err = store.updateTag(storedTrack.ID, predicate, tagValue)
-		} else {
-			err = store.deleteTag(storedTrack.ID, predicate)
-		}
-		if err != nil {
-			return
-		}
-		storedTrack, err = store.getTrackDataByField(filterField, value)
+	if !onlyMissing {
+		err = store.updateTags(storedTrack.ID, track.Tags);
+	} else {
+		err = store.updateTagsIfMissing(storedTrack.ID, track.Tags);
 	}
+	if err != nil {
+		return
+	}
+	storedTrack, err = store.getTrackDataByField(filterField, value)
 	if existingTrack.ID > 0 {
 		store.Loganne.post("trackUpdated", "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
 	} else {
@@ -422,13 +420,14 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 			case "fingerprint":
 				track.Fingerprint = fingerprint
 			}
+			onlyMissing := (r.Header.Get("If-None-Match") == "*")
 			existingTrack, err := store.getTrackDataByField(filterfield, filtervalue)
 			if r.Method == "PATCH" {
 				if err != nil && err.Error() == "Track Not Found" {
 					http.Error(w, "Track Not Found", http.StatusNotFound)
 					return
 				}
-				savedTrack, err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, existingTrack)
+				savedTrack, err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, existingTrack, onlyMissing)
 			} else {
 				missingFields := []string{}
 				if track.Fingerprint == "" {
@@ -444,7 +443,7 @@ func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) 
 					http.Error(w, "Missing fields \""+strings.Join(missingFields, "\" and \"")+"\"", http.StatusBadRequest)
 					return
 				}
-				savedTrack, err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, existingTrack)
+				savedTrack, err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, existingTrack, onlyMissing)
 			}
 			if err != nil {
 				statusCode := http.StatusInternalServerError
