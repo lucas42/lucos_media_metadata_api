@@ -173,6 +173,15 @@ func makeRequestWithUnallowedMethod(t *testing.T, path string, unallowedMethod s
 	}
 }
 
+func checkResponseHeader(t *testing.T, response *http.Response, headerName string, expectedValue string) {
+	actualValue := response.Header.Get(headerName)
+	if actualValue == "" {
+		t.Errorf("Response header \"%s\" missing", headerName)
+		return
+	}
+	assertEqual(t, "Incorrect response header for \""+headerName+"\"", expectedValue, actualValue)
+}
+
 /**
  * Constructs a http request which should do a redirect
  *
@@ -363,6 +372,37 @@ func TestCanUpdateById(test *testing.T) {
 	makeRequest(test, "GET", path2, "", 200, outputBJson, true)
 	makeRequest(test, "PUT", path, `{"start": "some JSON"`, 400, "unexpected EOF\n", false)
 	makeRequest(test, "GET", path, "", 200, outputBJson, true)
+}
+
+/**
+ * Checks the Track-Action HTTP Header
+ */
+func TestTrackActionHeader(test *testing.T) {
+	clearData()
+	path := "/tracks/1"
+	inputAJson := `{"fingerprint":"aoecu1234","duration":300,"url":"http://example.org/track/333","trackid":1,"tags":{},"weighting":0}`
+	request := basicRequest(test, "PUT", path, inputAJson)
+	response := makeRawRequest(test, request, 200, inputAJson, true)
+	checkResponseHeader(test, response, "Track-Action", "trackAdded")
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
+
+	inputBJson := `{"fingerprint":"aoecu1234","duration":299,"url":"http://example.org/track/changed","trackid":1,"tags":{},"weighting":0}`
+	request = basicRequest(test, "PUT", path, inputBJson)
+	response = makeRawRequest(test, request, 200, inputBJson, true)
+	checkResponseHeader(test, response, "Track-Action", "trackUpdated")
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
+
+	lastLoganneType = ""
+	request = basicRequest(test, "PUT", path, inputBJson)
+	response = makeRawRequest(test, request, 200, inputBJson, true)
+	checkResponseHeader(test, response, "Track-Action", "noChange")
+	assertEqual(test, "Loganne call", "", lastLoganneType)
+
+	request = basicRequest(test, "DELETE", path, "")
+	response = makeRawRequest(test, request, 204, "", false)
+	checkResponseHeader(test, response, "Track-Action", "trackDeleted")
+	assertEqual(test, "Loganne call", "trackDeleted", lastLoganneType)
+
 }
 
 /**
