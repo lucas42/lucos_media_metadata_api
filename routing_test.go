@@ -788,6 +788,39 @@ func TestUpdateMissingInMultipleTags(test *testing.T) {
 	makeRequest(test, "GET", artistpath, "", 200, "Has Been Changed", false)
 	makeRequest(test, "GET", albumpath, "", 200, "Brand New Album", false)
 }
+/**
+ * Checks that if no tags are missing, then loganne doesn't get called
+ */
+func TestNoMissingTagsDoesntPostToLogann(test *testing.T) {
+	clearData()
+	trackpath := "/tracks/1"
+	titlepath := "/tags/1/title"
+	artistpath := "/tags/1/artist"
+	albumpath := "/tags/1/album"
+	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300, "tags": {"title":"Original", "artist": "Not Changed", "album": "Irrelevant"}}`
+	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"title":"Original", "artist": "Not Changed", "album": "Irrelevant"}, "weighting": 0}`
+	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputJson, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
+	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
+	makeRequest(test, "GET", titlepath, "", 200, "Original", false)
+	makeRequest(test, "GET", artistpath, "", 200, "Not Changed", false)
+	makeRequest(test, "GET", albumpath, "", 200, "Irrelevant", false)
+
+	inputBJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300, "tags":{"title":"Original", "artist": "Has Been Changed"}}}`
+	lastLoganneType = ""
+	reader := strings.NewReader(inputBJson)
+	request, err := http.NewRequest("PUT", server.URL+trackpath, reader)
+	if err != nil {
+		test.Error(err)
+	}
+	request.Header.Add("If-None-Match", "*")
+	makeRawRequest(test, request, 200, outputJson, true)
+	assertEqual(test, "Loganne call", "", lastLoganneType) // Shouldn't have logged in this case
+	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
+	makeRequest(test, "GET", titlepath, "", 200, "Original", false)
+	makeRequest(test, "GET", artistpath, "", 200, "Not Changed", false)
+	makeRequest(test, "GET", albumpath, "", 200, "Irrelevant", false)
+}
 
 /**
  * Checks whether a track can have its weighting updated

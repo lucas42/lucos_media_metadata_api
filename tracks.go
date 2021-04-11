@@ -29,7 +29,7 @@ func (track Track) getName() (string) {
 	}
 	return "#"+strconv.Itoa(track.ID)
 }
-func (original Track) updateNeeded (changeSet Track) bool {
+func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 	if changeSet.Fingerprint != "" && changeSet.Fingerprint != original.Fingerprint{
 		return true
 	}
@@ -43,6 +43,12 @@ func (original Track) updateNeeded (changeSet Track) bool {
 		return true
 	}
 	for predicate, changeValue := range changeSet.Tags {
+
+		// If only missing tags are being updated, then ignore any
+		// predicates where the original track already has a value
+		if onlyMissing && original.Tags[predicate] != "" {
+			continue
+		}
 		if original.Tags[predicate] != changeValue {
 			return true
 		}
@@ -56,7 +62,7 @@ func (original Track) updateNeeded (changeSet Track) bool {
  */
 func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, existingTrack Track, onlyMissing bool) (storedTrack Track, err error) {
 	// If no changes are needed, return the existing track
-	if !existingTrack.updateNeeded(track) {
+	if !existingTrack.updateNeeded(track, onlyMissing) {
 		return existingTrack, nil
 	}
 	updateFields := []string{}
