@@ -35,6 +35,46 @@ func TestSimpleSearch(test *testing.T) {
 	]}`, true)
 }
 
+/**
+ * Checks whether the correct tracks are returned when searching for a particular predicate
+ */
+func TestPredicateSearch(test *testing.T) {
+	clearData()
+
+	// Title is Yellow Submarine
+	makeRequest(test, "PUT", "/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
+	// Title contains Yellow Submarine
+	makeRequest(test, "PUT", "/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"},"weighting": 0}`, true)
+	// Artist is Yellow Submarine
+	makeRequest(test, "PUT", "/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"},"weighting": 0}`, true)
+	// No mention of Yellow Submarine
+	makeRequest(test, "PUT", "/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"weighting": 0}`, true)
+
+	makeRequest(test, "GET", "/search?p.title=Yellow%20Submarine", "", 200, `{"tracks":[
+		{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}
+	]}`, true)
+}
+
+/**
+ * Checks whether the correct tracks are returned when searching for multiple predicates
+ */
+func TestMultiPredicateSearch(test *testing.T) {
+	clearData()
+
+	// Album is Now 42
+	makeRequest(test, "PUT", "/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Corrs", "title":"What Can I Do"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Corrs", "title":"What Can I Do"},"weighting": 0}`, true)
+	// Album is Now 42 AND Artist is Beatiful South
+	makeRequest(test, "PUT", "/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"},"weighting": 0}`, true)
+	// Album is Now 42
+	makeRequest(test, "PUT", "/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Divine Comedy", "title":"National Express"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Divine Comedy", "title":"National Express"},"weighting": 0}`, true)
+	// Artist is Beautiful South
+	makeRequest(test, "PUT", "/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"album": "Now That's What I Call Music! 41","artist":"The Beautiful South", "title":"Perfect 10"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"album": "Now That's What I Call Music! 41","artist":"The Beautiful South", "title":"Perfect 10"},"weighting": 0}`, true)
+
+	makeRequest(test, "GET", "/search?p.artist=The%20Beautiful%20South&p.album=Now%20That%27s%20What%20I%20Call%20Music!%2042", "", 200, `{"tracks":[
+		{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"},"weighting": 0}
+	]}`, true)
+}
+
 func TestInvalidRequestsToSearch(test *testing.T) {
 	makeRequestWithUnallowedMethod(test, "/search?q=blue", "POST", []string{"GET"})
 	makeRequest(test, "GET", "/search", "", 400, "No query given\n", false)
