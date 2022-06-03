@@ -32,7 +32,7 @@ func TestSimpleSearch(test *testing.T) {
 		{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Blue", "title":"I can"},"weighting": 0},
 		{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"weighting": 0},
 		{"fingerprint":"abc5","duration":7,"url":"http://example.org/blue","trackid":5,"tags":{},"weighting": 0}
-	]}`, true)
+	], "totalPages": 1}`, true)
 }
 
 /**
@@ -52,7 +52,7 @@ func TestPredicateSearch(test *testing.T) {
 
 	makeRequest(test, "GET", "/search?p.title=Yellow%20Submarine", "", 200, `{"tracks":[
 		{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}
-	]}`, true)
+	], "totalPages": 1}`, true)
 }
 
 /**
@@ -72,7 +72,7 @@ func TestMultiPredicateSearch(test *testing.T) {
 
 	makeRequest(test, "GET", "/search?p.artist=The%20Beautiful%20South&p.album=Now%20That%27s%20What%20I%20Call%20Music!%2042", "", 200, `{"tracks":[
 		{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"},"weighting": 0}
-	]}`, true)
+	], "totalPages": 1}`, true)
 }
 
 func TestInvalidRequestsToSearch(test *testing.T) {
@@ -128,5 +128,34 @@ func TestSearchPagination(test *testing.T) {
 		if len(output.Tracks) != count {
 			test.Errorf("Wrong number of tracks.  Expected: %d, Actual: %d", count, len(output.Tracks))
 		}
+		assertEqual(test, "Incorrect Page Count", 3, output.TotalPages)
+	}
+
+	for page, count := range pages {
+
+		url := server.URL + "/search?p.title=test&page=" + page
+		response, err := http.Get(url)
+		if err != nil {
+			test.Error(err)
+		}
+		responseData, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			test.Error(err)
+		}
+
+		expectedResponseCode := 200
+		if response.StatusCode != expectedResponseCode {
+			test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+		}
+
+		var output SearchResult
+		err = json.Unmarshal(responseData, &output)
+		if err != nil {
+			test.Errorf("Invalid JSON body: %s for %s", err.Error(), "/search?q=test&page="+page)
+		}
+		if len(output.Tracks) != count {
+			test.Errorf("Wrong number of tracks.  Expected: %d, Actual: %d", count, len(output.Tracks))
+		}
+		assertEqual(test, "Incorrect Page Count", 3, output.TotalPages)
 	}
 }
