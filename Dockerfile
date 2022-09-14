@@ -1,14 +1,11 @@
-FROM golang:1
+FROM golang:1.19
 
 WORKDIR /go/src/lucos_media_metadata_api
 
-ENV GO111MODULE=auto
+COPY go.* .
+RUN go mod download
 
-RUN go get github.com/mattn/go-sqlite3
-RUN go get github.com/jmoiron/sqlx
-
-COPY *.go ./
-
+COPY *.go .
 RUN go install
 
 ENV PORT=3002
