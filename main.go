@@ -14,6 +14,8 @@ import (
  */
 func FrontController(store Datastore) *http.ServeMux {
 	router := http.NewServeMux()
+	router.HandleFunc("/v2/tracks", store.TracksV2Controller)
+	router.HandleFunc("/v2/tracks/", store.TracksV2Controller)
 	router.HandleFunc("/tracks", store.TracksController)
 	router.HandleFunc("/tracks/", store.TracksController)
 	router.HandleFunc("/globals", store.GlobalsController)
