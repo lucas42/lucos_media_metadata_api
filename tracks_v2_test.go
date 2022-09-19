@@ -544,7 +544,7 @@ func TestDuplicateFingerprintV2(test *testing.T) {
 func TestRandomTracksV2(test *testing.T) {
 	clearData()
 	path := "/v2/tracks/random"
-	makeRequest(test, "GET", path, "", 200, "[]", true)
+	makeRequest(test, "GET", path, "", 200, `{"tracks":[],"totalPages":0}`, true)
 
 	// Create 40 Tracks
 	for i := 1; i <= 40; i++ {
@@ -572,13 +572,16 @@ func TestRandomTracksV2(test *testing.T) {
 		test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
 	}
 
-	var output []interface{}
+	var output SearchResult
 	err = json.Unmarshal(responseData, &output)
 	if err != nil {
 		test.Errorf("Invalid JSON body: %s for %s", err.Error(), path)
 	}
-	if len(output) != 20 {
-		test.Errorf("Wrong number of tracks.  Expected: 20, Actual: %d", len(output))
+	if len(output.Tracks) != 20 {
+		test.Errorf("Wrong number of tracks.  Expected: 20, Actual: %d", len(output.Tracks))
+	}
+	if output.TotalPages != 1 {
+		test.Errorf("Wrong number of totalPages.  Expected: 1, Actual: %d", output.TotalPages)
 	}
 	if !strings.Contains(response.Header.Get("Cache-Control"), "no-cache") {
 		test.Errorf("Random track list is cachable")
@@ -614,14 +617,6 @@ func TestSimpleQueryV2(test *testing.T) {
 	], "totalPages": 1}`, true)
 }
 
-/**
- * NOCOMMIT!!
- * 
- * Need to consider whether a response of type {tracks:[], totalPages: n} is good enough for the same root path which normally returns an array of tracks
- **/
- func TestStopV2(test *testing.T) {
- 	test.Error("NOCOMMIT, see source comment")
- }
 
 /**
  * Checks whether the correct tracks are returned when querying for a particular predicate

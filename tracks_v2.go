@@ -43,6 +43,20 @@ func getMultipleTracks(store Datastore, w http.ResponseWriter, r *http.Request) 
 	writeJSONResponse(w, result, err)
 }
 
+
+/**
+ * Write a http response with a JSON representation of a random 20 tracks
+ */
+func writeRandomTracksV2(store Datastore, w http.ResponseWriter) {
+	tracks, err := store.getRandomTracks(20)
+	var result SearchResult
+	result.Tracks = tracks
+	if (len(tracks) > 0) {
+		result.TotalPages = 1
+	}
+	writeJSONResponse(w, result, err)
+}
+
 /**
  * A controller for handling all requests dealing with tracks
  */
@@ -79,7 +93,7 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 		} else {
 			switch pathparts[1] {
 			case "random":
-				writeRandomTracks(store, w)
+				writeRandomTracksV2(store, w)
 			default:
 				http.Error(w, "Track Endpoint Not Found", http.StatusNotFound)
 			}
