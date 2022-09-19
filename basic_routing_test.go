@@ -8,7 +8,7 @@ import (
  * Checks that the homepage redirects to /tracks
  */
 func TestHomepage(t *testing.T) {
-	checkRedirect(t, "/", "/tracks")
+	checkRedirect(t, "/", "/v2/tracks")
 }
 
 /**

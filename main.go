@@ -30,7 +30,7 @@ func FrontController(store Datastore) *http.ServeMux {
 
 func HomepageController(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
-		http.Redirect(w, r, "/tracks", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, "/v2/tracks", http.StatusTemporaryRedirect)
 	} else {
 		http.NotFound(w, r)
 	}
