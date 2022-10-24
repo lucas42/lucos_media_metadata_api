@@ -8,6 +8,7 @@ services:
     image: lucas42/lucos_media_metadata_api
     volumes:
       - "db:/var/lib/media-metadata/"
+    restart: always
 
 volumes:
   db:
