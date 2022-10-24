@@ -5,7 +5,6 @@ jobs:
   test:
     docker:
       - image: cimg/go:1.19
-    working_directory: /go/src/github.com/lucas42/lucos_media_metadata_api
     environment:
       GO111MODULE: auto
     steps:
