@@ -5,7 +5,7 @@ WORKDIR /go/src/lucos_media_metadata_api
 COPY go.* .
 RUN go mod download
 
-COPY *.go .
+COPY src .
 RUN go install
 
 ENV PORT=3002
