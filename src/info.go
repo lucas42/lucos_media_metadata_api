@@ -76,18 +76,14 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 		importErrorsInt, _ := strconv.Atoi(importErrorsString)
 		importErrors.Value = importErrorsInt
 
-		weightingsRecencyCheck, sinceWeightings := RecencyCheck(store, "weightings", 2)
-
 		info.Checks = map[string]Check{
 			"db": dbCheck,
 			"import": importRecencyCheck,
-			"weightings": weightingsRecencyCheck,
 		}
 		info.Metrics = map[string]Metric{
 			"track-count": trackCount,
 			"since-import": sinceImport,
 			"import-errors": importErrors,
-			"since-weightings": sinceWeightings,
 		}
 		info.CI = map[string]string{
 			"circle": "gh/lucas42/lucos_media_metadata_api",
