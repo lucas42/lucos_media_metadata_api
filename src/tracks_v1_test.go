@@ -500,6 +500,7 @@ func TestCanUpdateWeighting(test *testing.T) {
 	clearData()
 	path := "/tracks/1/weighting"
 	makeRequest(test, "GET", path, "", 404, "Track Not Found\n", false)
+	assertEqual(test, "Loganne call", "", lastLoganneType) // Shouldn't have logged in this case
 
 	// Create track
 	trackurl := "http://example.org/track/eui4536"
@@ -507,15 +508,23 @@ func TestCanUpdateWeighting(test *testing.T) {
 	trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
 	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/eui4536", "trackid": 1, "tags": {}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, `{"fingerprint": "aoecu1234", "duration": 300}`, 200, outputJson, true)
+	lastLoganneType = ""
 
 	makeRequest(test, "GET", path, "", 200, "0", false)
 	makeRequest(test, "PUT", path, "bob", 400, "Weighting must be a number\n", false)
+	assertEqual(test, "Loganne call", "", lastLoganneType) // Shouldn't have logged in this case
 	makeRequest(test, "PUT", path, "3", 200, "3", false)
+	assertEqual(test, "Loganne call", "trackWeightingUpdated", lastLoganneType)
 	makeRequest(test, "GET", path, "", 200, "3", false)
 	restartServer()
 	makeRequest(test, "GET", path, "", 200, "3", false)
 	makeRequest(test, "PUT", path, "5.22", 200, "5.22", false)
 	makeRequest(test, "GET", path, "", 200, "5.22", false)
+
+	// Test that setting weighting to the existing value doesn't call loganne
+	lastLoganneType = ""
+	makeRequest(test, "PUT", path, "5.22", 200, "5.22", false)
+	assertEqual(test, "Loganne call", "", lastLoganneType) // Shouldn't have logged in this case
 
 
 	trackOutputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/eui4536", "trackid": 1, "tags": {}, "weighting": 5.22}`
