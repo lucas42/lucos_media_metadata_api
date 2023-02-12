@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -28,6 +29,7 @@ func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack
 		"type": eventType,
 		"humanReadable": humanReadable,
 		"track": track,
+		"url": fmt.Sprintf("https://media-metadata.l42.eu/tracks/%d", track.ID), // Included for all events, but perhaps less helpful for delete events as the URL will 404?
 	})
 	_, err := http.Post(url, "application/json", bytes.NewBuffer(postData))
 	if err != nil {

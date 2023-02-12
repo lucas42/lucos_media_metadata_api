@@ -46,7 +46,7 @@ func TestLoganneEvent(test *testing.T) {
 	assertEqual(test,"Loganne request wasn't POST request", "POST", latestRequest.Method)
 
 	assertNoError(test, "Failed to get request body", latestRequestError)
-	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","trackid":17,"tags":{"album":"Harvest Storm","artist":"Altan"},"weighting":9},"type":"testEvent"}`, latestRequestBody)
+	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","trackid":17,"tags":{"album":"Harvest Storm","artist":"Altan"},"weighting":9},"type":"testEvent","url":"https://media-metadata.l42.eu/tracks/17"}`, latestRequestBody)
 }
 func TestLoganneDeleteEvent(test *testing.T) {
 	loganne := Loganne{
@@ -72,7 +72,7 @@ func TestLoganneDeleteEvent(test *testing.T) {
 	assertEqual(test,"Loganne request wasn't POST request", "POST", latestRequest.Method)
 
 	assertNoError(test, "Failed to get request body", latestRequestError)
-	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","trackid":18,"tags":{"album":"Harvest Storm","artist":"Altan"},"weighting":9},"type":"deleteEvent"}`, latestRequestBody)
+	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","trackid":18,"tags":{"album":"Harvest Storm","artist":"Altan"},"weighting":9},"type":"deleteEvent","url":"https://media-metadata.l42.eu/tracks/18"}`, latestRequestBody)
 }
 
 func assertEqual(test *testing.T, message string, expected interface{}, actual interface{}) {
