@@ -54,7 +54,7 @@ func getMultipleTracks(store Datastore, w http.ResponseWriter, r *http.Request) 
  * Updates a set of tracks based on get parameters
  */
 func updateMultipleTracks(store Datastore, r *http.Request, trackupdates Track) (action string, err error) {
-	tracks, totalTracks, err := queryMultipleTracks(store, r)
+	tracks, _, err := queryMultipleTracks(store, r)
 	if err != nil {
 		return
 	}
@@ -69,7 +69,7 @@ func updateMultipleTracks(store Datastore, r *http.Request, trackupdates Track) 
 		}
 	}
 	action = "tracksUpdated"
-	store.Loganne.post(action, strconv.Itoa(totalTracks) + " tracks updated", Track{}, Track{})
+	store.Loganne.post(action, strconv.Itoa(len(tracks)) + " tracks updated", Track{}, Track{})
 	return
 }
 
