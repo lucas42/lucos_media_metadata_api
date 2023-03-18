@@ -10,9 +10,9 @@ import (
 
 
 /**
- * Runs a basic search and write the output to the http response
+ * Run a basic search based on request GET parameters
  */
-func getMultipleTracks(store Datastore, w http.ResponseWriter, r *http.Request) {
+func queryMultipleTracks(store Datastore, r *http.Request) (tracks []Track, totalTracks int, err error) {
 	var query string
 	predicates := make(map[string]string)
 	for key, value := range r.URL.Query() {
@@ -31,18 +31,47 @@ func getMultipleTracks(store Datastore, w http.ResponseWriter, r *http.Request) 
 	}
 	limit := 20
 	startid := limit * (page - 1)
-	var result SearchResult
-	var totalTracks int
 	if (query != "") {
-		result.Tracks, totalTracks, err = store.trackSearch(query, limit, startid)
+		return store.trackSearch(query, limit, startid)
 	} else {
-		result.Tracks, totalTracks, err = store.searchByPredicates(predicates, limit, startid)
+		return store.searchByPredicates(predicates, limit, startid)
 	}
+}
 
+/**
+ * Run a basic search and write the output to the http response
+ */
+func getMultipleTracks(store Datastore, w http.ResponseWriter, r *http.Request) {
+	var result SearchResult
+	tracks, totalTracks, err := queryMultipleTracks(store , r)
+	result.Tracks = tracks
+	limit := 20
 	result.TotalPages = int(math.Ceil(float64(totalTracks) / float64(limit)))
 	writeJSONResponse(w, result, err)
 }
 
+/**
+ * Updates a set of tracks based on get parameters
+ */
+func updateMultipleTracks(store Datastore, r *http.Request, trackupdates Track) (action string, err error) {
+	tracks, totalTracks, err := queryMultipleTracks(store, r)
+	if err != nil {
+		return
+	}
+	onlyMissing := (r.Header.Get("If-None-Match") == "*")
+
+	for i := range tracks {
+		track := &tracks[i]
+		if !onlyMissing {
+			err = store.updateTags(track.ID, trackupdates.Tags);
+		} else {
+			err = store.updateTagsIfMissing(track.ID, trackupdates.Tags);
+		}
+	}
+	action = "tracksUpdated"
+	store.Loganne.post(action, strconv.Itoa(totalTracks) + " tracks updated", Track{}, Track{})
+	return
+}
 
 /**
  * Write a http response with a JSON representation of a random 20 tracks
@@ -85,10 +114,40 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 	}
 	if filterfield == "" {
 		if len(pathparts) <= 1 {
-			if r.Method == "GET" {
+			switch r.Method {
+			case "PATCH":
+				track, err := DecodeTrack(r.Body)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				if track.ID != 0 {
+					http.Error(w, "Can't bulk update id", http.StatusBadRequest)
+					return
+				}
+				if track.URL != "" {
+					http.Error(w, "Can't bulk update url", http.StatusBadRequest)
+					return
+				}
+				if track.Fingerprint != "" {
+					http.Error(w, "Can't bulk update fingerprint", http.StatusBadRequest)
+					return
+				}
+				if track.Duration != 0 {
+					http.Error(w, "Bulk update of duration not supported", http.StatusNotFound)
+					return
+				}
+				action, err := updateMultipleTracks(store, r, track)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				w.Header().Set("Track-Action", action)
+				fallthrough
+			case "GET":
 				getMultipleTracks(store, w, r)
-			} else {
-				MethodNotAllowed(w, []string{"GET"})
+			default:
+				MethodNotAllowed(w, []string{"GET", "PATCH"})
 			}
 		} else {
 			switch pathparts[1] {
