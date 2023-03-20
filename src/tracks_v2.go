@@ -74,6 +74,8 @@ func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Tra
 	}
 	onlyMissing := (r.Header.Get("If-None-Match") == "*")
 
+	result.Tracks = make([]Track, 0)
+	action = "noChange"
 	for i := range tracks {
 		trackupdates := updatesForTracks
 		trackupdates.ID = tracks[i].ID
@@ -90,9 +92,11 @@ func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Tra
 			return
 		}
 		result.Tracks = append(result.Tracks, storedTrack)
+		action = "tracksUpdated"
 	}
-	action = "tracksUpdated"
-	store.Loganne.post(action, strconv.Itoa(len(tracks)) + " tracks updated", Track{}, Track{})
+	if action != "noChange" {
+		store.Loganne.post(action, strconv.Itoa(len(tracks)) + " tracks updated", Track{}, Track{})
+	}
 	return
 }
 func updateMultipleTracksAndRespond(store Datastore, w http.ResponseWriter, r *http.Request, updatesForTracks Track) {
