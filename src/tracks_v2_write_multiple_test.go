@@ -332,3 +332,41 @@ func TestBulkUpdateNoPaginationV2(test *testing.T) {
 	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc5", "", 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine","genre":"panpipes"},"weighting": 0}`, true)
 
 }
+
+/**
+ * Checks case where some tracks match the target state of the edit, but others need updating
+ */
+ func TestPatchTracksOnlySomeUpdatesNeededV2(test *testing.T) {
+	clearData()
+
+	// Title is Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
+	// Title contains Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"},"weighting": 0}`, true)
+	// Artist is Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"},"weighting": 0}`, true)
+	// No mention of Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"weighting": 0}`, true)
+	// Title is also Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc5", `{"url":"http://example.org/track5", "duration": 7,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"}}`, 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"},"weighting": 0}`, true)
+
+	restartServer() // Clear Loganne counters etc
+	request := basicRequest(test, "PATCH", "/v2/tracks?p.title=Yellow%20Submarine", `{"tags": {"artist":"The Beatles"}}`)
+	response := makeRawRequest(test, request, 200, `{"tracks":[{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"The Beatles", "title":"Yellow Submarine","genre":"panpipes"},"weighting": 0}],"totalPages":1}`, true)
+	checkResponseHeader(test, response, "Track-Action", "tracksUpdated")
+
+	// No calls to Loganne should be made, as nothing was updated
+	assertEqual(test, "Loganne call", "tracksUpdated", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable", "1 tracks updated", lastLoganneMessage)
+	assertEqual(test, "Number of Loganne requests", 2, loganneRequestCount) // One request for each track changed, plus one for the bulk change
+
+	// Ensure the track which needs updating has changed
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc5", "", 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"The Beatles", "title":"Yellow Submarine","genre":"panpipes"},"weighting": 0}`, true)
+
+	// Ensure the tracks which don't match haven't changed
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc1", "", 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc2", "", 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"},"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc3", "", 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"},"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc4", "", 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"weighting": 0}`, true)
+
+}
