@@ -13,7 +13,7 @@ import (
 /**
  * Run a basic search based on request GET parameters
  */
-func queryMultipleTracks(store Datastore, r *http.Request) (tracks []Track, totalTracks int, err error) {
+func queryMultipleTracks(store Datastore, r *http.Request) (tracks []Track, totalPages int, err error) {
 	var query string
 	predicates := make(map[string]string)
 	for key, value := range r.URL.Query() {
@@ -32,22 +32,24 @@ func queryMultipleTracks(store Datastore, r *http.Request) (tracks []Track, tota
 	}
 	limit := 20
 	startid := limit * (page - 1)
+	var totalTracks int
 	if (query != "") {
-		return store.trackSearch(query, limit, startid)
+		tracks, totalTracks, err = store.trackSearch(query, limit, startid)
 	} else {
-		return store.searchByPredicates(predicates, limit, startid)
+		tracks, totalTracks, err = store.searchByPredicates(predicates, limit, startid)
 	}
+	totalPages = int(math.Ceil(float64(totalTracks) / float64(limit)))
+	return tracks, totalPages, err
 }
 
 /**
  * Run a basic search and write the output to the http response
  */
 func getMultipleTracks(store Datastore, w http.ResponseWriter, r *http.Request) {
+	tracks, totalPages, err := queryMultipleTracks(store , r)
 	var result SearchResult
-	tracks, totalTracks, err := queryMultipleTracks(store , r)
 	result.Tracks = tracks
-	limit := 20
-	result.TotalPages = int(math.Ceil(float64(totalTracks) / float64(limit)))
+	result.TotalPages = totalPages
 	writeJSONResponse(w, result, err)
 }
 
@@ -55,12 +57,11 @@ func getMultipleTracks(store Datastore, w http.ResponseWriter, r *http.Request) 
  * Updates a set of tracks based on get parameters
  */
 func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Track) (result SearchResult, action string, err error) {
-	tracks, totalTracks, err := queryMultipleTracks(store, r)
+	tracks, totalPages, err := queryMultipleTracks(store, r)
+	result.TotalPages = totalPages
 	if err != nil {
 		return
 	}
-	limit := 20
-	result.TotalPages = int(math.Ceil(float64(totalTracks) / float64(limit)))
 	if err != nil {
 		return
 	}
@@ -89,10 +90,6 @@ func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Tra
 }
 func updateMultipleTracksAndRespond(store Datastore, w http.ResponseWriter, r *http.Request, updatesForTracks Track) {
 	result, action, err := updateMultipleTracks(store, r, updatesForTracks)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	w.Header().Set("Track-Action", action)
 	writeJSONResponse(w, result, err)
 }
