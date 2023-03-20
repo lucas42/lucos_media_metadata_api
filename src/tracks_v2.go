@@ -9,9 +9,9 @@ import (
 	"math"
 )
 
-func parsePageParam(rawpage string, standardLimit int) (limit int, startid int) {
+func parsePageParam(rawpage string, standardLimit int) (offset int, limit int) {
 	if rawpage == "all" {
-		return -1, 0
+		return 0, -1
 	}
 	page, err := strconv.Atoi(rawpage)
 
@@ -19,8 +19,8 @@ func parsePageParam(rawpage string, standardLimit int) (limit int, startid int) 
 	if err != nil {
 		page = 1
 	}
-	startid = standardLimit * (page - 1)
-	return standardLimit, startid
+	offset = standardLimit * (page - 1)
+	return offset, standardLimit
 }
 
 /**
@@ -38,12 +38,12 @@ func queryMultipleTracks(store Datastore, r *http.Request) (tracks []Track, tota
 		}
 	}
 	standardLimit := 20
-	limit, startid := parsePageParam(r.URL.Query().Get("page"), standardLimit)
+	offset, limit := parsePageParam(r.URL.Query().Get("page"), standardLimit)
 	var totalTracks int
 	if (query != "") {
-		tracks, totalTracks, err = store.trackSearch(query, limit, startid)
+		tracks, totalTracks, err = store.trackSearch(query, offset, limit)
 	} else {
-		tracks, totalTracks, err = store.searchByPredicates(predicates, limit, startid)
+		tracks, totalTracks, err = store.searchByPredicates(predicates, offset, limit)
 	}
 	totalPages = int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
 	return tracks, totalPages, err

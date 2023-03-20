@@ -19,10 +19,10 @@ type SearchResult struct {
  * Searches for tracks with a tag value containing the given query
  *
  */
-func (store Datastore) trackSearch(query string, limit int, startid int) (tracks []Track, totalTracks int, err error) {
+func (store Datastore) trackSearch(query string, offset int, limit int) (tracks []Track, totalTracks int, err error) {
 	tracks = []Track{}
 	query = "%"+query+"%"
-	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM tag LEFT JOIN track ON tag.trackid = track.id WHERE value LIKE $1 UNION SELECT id, url, fingerprint, duration, weighting FROM track WHERE url LIKE $1 GROUP BY id ORDER BY id LIMIT $2, $3", query, startid, limit)
+	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM tag LEFT JOIN track ON tag.trackid = track.id WHERE value LIKE $1 UNION SELECT id, url, fingerprint, duration, weighting FROM track WHERE url LIKE $1 GROUP BY id ORDER BY id LIMIT $2, $3", query, offset, limit)
 	if err != nil {
 		return
 	}
@@ -43,7 +43,7 @@ func (store Datastore) trackSearch(query string, limit int, startid int) (tracks
  * Searches for tracks based on a map of predicates and their values
  *
  */
-func (store Datastore) searchByPredicates(predicates map[string]string, limit int, startid int) (tracks []Track, totalTracks int, err error) {
+func (store Datastore) searchByPredicates(predicates map[string]string, offset int, limit int) (tracks []Track, totalTracks int, err error) {
 	tracks = []Track{}
 	dbQuery := "SELECT id, url, fingerprint, duration, weighting FROM track"
 	var values []interface{}
@@ -56,7 +56,7 @@ func (store Datastore) searchByPredicates(predicates map[string]string, limit in
 	}
 	countQuery := dbQuery
 	dbQuery += " ORDER BY id LIMIT ?, ?"
-	values = append(values, startid, limit)
+	values = append(values, offset, limit)
 
 	err = store.DB.Select(&tracks, dbQuery, values...)
 	if err != nil {
@@ -101,13 +101,13 @@ func basicSearch(store Datastore, w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 	limit := 20
-	startid := limit * (page - 1)
+	offset := limit * (page - 1)
 	var result SearchResult
 	var totalTracks int
 	if (query != "") {
-		result.Tracks, totalTracks, err = store.trackSearch(query, limit, startid)
+		result.Tracks, totalTracks, err = store.trackSearch(query, offset, limit)
 	} else {
-		result.Tracks, totalTracks, err = store.searchByPredicates(predicates, limit, startid)
+		result.Tracks, totalTracks, err = store.searchByPredicates(predicates, offset, limit)
 	}
 
 	result.TotalPages = int(math.Ceil(float64(totalTracks) / float64(limit)))
