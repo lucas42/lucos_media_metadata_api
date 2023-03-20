@@ -17,6 +17,7 @@ var lastLoganneType string
 var lastLoganneMessage string
 var lastLoganneTrack Track
 var lastLoganneExistingTrack Track
+var loganneRequestCount int
 
 type MockLoganne struct {}
 func (mock MockLoganne) post(eventType string, humanReadable string, track Track, existingTrack Track) {
@@ -24,6 +25,7 @@ func (mock MockLoganne) post(eventType string, humanReadable string, track Track
 	lastLoganneMessage = humanReadable
 	lastLoganneTrack = track
 	lastLoganneExistingTrack = existingTrack
+	loganneRequestCount++
 }
 
 func clearData() {
@@ -49,6 +51,7 @@ func restartServer() {
 	lastLoganneMessage = ""
 	lastLoganneTrack = Track{}
 	lastLoganneExistingTrack = Track{}
+	loganneRequestCount = 0
 	store := DBInit("testrouting.sqlite", MockLoganne{})
 	server = httptest.NewServer(FrontController(store))
 }

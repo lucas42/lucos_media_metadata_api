@@ -61,12 +61,7 @@ func updateMultipleTracks(store Datastore, r *http.Request, trackupdates Track) 
 	onlyMissing := (r.Header.Get("If-None-Match") == "*")
 
 	for i := range tracks {
-		track := &tracks[i]
-		if !onlyMissing {
-			err = store.updateTags(track.ID, trackupdates.Tags);
-		} else {
-			err = store.updateTagsIfMissing(track.ID, trackupdates.Tags);
-		}
+		store.updateCreateTrackDataByField("id", tracks[i].ID, trackupdates, tracks[i], onlyMissing)
 	}
 	action = "tracksUpdated"
 	store.Loganne.post(action, strconv.Itoa(len(tracks)) + " tracks updated", Track{}, Track{})

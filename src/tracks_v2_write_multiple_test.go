@@ -20,10 +20,12 @@ import (
 	// Title is also Yellow Submarine
 	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc5", `{"url":"http://example.org/track5", "duration": 7,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"}}`, 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"},"weighting": 0}`, true)
 
+	restartServer() // Clear Loganne counters etc
 	request := basicRequest(test, "PATCH", "/v2/tracks?p.title=Yellow%20Submarine", `{"tags": {"genre":"Maritime Songs"}}`)
 	response := makeRawRequest(test, request, 200, `{"tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles","genre":"Maritime Songs","title":"Yellow Submarine"},"weighting":0},{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band","genre":"Maritime Songs","title":"Yellow Submarine"},"weighting":0}],"totalPages":1}`, true)
 	checkResponseHeader(test, response, "Track-Action", "tracksUpdated")
 	assertEqual(test, "Loganne call", "tracksUpdated", lastLoganneType)
+	assertEqual(test, "Number of Loganne requests", 3, loganneRequestCount) // One request for each track changed, plus one for the bulk change
 
 	// Ensure the tracks which match have been updated
 	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc1", "", 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine","genre":"Maritime Songs"},"weighting": 0}`, true)
@@ -53,11 +55,13 @@ import (
 	// Title is also Yellow Submarine, but already has a genre set
 	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc5", `{"url":"http://example.org/track5", "duration": 7,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"}}`, 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"},"weighting": 0}`, true)
 
+	restartServer() // Clear Loganne counters etc
 	request := basicRequest(test, "PATCH", "/v2/tracks?p.title=Yellow%20Submarine", `{"tags": {"genre":"Maritime Songs"}}`)
 	request.Header.Add("If-None-Match", "*")
 	response := makeRawRequest(test, request, 200, `{"tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles","genre":"Maritime Songs","title":"Yellow Submarine"},"weighting":0},{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band","genre":"panpipes","title":"Yellow Submarine"},"weighting":0}],"totalPages":1}`, true)
 	checkResponseHeader(test, response, "Track-Action", "tracksUpdated")
 	assertEqual(test, "Loganne call", "tracksUpdated", lastLoganneType)
+	assertEqual(test, "Number of Loganne requests", 2, loganneRequestCount) // One request for each track changed, plus one for the bulk change
 
 	// Ensure the tracks which match have been updated
 	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc1", "", 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine","genre":"Maritime Songs"},"weighting": 0}`, true)
@@ -87,10 +91,12 @@ import (
 	// Title is also Yellow Submarine
 	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc5", `{"url":"http://example.org/track5", "duration": 7,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"}}`, 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"},"weighting": 0}`, true)
 
+	restartServer() // Clear Loganne counters etc
 	request := basicRequest(test, "PATCH", "/v2/tracks?p.title=Yellow%20Submarine&p.artist=Panpipes%20Cover%20Band", `{"tags": {"genre":"Maritime Songs"}}`)
 	response := makeRawRequest(test, request, 200, `{"tracks":[{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band","genre":"Maritime Songs","title":"Yellow Submarine"},"weighting":0}],"totalPages":1}`, true)
 	checkResponseHeader(test, response, "Track-Action", "tracksUpdated")
 	assertEqual(test, "Loganne call", "tracksUpdated", lastLoganneType)
+	assertEqual(test, "Number of Loganne requests", 2, loganneRequestCount) // One request for each track changed, plus one for the bulk change
 
 	// Ensure the tracks which match have been updated
 	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc5", "", 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine","genre":"Maritime Songs"},"weighting": 0}`, true)
@@ -120,10 +126,12 @@ import (
 	// Title is also Yellow Submarine
 	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc5", `{"url":"http://example.org/track5", "duration": 7,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"}}`, 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"},"weighting": 0}`, true)
 
+	restartServer() // Clear Loganne counters etc
 	request := basicRequest(test, "PATCH", "/v2/tracks?q=Yellow%20Submarine", `{"tags": {"genre":"Maritime Songs"}}`)
 	response := makeRawRequest(test, request, 200, `{"tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles","genre":"Maritime Songs","title":"Yellow Submarine"},"weighting":0},{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds","genre":"Maritime Songs","title":"Want to visit a Yellow Submarine"},"weighting":0},{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Yellow Submarine","genre":"Maritime Songs","title":"Love Me Do"},"weighting":0},{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band","genre":"Maritime Songs","title":"Yellow Submarine"},"weighting":0}],"totalPages":1}`, true)
 	checkResponseHeader(test, response, "Track-Action", "tracksUpdated")
 	assertEqual(test, "Loganne call", "tracksUpdated", lastLoganneType)
+	assertEqual(test, "Number of Loganne requests", 5, loganneRequestCount) // One request for each track changed, plus one for the bulk change
 
 	// Ensure the tracks which match have been updated
 	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc1", "", 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine","genre":"Maritime Songs"},"weighting": 0}`, true)
