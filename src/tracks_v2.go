@@ -53,7 +53,7 @@ func getMultipleTracks(store Datastore, w http.ResponseWriter, r *http.Request) 
 /**
  * Updates a set of tracks based on get parameters
  */
-func updateMultipleTracks(store Datastore, r *http.Request, trackupdates Track) (action string, err error) {
+func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Track) (action string, err error) {
 	tracks, _, err := queryMultipleTracks(store, r)
 	if err != nil {
 		return
@@ -61,6 +61,8 @@ func updateMultipleTracks(store Datastore, r *http.Request, trackupdates Track) 
 	onlyMissing := (r.Header.Get("If-None-Match") == "*")
 
 	for i := range tracks {
+		trackupdates := updatesForTracks
+		trackupdates.ID = tracks[i].ID
 		store.updateCreateTrackDataByField("id", tracks[i].ID, trackupdates, tracks[i], onlyMissing)
 	}
 	action = "tracksUpdated"
@@ -126,10 +128,6 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 				}
 				if track.Fingerprint != "" {
 					http.Error(w, "Can't bulk update fingerprint", http.StatusBadRequest)
-					return
-				}
-				if track.Duration != 0 {
-					http.Error(w, "Bulk update of duration not supported", http.StatusNotFound)
 					return
 				}
 				action, err := updateMultipleTracks(store, r, track)

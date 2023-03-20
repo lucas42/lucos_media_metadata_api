@@ -160,8 +160,36 @@ func TestCantBulkUpdateIdentifiers(test *testing.T) {
 	makeRequest(test, "PATCH", "/v2/tracks?q=Green", `{"fingerprint": "abc7"}`, 400, "Can't bulk update fingerprint\n", false)
 }
 /**
- * Checks that attempt to update duration returns a resonable error
+ * Checks bulk duration change works as expected.  (Though not really sure when this'd be useful)
  */
-func TestCantBulkUpdateDuration(test *testing.T) {
-	makeRequest(test, "PATCH", "/v2/tracks?q=Yellow", `{"duration": 137}`, 404, "Bulk update of duration not supported\n", false)
+func TestBulkUpdateDuration(test *testing.T) {
+	clearData()
+
+	// Title is Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
+	// Title contains Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"},"weighting": 0}`, true)
+	// Artist is Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"},"weighting": 0}`, true)
+	// No mention of Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"weighting": 0}`, true)
+	// Title is also Yellow Submarine
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc5", `{"url":"http://example.org/track5", "duration": 7,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"}}`, 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine", "genre": "panpipes"},"weighting": 0}`, true)
+
+	restartServer() // Clear Loganne counters etc
+	request := basicRequest(test, "PATCH", "/v2/tracks?q=Yellow%20Submarine", `{"duration": 137}`)
+	response := makeRawRequest(test, request, 200, `{"tracks":[{"fingerprint":"abc1","duration":137,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles","title":"Yellow Submarine"},"weighting":0},{"fingerprint":"abc2","duration":137,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds","title":"Want to visit a Yellow Submarine"},"weighting":0},{"fingerprint":"abc3","duration":137,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Yellow Submarine","title":"Love Me Do"},"weighting":0},{"fingerprint":"abc5","duration":137,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band","genre":"panpipes","title":"Yellow Submarine"},"weighting":0}],"totalPages":1}`, true)
+	checkResponseHeader(test, response, "Track-Action", "tracksUpdated")
+	assertEqual(test, "Loganne call", "tracksUpdated", lastLoganneType)
+	assertEqual(test, "Number of Loganne requests", 5, loganneRequestCount) // One request for each track changed, plus one for the bulk change
+
+	// Ensure the tracks which match have been updated
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc1", "", 200, `{"fingerprint":"abc1","duration":137,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc2", "", 200, `{"fingerprint":"abc2","duration":137,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"},"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc3", "", 200, `{"fingerprint":"abc3","duration":137,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"},"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc5", "", 200, `{"fingerprint":"abc5","duration":137,"url":"http://example.org/track5","trackid":5,"tags":{"artist":"Panpipes Cover Band", "title":"Yellow Submarine","genre":"panpipes"},"weighting": 0}`, true)
+
+	// Ensure the tracks which don't match haven't changed
+	makeRequest(test, "GET", "/v2/tracks?fingerprint=abc4", "", 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"weighting": 0}`, true)
+
 }
