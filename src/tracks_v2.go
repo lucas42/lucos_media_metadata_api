@@ -2,6 +2,7 @@ package main
 
 import (
 	"io/ioutil"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,8 +54,13 @@ func getMultipleTracks(store Datastore, w http.ResponseWriter, r *http.Request) 
 /**
  * Updates a set of tracks based on get parameters
  */
-func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Track) (action string, err error) {
-	tracks, _, err := queryMultipleTracks(store, r)
+func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Track) (result SearchResult, action string, err error) {
+	tracks, totalTracks, err := queryMultipleTracks(store, r)
+	if err != nil {
+		return
+	}
+	limit := 20
+	result.TotalPages = int(math.Ceil(float64(totalTracks) / float64(limit)))
 	if err != nil {
 		return
 	}
@@ -63,11 +69,32 @@ func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Tra
 	for i := range tracks {
 		trackupdates := updatesForTracks
 		trackupdates.ID = tracks[i].ID
-		store.updateCreateTrackDataByField("id", tracks[i].ID, trackupdates, tracks[i], onlyMissing)
+		storedTrack, trackAction, trackError := store.updateCreateTrackDataByField("id", tracks[i].ID, trackupdates, tracks[i], onlyMissing)
+		if err != nil {
+			err = trackError
+			return
+		}
+		if trackAction == "noChange" {
+			continue
+		}
+		if trackAction != "trackUpdated" {
+			err = errors.New("Unexpected action "+trackAction)
+			return
+		}
+		result.Tracks = append(result.Tracks, storedTrack)
 	}
 	action = "tracksUpdated"
 	store.Loganne.post(action, strconv.Itoa(len(tracks)) + " tracks updated", Track{}, Track{})
 	return
+}
+func updateMultipleTracksAndRespond(store Datastore, w http.ResponseWriter, r *http.Request, updatesForTracks Track) {
+	result, action, err := updateMultipleTracks(store, r, updatesForTracks)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Track-Action", action)
+	writeJSONResponse(w, result, err)
 }
 
 /**
@@ -130,13 +157,7 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 					http.Error(w, "Can't bulk update fingerprint", http.StatusBadRequest)
 					return
 				}
-				action, err := updateMultipleTracks(store, r, track)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				w.Header().Set("Track-Action", action)
-				fallthrough
+				updateMultipleTracksAndRespond(store, w, r, track)
 			case "GET":
 				getMultipleTracks(store, w, r)
 			default:
