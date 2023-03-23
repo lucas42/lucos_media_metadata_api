@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -88,11 +89,13 @@ func (store Datastore) GlobalsController(w http.ResponseWriter, r *http.Request)
 			value, err := ioutil.ReadAll(r.Body)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Printf("Internal Server Error: %s", err.Error())
 				return
 			}
 			err = store.setGlobal(key, string(value))
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Printf("Internal Server Error: %s", err.Error())
 				return
 			}
 			fallthrough

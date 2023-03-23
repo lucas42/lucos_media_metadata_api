@@ -47,6 +47,7 @@ func writeJSONResponse(w http.ResponseWriter, data interface{}, err error) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("Internal Server Error: %s", err.Error())
 		}
 		return
 	}
@@ -66,6 +67,7 @@ func writePlainResponse(w http.ResponseWriter, data string, err error) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("Internal Server Error: %s", err.Error())
 		}
 		return
 	}
@@ -84,6 +86,7 @@ func writeContentlessResponse(w http.ResponseWriter, err error) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 		} else {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("Internal Server Error: %s", err.Error())
 		}
 		return
 	}

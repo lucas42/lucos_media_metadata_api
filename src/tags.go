@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -185,6 +186,7 @@ func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
 		value, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("Internal Server Error: %s", err.Error())
 			return
 		}
 		if r.Header.Get("If-None-Match") == "*" {
@@ -198,6 +200,7 @@ func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
 				status = http.StatusNotFound
 			} else {
 				status = http.StatusInternalServerError
+				log.Printf("Internal Server Error: %s", err.Error())
 			}
 			http.Error(w, err.Error(), status)
 			return

@@ -3,6 +3,7 @@ package main
 import (
 	"io/ioutil"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -187,6 +188,7 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 				body, err := ioutil.ReadAll(r.Body)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
+					log.Printf("Internal Server Error: %s", err.Error())
 					return
 				}
 				weighting, err := strconv.ParseFloat(string(body), 64)
@@ -197,6 +199,7 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 				err = store.setTrackWeighting(trackid, weighting)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
+					log.Printf("Internal Server Error: %s", err.Error())
 					return
 				}
 				fallthrough
@@ -259,6 +262,9 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 					statusCode = http.StatusBadRequest
 				}
 				http.Error(w, err.Error(), statusCode)
+				if statusCode == http.StatusInternalServerError {
+					log.Printf("Internal Server Error: %s", err.Error())
+				}
 				return
 			}
 			w.Header().Set("Track-Action", action)

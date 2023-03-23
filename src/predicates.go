@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"path"
 )
@@ -78,6 +79,7 @@ func (store Datastore) PredicatesController(w http.ResponseWriter, r *http.Reque
 			err := store.createPredicate(id)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Printf("Internal Server Error: %s", err.Error())
 				return
 			}
 			fallthrough
