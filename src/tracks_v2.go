@@ -81,7 +81,7 @@ func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Tra
 		trackupdates := updatesForTracks
 		trackupdates.ID = tracks[i].ID
 		storedTrack, trackAction, trackError := store.updateCreateTrackDataByField("id", tracks[i].ID, trackupdates, tracks[i], onlyMissing)
-		if err != nil {
+		if trackError != nil {
 			err = trackError
 			return
 		}
