@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
-	"time"
 )
 
 /**
@@ -25,20 +24,14 @@ func TestInfoEndpoint(test *testing.T) {
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
-	fiveMinsAgo := time.Now().UTC().Add(time.Minute * -5).Format("2006-01-02T15:04:05.000000")
-	makeRequest(test, "PUT", "/globals/latest_import-timestamp", fiveMinsAgo, 200, fiveMinsAgo, false)
-	makeRequest(test, "PUT", "/globals/latest_import-errors", "12", 200, "12", false)
 
 	expectedOutput := `{
 		"system": "lucos_media_metadata_api",
 		"checks": {
-			"db": {"techDetail":"Does basic SELECT query from database", "ok": true},
-			"import": {"techDetail": "Checks whether 'latest_import-timestamp' is within the past 14 days", "ok": true}
+			"db": {"techDetail":"Does basic SELECT query from database", "ok": true}
 		},
 		"metrics": {
-			"track-count":{"techDetail":"Number of tracks in database", "value": 37},
-			"since-import":{"techDetail":"Seconds since latest completion of import script", "value": 300},
-			"import-errors":{"techDetail":"Number of errors from latest completed run of import script", "value": 12}
+			"track-count":{"techDetail":"Number of tracks in database", "value": 37}
 		},
 		"ci":{"circle":"gh/lucas42/lucos_media_metadata_api"}
 	}`

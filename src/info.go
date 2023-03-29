@@ -69,21 +69,12 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 		} else {
 			dbCheck.OK = true
 		}
-		importRecencyCheck, sinceImport := RecencyCheck(store, "import", 14)
-
-		importErrors := Metric{TechDetail:"Number of errors from latest completed run of import script"}
-		importErrorsString, _ := store.getGlobal("latest_import-errors")
-		importErrorsInt, _ := strconv.Atoi(importErrorsString)
-		importErrors.Value = importErrorsInt
 
 		info.Checks = map[string]Check{
 			"db": dbCheck,
-			"import": importRecencyCheck,
 		}
 		info.Metrics = map[string]Metric{
 			"track-count": trackCount,
-			"since-import": sinceImport,
-			"import-errors": importErrors,
 		}
 		info.CI = map[string]string{
 			"circle": "gh/lucas42/lucos_media_metadata_api",
