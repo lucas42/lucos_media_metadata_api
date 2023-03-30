@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"log"
 )
 
 /**
@@ -18,6 +19,7 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 	database = Datastore{db, loganne}
 	database.DB.MustExec("PRAGMA foreign_keys = ON;")
 	if !database.TableExists("track") {
+		log.Print("Creating table `track`")
 		sqlStmt := `
 		CREATE TABLE "track" (
 			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
@@ -30,16 +32,8 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		`
 		database.DB.MustExec(sqlStmt)
 	}
-	if !database.TableExists("global") {
-		sqlStmt := `
-		CREATE TABLE "global" (
-			"key" TEXT PRIMARY KEY NOT NULL, 
-			"value" TEXT
-		);
-		`
-		database.DB.MustExec(sqlStmt)
-	}
 	if !database.TableExists("predicate") {
+		log.Print("Creating table `predicate`")
 		sqlStmt := `
 		CREATE TABLE "predicate" (
 			"id" TEXT PRIMARY KEY NOT NULL
@@ -48,6 +42,7 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		database.DB.MustExec(sqlStmt)
 	}
 	if !database.TableExists("tag") {
+		log.Print("Creating table `tag`")
 		sqlStmt := `
 		CREATE TABLE "tag" (
 			"trackid" TEXT NOT NULL,
@@ -58,6 +53,11 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 			CONSTRAINT track_predicate_unique UNIQUE (trackid, predicateid)
 		);
 		`
+		database.DB.MustExec(sqlStmt)
+	}
+	if database.TableExists("global") {
+		log.Print("Dropping table `global`")
+		sqlStmt := `DROP TABLE "global";`
 		database.DB.MustExec(sqlStmt)
 	}
 	return

@@ -18,8 +18,8 @@ func TestDatabaseSetup(test *testing.T) {
 	if !db.TableExists("tag") {
 		test.Error("tag table not created")
 	}
-	if !db.TableExists("global") {
-		test.Error("global table not created")
+	if db.TableExists("global") {
+		test.Error("Unused `global` table created")
 	}
 	if db.TableExists("moo-moo head") {
 		test.Error("Unexpected table created")

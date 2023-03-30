@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -33,6 +34,7 @@ func clearData() {
 	restartServer()
 }
 func TestMain(m *testing.M) {
+	log.SetOutput(ioutil.Discard)
 	clearData()
 	result := m.Run()
 	os.Remove("testrouting.sqlite")

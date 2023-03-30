@@ -2,8 +2,6 @@ package main
 
 import (
 	"net/http"
-	"strconv"
-	"time"
 )
 
 type InfoStruct struct {
@@ -24,34 +22,6 @@ type Metric struct {
 	Value      int    `json:"value"`
 }
 
-/**
- * Checks the recency of a global value, for use in /_info
- */
-func RecencyCheck(store Datastore, scriptName string, maxDaysOld int) (Check, Metric) {
-
-	globalKey := "latest_"+scriptName+"-timestamp"
-	recencyCheck := Check{TechDetail:"Checks whether '"+globalKey+"' is within the past "+strconv.Itoa(maxDaysOld)+" days"}
-	recencyMetric := Metric{TechDetail:"Seconds since latest completion of "+scriptName+" script"}
-	latestRunTimestamp, err := store.getGlobal(globalKey)
-	if err != nil {
-		recencyCheck.OK = false
-		recencyCheck.Debug = err.Error()
-		recencyMetric.Value = -1
-	} else {
-
-		// Expect format outputted by python datetime's isoformat() function (with no timezone)
-		latestRunTime, err := time.Parse("2006-01-02T15:04:05.000000", latestRunTimestamp)
-		if err != nil {
-			recencyCheck.OK = false
-			recencyCheck.Debug = err.Error()
-			recencyMetric.Value = -1
-		} else {
-			recencyMetric.Value = int(time.Since(latestRunTime).Seconds())
-			recencyCheck.OK = latestRunTime.After(time.Now().Add(time.Hour * -24 * time.Duration(maxDaysOld)))
-		}
-	}
-	return recencyCheck, recencyMetric
-}
 
 /**
  * A controller for serving /_info
