@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
-	"log"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -223,29 +221,6 @@ func (store Datastore) getMaxCumWeighting() (maxcumweighting float64, err error)
 	return
 }
 
-/**
- * Gets data about all tracks in the database
- *
- */
-func (store Datastore) getAllTracks(page int) (tracks []Track, err error) {
-	limit := 20
-	startid := limit * (page - 1)
-	tracks = []Track{}
-	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM track ORDER BY id LIMIT $1, $2", startid, limit)
-	if err != nil {
-		return
-	}
-
-	// Loop through all the tracks and add tags for each one
-	for i := range tracks {
-		track := &tracks[i]
-		track.Tags, err = store.getAllTagsForTrack(track.ID)
-		if err != nil {
-			return
-		}
-	}
-	return
-}
 
 /**
  * Gets data about a random set of tracks from the database
@@ -300,19 +275,6 @@ func (store Datastore) deleteTrack(trackid int) (err error) {
 }
 
 /**
- * Write a http response with a JSON representation of all tracks
- *
- */
-func writeAllTrackData(store Datastore, w http.ResponseWriter, r *http.Request) {
-	page, err := strconv.Atoi(r.URL.Query().Get("page"))
-	if err != nil {
-		page = 1
-	} // If there's any doubt about page number, start at page 1
-	tracks, err := store.getAllTracks(page)
-	writeJSONResponse(w, tracks, err)
-}
-
-/**
  * Writes a http response with a JSON representation of a given track
  */
 func writeTrackDataByField(store Datastore, w http.ResponseWriter, field string, value interface{}) {
@@ -354,143 +316,4 @@ func DecodeTrack(r io.Reader) (Track, error) {
 	track := new(Track)
 	err := json.NewDecoder(r).Decode(track)
 	return *track, err
-}
-
-/**
- * A controller for handling all requests dealing with tracks
- */
-func (store Datastore) TracksController(w http.ResponseWriter, r *http.Request) {
-	trackurl := r.URL.Query().Get("url")
-	fingerprint := r.URL.Query().Get("fingerprint")
-	pathparts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-
-	var trackid int
-	var filtervalue interface{}
-	var filterfield string
-	if len(pathparts) > 1 {
-		id, err := strconv.Atoi(pathparts[1])
-		if err == nil {
-			filterfield = "id"
-			filtervalue = pathparts[1]
-			trackid = id
-		}
-	} else if len(trackurl) > 0 {
-		filterfield = "url"
-		filtervalue = trackurl
-	} else if len(fingerprint) > 0 {
-		filterfield = "fingerprint"
-		filtervalue = fingerprint
-	}
-	if filterfield == "" {
-		if len(pathparts) <= 1 {
-			if r.Method == "GET" {
-				writeAllTrackData(store, w, r)
-			} else {
-				MethodNotAllowed(w, []string{"GET"})
-			}
-		} else {
-			switch pathparts[1] {
-			case "random":
-				writeRandomTracks(store, w)
-			default:
-				http.Error(w, "Track Endpoint Not Found", http.StatusNotFound)
-			}
-		}
-	} else if len(pathparts) > 2 {
-		switch pathparts[2] {
-		case "weighting":
-			switch r.Method {
-			case "PUT":
-				body, err := ioutil.ReadAll(r.Body)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					log.Printf("Internal Server Error: %s", err.Error())
-					return
-				}
-				weighting, err := strconv.ParseFloat(string(body), 64)
-				if err != nil {
-					http.Error(w, "Weighting must be a number", http.StatusBadRequest)
-					return
-				}
-				err = store.setTrackWeighting(trackid, weighting)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					log.Printf("Internal Server Error: %s", err.Error())
-					return
-				}
-				fallthrough
-			case "GET":
-				writeWeighting(store, w, trackid)
-			default:
-				MethodNotAllowed(w, []string{"GET", "PUT"})
-			}
-		default:
-			http.Error(w, "Track Endpoint Not Found", http.StatusNotFound)
-		}
-	} else {
-		switch r.Method {
-		case "PATCH":
-			fallthrough
-		case "PUT":
-			var savedTrack Track
-			var action string
-			track, err := DecodeTrack(r.Body)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			switch filterfield {
-			case "id":
-				track.ID = trackid
-			case "url":
-				track.URL = trackurl
-			case "fingerprint":
-				track.Fingerprint = fingerprint
-			}
-			onlyMissing := (r.Header.Get("If-None-Match") == "*")
-			existingTrack, err := store.getTrackDataByField(filterfield, filtervalue)
-			if r.Method == "PATCH" {
-				if err != nil && err.Error() == "Track Not Found" {
-					http.Error(w, "Track Not Found", http.StatusNotFound)
-					return
-				}
-				savedTrack, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, existingTrack, onlyMissing)
-			} else {
-				missingFields := []string{}
-				if track.Fingerprint == "" {
-					missingFields = append(missingFields, "fingerprint")
-				}
-				if track.URL == "" {
-					missingFields = append(missingFields, "url")
-				}
-				if track.Duration == 0 {
-					missingFields = append(missingFields, "duration")
-				}
-				if len(missingFields) > 0 {
-					http.Error(w, "Missing fields \""+strings.Join(missingFields, "\" and \"")+"\"", http.StatusBadRequest)
-					return
-				}
-				savedTrack, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, existingTrack, onlyMissing)
-			}
-			if err != nil {
-				statusCode := http.StatusInternalServerError
-				if strings.HasPrefix(err.Error(), "Duplicate:") {
-					statusCode = http.StatusBadRequest
-				}
-				http.Error(w, err.Error(), statusCode)
-				if statusCode == http.StatusInternalServerError {
-					log.Printf("Internal Server Error: %s", err.Error())
-				}
-				return
-			}
-			w.Header().Set("Track-Action", action)
-			writeJSONResponse(w, savedTrack, err)
-		case "GET":
-			writeTrackDataByField(store, w, filterfield, filtervalue)
-		case "DELETE":
-			deleteTrackHandler(store, w, trackid)
-		default:
-			MethodNotAllowed(w, []string{"GET", "PUT", "PATCH", "DELETE"})
-		}
-	}
 }

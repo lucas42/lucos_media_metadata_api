@@ -55,11 +55,6 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		`
 		database.DB.MustExec(sqlStmt)
 	}
-	if database.TableExists("global") {
-		log.Print("Dropping table `global`")
-		sqlStmt := `DROP TABLE "global";`
-		database.DB.MustExec(sqlStmt)
-	}
 	return
 }
 

@@ -1,10 +1,7 @@
 package main
 
 import (
-	"net/http"
 	"strconv"
-	"strings"
-	"math"
 )
 
 /**
@@ -73,55 +70,4 @@ func (store Datastore) searchByPredicates(predicates map[string]string, offset i
 	}
 	err = store.DB.Get(&totalTracks, "SELECT COUNT(*) FROM ("+countQuery+")", values...)
 	return
-}
-
-
-/**
- * Runs a basic search and write the output to the http response
- */
-func basicSearch(store Datastore, w http.ResponseWriter, r *http.Request) {
-	var query string
-	predicates := make(map[string]string)
-	for key, value := range r.URL.Query() {
-		if key == "q" {
-			query = value[0]
-		}
-		if strings.HasPrefix(key, "p.") {
-			predicates[key[2:len(key)]] = value[0]
-		}
-	}
-	if query == "" && len(predicates) == 0 {
-		http.Error(w, "No query given", http.StatusBadRequest)
-		return
-	}
-	page, err := strconv.Atoi(r.URL.Query().Get("page"))
-
-	// If there's any doubt about page number, start at page 1
-	if err != nil {
-		page = 1
-	}
-	limit := 20
-	offset := limit * (page - 1)
-	var result SearchResult
-	var totalTracks int
-	if (query != "") {
-		result.Tracks, totalTracks, err = store.trackSearch(query, offset, limit)
-	} else {
-		result.Tracks, totalTracks, err = store.searchByPredicates(predicates, offset, limit)
-	}
-
-	result.TotalPages = int(math.Ceil(float64(totalTracks) / float64(limit)))
-	writeJSONResponse(w, result, err)
-}
-
-/**
- * A controller for handling search requests
- */
-func (store Datastore) SearchController(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-		case "GET":
-			basicSearch(store, w, r)
-		default:
-			MethodNotAllowed(w, []string{"GET"})
-	}
 }

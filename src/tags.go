@@ -2,11 +2,6 @@ package main
 
 import (
 	"errors"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"strconv"
-	"strings"
 )
 
 type Tag struct {
@@ -131,86 +126,4 @@ func (store Datastore) deleteTag(trackid int, predicate string) (err error) {
 		return
 	}
 	return
-}
-
-/**
- * Writes a http response with the value of a tag
- */
-func writeTag(store Datastore, w http.ResponseWriter, trackid int, predicate string) {
-	value, err := store.getTagValue(trackid, predicate)
-	writePlainResponse(w, value, err)
-}
-
-/**
- * Writes a http response with a JSON representation of all tags for a given track
- */
-func writeAllTagsForTrack(store Datastore, w http.ResponseWriter, trackid int) {
-	tags, err := store.getAllTagsForTrack(trackid)
-	writeJSONResponse(w, tags, err)
-}
-
-
-/**
- * Deletes a given tag and writes a response with no content
- */
-func deleteTagHandler(store Datastore, w http.ResponseWriter, trackid int, predicate string) {
-	err := store.deleteTag(trackid, predicate)
-	writeContentlessResponse(w, err)
-}
-
-/**
- * A controller for handling all requests dealing with tags
- */
-func (store Datastore) TagsController(w http.ResponseWriter, r *http.Request) {
-	pathparts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(pathparts) < 2 {
-		http.Redirect(w, r, "/tracks", http.StatusFound)
-		return
-	}
-	trackid, err := strconv.Atoi(pathparts[1])
-	if err != nil {
-		http.Error(w, "Track ID must be an integer", http.StatusBadRequest)
-		return
-	}
-	if len(pathparts) < 3 {
-		if r.Method == "GET" {
-			writeAllTagsForTrack(store, w, trackid)
-		} else {
-			MethodNotAllowed(w, []string{"GET"})
-		}
-		return
-	}
-	predicate := pathparts[2]
-	switch r.Method {
-	case "PUT":
-		value, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Printf("Internal Server Error: %s", err.Error())
-			return
-		}
-		if r.Header.Get("If-None-Match") == "*" {
-			err = store.updateTagIfMissing(trackid, predicate, string(value))
-		} else {
-			err = store.updateTag(trackid, predicate, string(value))
-		}
-		if err != nil {
-			var status int
-			if err.Error() == "Unknown Track" {
-				status = http.StatusNotFound
-			} else {
-				status = http.StatusInternalServerError
-				log.Printf("Internal Server Error: %s", err.Error())
-			}
-			http.Error(w, err.Error(), status)
-			return
-		}
-		fallthrough
-	case "GET":
-		writeTag(store, w, trackid, predicate)
-	case "DELETE":
-		deleteTagHandler(store, w, trackid, predicate)
-	default:
-		MethodNotAllowed(w, []string{"GET", "PUT", "DELETE"})
-	}
 }
