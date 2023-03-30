@@ -16,15 +16,17 @@ func FrontController(store Datastore) *http.ServeMux {
 	router := http.NewServeMux()
 	router.HandleFunc("/v2/tracks", store.TracksV2Controller)
 	router.HandleFunc("/v2/tracks/", store.TracksV2Controller)
-	router.HandleFunc("/tracks", store.TracksController)
-	router.HandleFunc("/tracks/", store.TracksController)
-	router.HandleFunc("/globals", store.GlobalsController)
-	router.HandleFunc("/globals/", store.GlobalsController)
-	router.HandleFunc("/predicates/", store.PredicatesController)
-	router.HandleFunc("/tags/", store.TagsController)
-	router.HandleFunc("/search", store.SearchController)
 	router.HandleFunc("/_info", store.InfoController)
 	router.HandleFunc("/", HomepageController)
+
+	/** The following routes used to be part of the V1 API - return a Gone status */
+	router.HandleFunc("/tracks", V1GoneController)
+	router.HandleFunc("/tracks/", V1GoneController)
+	router.HandleFunc("/globals", V1GoneController)
+	router.HandleFunc("/globals/", V1GoneController)
+	router.HandleFunc("/predicates/", V1GoneController)
+	router.HandleFunc("/tags/", V1GoneController)
+	router.HandleFunc("/search", V1GoneController)
 	return router
 }
 

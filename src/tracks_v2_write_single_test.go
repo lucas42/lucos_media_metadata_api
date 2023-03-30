@@ -231,7 +231,6 @@ func TestInvalidTrackIDsV2(test *testing.T) {
 	makeRequest(test, "GET", "/v2/tracks/blah", "", 404, "Track Endpoint Not Found\n", false)
 	makeRequest(test, "GET", "/v2/tracks/blah/weighting", "", 404, "Track Endpoint Not Found\n", false)
 	makeRequest(test, "GET", "/v2/tracks/1/blahing", "", 404, "Track Endpoint Not Found\n", false)
-	makeRequest(test, "GET", "/tags/four/artist", "", 400, "Track ID must be an integer\n", false)
 }
 
 
@@ -241,27 +240,23 @@ func TestInvalidTrackIDsV2(test *testing.T) {
  */
 func TestTrackDeletionV2(test *testing.T) {
 	clearData()
-	input1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333"}`
-	input2Json := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334"}`
-	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {}, "weighting": 0}`
-	output2Json := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {}, "weighting": 0}`
-	output1TagsJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {"title":"Track One"}, "weighting": 0}`
-	output2TagsJson := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {"title": "Track Two"}, "weighting": 0}`
+	input1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "tags": {"title":"Track One"}}`
+	input2Json := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "tags": {"title": "Track Two"}}`
+	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/333", "trackid": 1, "tags": {"title":"Track One"}, "weighting": 0}`
+	output2Json := `{"fingerprint": "76543", "duration": 150, "url": "http://example.org/track/334", "trackid": 2, "tags": {"title": "Track Two"}, "weighting": 0}`
 	makeRequest(test, "PUT", "/v2/tracks/1", input1Json, 200, output1Json, true)
 	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
-	makeRequest(test, "PUT", "/tags/1/title", "Track One", 200, "Track One", false)
-	makeRequest(test, "GET", "/v2/tracks/1", "", 200, output1TagsJson, true)
 	makeRequest(test, "PUT", "/v2/tracks/2", input2Json, 200, output2Json, true)
-	makeRequest(test, "PUT", "/tags/2/title", "Track Two", 200, "Track Two", false)
-	makeRequest(test, "GET", "/v2/tracks/2", "", 200, output2TagsJson, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
+	makeRequest(test, "GET", "/v2/tracks/1", "", 200, output1Json, true)
+	makeRequest(test, "GET", "/v2/tracks/2", "", 200, output2Json, true)
 	makeRequest(test, "DELETE", "/v2/tracks/2", "", 204, "", false)
 	assertEqual(test, "Loganne event type", "trackDeleted", lastLoganneType)
 	assertEqual(test, "Loganne humanReadable", "Track \"Track Two\" deleted", lastLoganneMessage)
 	assertEqual(test, "Loganne track ID", 0, lastLoganneTrack.ID)
 	assertEqual(test, "Loganne existingTrack ID", 2, lastLoganneExistingTrack.ID)
 	makeRequest(test, "GET", "/v2/tracks/2", "", 404, "Track Not Found\n", false)
-	makeRequest(test, "GET", "/tags/2", "", 200, "{}", true)
-	makeRequest(test, "GET", "/v2/tracks/1", "", 200, output1TagsJson, true)
+	makeRequest(test, "GET", "/v2/tracks/1", "", 200, output1Json, true)
 }
 
 func TestCantDeleteAllV2(test *testing.T) {
@@ -285,21 +280,16 @@ func TestCantDeleteAllV2(test *testing.T) {
 func TestUpdateMultipleTagsV2(test *testing.T) {
 	clearData()
 	trackpath := "/v2/tracks/1"
-	artistpath := "/tags/1/artist"
-	albumpath := "/tags/1/album"
 	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300}`
 	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
 	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
-	makeRequest(test, "GET", artistpath, "", 404, "Tag Not Found\n", false)
-	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
 	inputBJson := `{"tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}}`
 	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}, "weighting": 0}`
 	makeRequest(test, "PATCH", trackpath, inputBJson, 200, outputBJson, true)
 	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
-	makeRequest(test, "GET", artistpath, "", 200, "Beautiful South", false)
-	makeRequest(test, "GET", albumpath, "", 200, "Carry On Up The Charts", false)
+	makeRequest(test, "GET", trackpath, "", 200, outputBJson, true)
 }
 /**
  * Checks whether multiple tags can be updated at once when track is identified by URL
@@ -309,21 +299,16 @@ func TestUpdateMultipleTagsByURLV2(test *testing.T) {
 	trackurl := "http://example.org/track/444"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
-	artistpath := "/tags/1/artist"
-	albumpath := "/tags/1/album"
 	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300}`
 	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
 	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
-	makeRequest(test, "GET", artistpath, "", 404, "Tag Not Found\n", false)
-	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
 	inputBJson := `{"tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}}`
 	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts"}, "weighting": 0}`
 	makeRequest(test, "PATCH", trackpath, inputBJson, 200, outputBJson, true)
 	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
-	makeRequest(test, "GET", artistpath, "", 200, "Beautiful South", false)
-	makeRequest(test, "GET", albumpath, "", 200, "Carry On Up The Charts", false)
+	makeRequest(test, "GET", trackpath, "", 200, outputBJson, true)
 }
 /**
  * Checks whether a tag can be deleted whilst others are updated
@@ -331,27 +316,16 @@ func TestUpdateMultipleTagsByURLV2(test *testing.T) {
 func TestDeleteTagInMultipleV2(test *testing.T) {
 	clearData()
 	trackpath := "/v2/tracks/1"
-	titlepath := "/tags/1/title"
-	artistpath := "/tags/1/artist"
-	albumpath := "/tags/1/album"
-	genrepath := "/tags/1/genre"
 	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts", "genre": "pop"}}`
 	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"Beautiful South", "album": "Carry On Up The Charts", "genre": "pop"}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
 	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
-	makeRequest(test, "GET", titlepath, "", 404, "Tag Not Found\n", false)
-	makeRequest(test, "GET", artistpath, "", 200, "Beautiful South", false)
-	makeRequest(test, "GET", albumpath, "", 200, "Carry On Up The Charts", false)
-	makeRequest(test, "GET", genrepath, "", 200, "pop", false)
 	inputBJson := `{"tags": {"artist":"The Beautiful South", "album": null, "title": "Good As Gold"}}`
 	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"artist":"The Beautiful South", "title": "Good As Gold", "genre": "pop"}, "weighting": 0}`
 	makeRequest(test, "PATCH", trackpath, inputBJson, 200, outputBJson, true)
 	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
-	makeRequest(test, "GET", titlepath, "", 200, "Good As Gold", false)
-	makeRequest(test, "GET", artistpath, "", 200, "The Beautiful South", false)
-	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
-	makeRequest(test, "GET", genrepath, "", 200, "pop", false)
+	makeRequest(test, "GET", trackpath, "", 200, outputBJson, true)
 }
 /**
  * Checks whether only the missing tags can be added when multiple are specified
@@ -359,17 +333,11 @@ func TestDeleteTagInMultipleV2(test *testing.T) {
 func TestUpdateMissingInMultipleTagsV2(test *testing.T) {
 	clearData()
 	trackpath := "/v2/tracks/1"
-	titlepath := "/tags/1/title"
-	artistpath := "/tags/1/artist"
-	albumpath := "/tags/1/album"
 	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300, "tags": {"title":"Original", "artist": "Has Been Changed"}}`
 	outputAJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"title":"Original", "artist": "Has Been Changed"}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputAJson, true)
 	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", trackpath, "", 200, outputAJson, true)
-	makeRequest(test, "GET", titlepath, "", 200, "Original", false)
-	makeRequest(test, "GET", artistpath, "", 200, "Has Been Changed", false)
-	makeRequest(test, "GET", albumpath, "", 404, "Tag Not Found\n", false)
 	inputBJson := `{"tags":{"title":"Original", "artist": "Old Artist", "album": "Brand New Album"}}}`
 	outputBJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"title":"Original", "artist": "Has Been Changed", "album": "Brand New Album"}, "weighting": 0}`
 
@@ -377,9 +345,7 @@ func TestUpdateMissingInMultipleTagsV2(test *testing.T) {
 	request.Header.Add("If-None-Match", "*")
 	makeRawRequest(test, request, 200, outputBJson, true)
 	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
-	makeRequest(test, "GET", titlepath, "", 200, "Original", false)
-	makeRequest(test, "GET", artistpath, "", 200, "Has Been Changed", false)
-	makeRequest(test, "GET", albumpath, "", 200, "Brand New Album", false)
+	makeRequest(test, "GET", trackpath, "", 200, outputBJson, true)
 }
 /**
  * Checks that if no tags are missing, then loganne doesn't get called
@@ -387,17 +353,11 @@ func TestUpdateMissingInMultipleTagsV2(test *testing.T) {
 func TestNoMissingTagsDoesntPostToLogannV2(test *testing.T) {
 	clearData()
 	trackpath := "/v2/tracks/1"
-	titlepath := "/tags/1/title"
-	artistpath := "/tags/1/artist"
-	albumpath := "/tags/1/album"
 	inputAJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300, "tags": {"title":"Original", "artist": "Not Changed", "album": "Irrelevant"}}`
 	outputJson := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/444", "trackid": 1, "tags": {"title":"Original", "artist": "Not Changed", "album": "Irrelevant"}, "weighting": 0}`
 	makeRequest(test, "PUT", trackpath, inputAJson, 200, outputJson, true)
 	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
 	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
-	makeRequest(test, "GET", titlepath, "", 200, "Original", false)
-	makeRequest(test, "GET", artistpath, "", 200, "Not Changed", false)
-	makeRequest(test, "GET", albumpath, "", 200, "Irrelevant", false)
 
 	inputBJson := `{"fingerprint": "aoecu1234", "url": "http://example.org/track/444", "duration": 300, "tags":{"title":"Original", "artist": "Has Been Changed"}}}`
 	lastLoganneType = ""
@@ -406,9 +366,6 @@ func TestNoMissingTagsDoesntPostToLogannV2(test *testing.T) {
 	makeRawRequest(test, request, 200, outputJson, true)
 	assertEqual(test, "Loganne call", "", lastLoganneType) // Shouldn't have logged in this case
 	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
-	makeRequest(test, "GET", titlepath, "", 200, "Original", false)
-	makeRequest(test, "GET", artistpath, "", 200, "Not Changed", false)
-	makeRequest(test, "GET", albumpath, "", 200, "Irrelevant", false)
 }
 
 /**

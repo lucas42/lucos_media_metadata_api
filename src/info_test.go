@@ -18,11 +18,11 @@ func TestInfoEndpoint(test *testing.T) {
 		id := strconv.Itoa(i)
 		trackurl := "http://example.org/track/id" + id
 		escapedTrackUrl := url.QueryEscape(trackurl)
-		trackpath := fmt.Sprintf("/tracks?url=%s", escapedTrackUrl)
+		trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
 		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}, "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
-		makeRequest(test, "PUT", "/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
+		makeRequest(test, "PUT", "/v2/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
 
 	expectedOutput := `{
