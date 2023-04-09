@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -66,6 +67,10 @@ func restartServer() {
 func AreEqualJSON(s1, s2 string) (bool, error) {
 	var o1 interface{}
 	var o2 interface{}
+
+	// The `added` tag can very based on time of request, so ignore from this check
+	re := regexp.MustCompile(`"added": *".*?",?`)
+	s1 = re.ReplaceAllString(s1, "")
 
 	var err error
 	err = json.Unmarshal([]byte(s1), &o1)

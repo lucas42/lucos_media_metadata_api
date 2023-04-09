@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 /**
@@ -96,6 +97,12 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 	storedTrack, err = store.getTrackDataByField(filterField, value)
 	if err != nil {
 		return
+	}
+	if track.Tags == nil {
+		track.Tags = map[string]string{}
+	}
+	if existingTrack.Tags["added"] == "" && track.Tags["added"] == "" {
+		track.Tags["added"] = time.Now().Format(time.RFC3339)
 	}
 	if !onlyMissing {
 		err = store.updateTags(storedTrack.ID, track.Tags);

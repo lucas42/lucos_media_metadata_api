@@ -1,8 +1,11 @@
 package main
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"testing"
+	"time"
 )
 
 
@@ -461,4 +464,33 @@ func TestDuplicateFingerprintV2(test *testing.T) {
 	makeRequest(test, "PUT", track3Path, `{"fingerprint":"` + fingerprint2 + `", "duration": 17}`, 400, "Duplicate: track 2 has same fingerprint\n", false)
 	makeRequest(test, "PUT", track3Path, `{"fingerprint":"` + fingerprint1 + `", "duration": 17}`, 400, "Duplicate: track 1 has same fingerprint\n", false)
 
+}
+
+
+/**
+ * Checks whether the "added" tag gets set for new tracks when missing from the request
+ */
+func TestAddedTagV2(test *testing.T) {
+	clearData()
+	inputJson := `{"url": "http://example.org/track/1256", "duration": 300}`
+	path := "/v2/tracks?fingerprint=aoecu1234"
+	request := basicRequest(test, "PUT", path, inputJson)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		test.Error(err)
+	}
+
+	track := new(Track)
+	err = json.NewDecoder(response.Body).Decode(track)
+	if err != nil {
+		test.Error(err)
+	}
+	addedTime, err := time.Parse(time.RFC3339, track.Tags["added"])
+	if err != nil {
+		test.Error(err)
+	}
+	secondsSinceAdded := time.Since(addedTime).Seconds()
+	if secondsSinceAdded > 3 {
+		test.Errorf("Added tag is older than expected (%f seconds is more than 3 seconds)", secondsSinceAdded)
+	}
 }
