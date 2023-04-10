@@ -234,6 +234,7 @@ func TestInvalidTrackIDsV2(test *testing.T) {
 	makeRequest(test, "GET", "/v2/tracks/blah", "", 404, "Track Endpoint Not Found\n", false)
 	makeRequest(test, "GET", "/v2/tracks/blah/weighting", "", 404, "Track Endpoint Not Found\n", false)
 	makeRequest(test, "GET", "/v2/tracks/1/blahing", "", 404, "Track Endpoint Not Found\n", false)
+	makeRequest(test, "PUT", "/v2/tracks/13/weighting", "70", 404, "Track Not Found\n", false)
 }
 
 

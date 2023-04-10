@@ -44,13 +44,7 @@ func HomepageController(w http.ResponseWriter, r *http.Request) {
 func writeJSONResponse(w http.ResponseWriter, data interface{}, err error) {
 	w.Header().Set("Cache-Control", "no-cache, max-age=0, no-store, must-revalidate")
 	if err != nil {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		if strings.HasSuffix(err.Error(), " Not Found") {
-			http.Error(w, err.Error(), http.StatusNotFound)
-		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Printf("Internal Server Error: %s", err.Error())
-		}
+		writeErrorResponse(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -65,12 +59,7 @@ func writePlainResponse(w http.ResponseWriter, data string, err error) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, max-age=0, no-store, must-revalidate")
 	if err != nil {
-		if strings.HasSuffix(err.Error(), " Not Found") {
-			http.Error(w, err.Error(), http.StatusNotFound)
-		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Printf("Internal Server Error: %s", err.Error())
-		}
+		writeErrorResponse(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -84,16 +73,25 @@ func writeContentlessResponse(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, max-age=0, no-store, must-revalidate")
 	if err != nil {
-		if strings.HasSuffix(err.Error(), " Not Found") {
-			http.Error(w, err.Error(), http.StatusNotFound)
-		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Printf("Internal Server Error: %s", err.Error())
-		}
+		writeErrorResponse(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+/**
+ * Writes a http response for an error
+ */
+func writeErrorResponse(w http.ResponseWriter, err error) {
+	if strings.HasSuffix(err.Error(), " Not Found") {
+		http.Error(w, err.Error(), http.StatusNotFound)
+	} else if strings.HasPrefix(err.Error(), "Duplicate:"){
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	} else {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Internal Server Error: %s", err.Error())
+	}
+ }
 
 /**
  * Listens for incoming http requests

@@ -3,7 +3,6 @@ package main
 import (
 	"io/ioutil"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -187,8 +186,7 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 			case "PUT":
 				body, err := ioutil.ReadAll(r.Body)
 				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					log.Printf("Internal Server Error: %s", err.Error())
+					writeErrorResponse(w, err)
 					return
 				}
 				weighting, err := strconv.ParseFloat(string(body), 64)
@@ -198,8 +196,7 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 				}
 				err = store.setTrackWeighting(trackid, weighting)
 				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					log.Printf("Internal Server Error: %s", err.Error())
+					writeErrorResponse(w, err)
 					return
 				}
 				fallthrough
@@ -257,14 +254,7 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 				savedTrack, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, track, existingTrack, onlyMissing)
 			}
 			if err != nil {
-				statusCode := http.StatusInternalServerError
-				if strings.HasPrefix(err.Error(), "Duplicate:") {
-					statusCode = http.StatusBadRequest
-				}
-				http.Error(w, err.Error(), statusCode)
-				if statusCode == http.StatusInternalServerError {
-					log.Printf("Internal Server Error: %s", err.Error())
-				}
+				writeErrorResponse(w, err)
 				return
 			}
 			w.Header().Set("Track-Action", action)
