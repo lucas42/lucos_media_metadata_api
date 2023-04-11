@@ -15,7 +15,7 @@ type Datastore struct {
 }
 
 func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
-	db := sqlx.MustConnect("sqlite3", dbpath)
+	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
 	database = Datastore{db, loganne}
 	database.DB.MustExec("PRAGMA foreign_keys = ON;")
 	if !database.TableExists("track") {
