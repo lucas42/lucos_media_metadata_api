@@ -21,6 +21,8 @@ type Track struct {
 	ID          int               `json:"trackid"`
 	Tags        map[string]string `json:"tags"`
 	Weighting   float64           `json:"weighting"`
+	RandWeight  float64           `json:"_random_weighting,omitempty"` // Only for debug purposes
+	Cumweight   float64           `json:"_cum_weighting,omitempty"`    // Only for debug purposes
 }
 
 func (track Track) getName() (string) {
@@ -247,7 +249,8 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
 	for i := 0; i < count; i++ {
 		track := Track{}
 		weighting := rand.Float64() * max
-		err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration, weighting FROM track WHERE cum_weighting > $1 ORDER BY cum_weighting ASC LIMIT 1", weighting)
+		err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration, weighting, cum_weighting AS cumweight FROM track WHERE cum_weighting > $1 ORDER BY cum_weighting ASC LIMIT 1", weighting)
+		track.RandWeight = weighting
 		if err != nil {
 			return
 		}
