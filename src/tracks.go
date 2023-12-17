@@ -175,7 +175,7 @@ func (store Datastore) checkForDuplicate(compareField string, compareValue inter
  * Sets the weighting for a given track
  *
  */
-func (store Datastore) setTrackWeighting(trackid int, weighting float64) (err error) {
+func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err error) {
 	existingTrack, err := store.getTrackDataByField("id", trackid)
 	if err != nil {
 		return
@@ -183,10 +183,10 @@ func (store Datastore) setTrackWeighting(trackid int, weighting float64) (err er
 	oldWeighting := existingTrack.Weighting
 
 	// No need to do anything if old and new values are the same
-	if weighting == oldWeighting {
+	if newWeighting == oldWeighting {
 		return
 	}
-	diff := weighting - oldWeighting
+	diff := newWeighting - oldWeighting
 	max, err := store.getMaxCumWeighting()
 	if err != nil {
 		return
@@ -195,13 +195,13 @@ func (store Datastore) setTrackWeighting(trackid int, weighting float64) (err er
 	if err != nil {
 		return
 	}
-	_, err = store.DB.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", weighting, max+diff, trackid)
+	_, err = store.DB.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", newWeighting, max+diff, trackid)
 	if err != nil {
 		return
 	}
 	updatedTrack := existingTrack
-	updatedTrack.Weighting = weighting
-	humanReadableMessage := "Weighting for track "+updatedTrack.getName()+" updated from "+strconv.FormatFloat(oldWeighting, 'f', -1, 64)+" to "+strconv.FormatFloat(weighting, 'f', -1, 64)
+	updatedTrack.Weighting = newWeighting
+	humanReadableMessage := "Weighting for track "+updatedTrack.getName()+" updated from "+strconv.FormatFloat(oldWeighting, 'f', -1, 64)+" to "+strconv.FormatFloat(newWeighting, 'f', -1, 64)
 	store.Loganne.post("trackWeightingUpdated", humanReadableMessage, updatedTrack, existingTrack)
 	return
 }
