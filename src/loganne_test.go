@@ -91,14 +91,3 @@ func TestBulkEvent(test *testing.T) {
 	assertNoError(test, "Failed to get request body", latestRequestError)
 	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the bulk test","source":"metadata_api_test","type":"bulkTestEvent"}`, latestRequestBody)
 }
-
-func assertEqual(test *testing.T, message string, expected interface{}, actual interface{}) {
-	if expected != actual {
-		test.Errorf("%s. Expected: %s, Actual: %s", message, expected, actual)
-	}
-}
-func assertNoError(test *testing.T, message string, err error) {
-	if err != nil {
-		test.Errorf("%s Error message: %s", message, err)
-	}
-}

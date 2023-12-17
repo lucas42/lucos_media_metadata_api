@@ -206,3 +206,14 @@ func checkRedirect(t *testing.T, initialPath string, expectedPath string) {
 	}
 }
 
+
+func assertEqual(test *testing.T, message string, expected interface{}, actual interface{}) {
+	if expected != actual {
+		test.Errorf("%s. Expected: %s, Actual: %s", message, expected, actual)
+	}
+}
+func assertNoError(test *testing.T, message string, err error) {
+	if err != nil {
+		test.Errorf("%s Error message: %s", message, err)
+	}
+}
