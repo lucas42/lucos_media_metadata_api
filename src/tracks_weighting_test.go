@@ -23,7 +23,7 @@ func TestSetWeighting(test *testing.T) {
 	store := DBInit("testweighting.sqlite", MockLoganne{})
 	store.DB.Exec("INSERT INTO track")
 	_, err := store.DB.Exec("INSERT INTO track (url,fingerprint,duration) values ('/track1','abc',3)")
-	if err != nil { 
+	if err != nil {
 		test.Errorf("Error inserting track 1: %s", err.Error())
 	}
 	err = store.setTrackWeighting(1, 5)
@@ -36,7 +36,7 @@ func TestDeletingTrackCorrectsWeighting(test *testing.T) {
 	clearData()
 	store := DBInit("testweighting.sqlite", MockLoganne{})
 	_, err := store.DB.Exec("INSERT INTO track (url,fingerprint,duration) values ('/track1','abc',3),('/track2','def',6),('/track3','hij',9)")
-	if err != nil { 
+	if err != nil {
 		test.Errorf("Error inserting track 1: %s", err.Error())
 	}
 	err = store.setTrackWeighting(1, 5)
@@ -60,4 +60,76 @@ func TestDeletingTrackCorrectsWeighting(test *testing.T) {
 	}
 	assertWeighting(test, store, 1, 5, 5)
 	assertWeighting(test, store, 3, 5, 10)
+}
+
+func TestChangeWeighting(test *testing.T) {
+	clearData()
+	store := DBInit("testweighting.sqlite", MockLoganne{})
+	_, err := store.DB.Exec("INSERT INTO track (url,fingerprint,duration) values ('/track1','abc',3),('/track2','def',6),('/track3','hij',9)")
+	if err != nil {
+		test.Errorf("Error inserting track 1: %s", err.Error())
+	}
+	err = store.setTrackWeighting(1, 5)
+	if err != nil {
+		test.Errorf("Error setting weighting 1: %s", err.Error())
+	}
+	err = store.setTrackWeighting(2, 5)
+	if err != nil {
+		test.Errorf("Error setting weighting 2: %s", err.Error())
+	}
+	err = store.setTrackWeighting(3, 5)
+	if err != nil {
+		test.Errorf("Error setting weighting 3: %s", err.Error())
+	}
+	assertWeighting(test, store, 1, 5, 5)
+	assertWeighting(test, store, 2, 5, 10)
+	assertWeighting(test, store, 3, 5, 15)
+
+	err = store.setTrackWeighting(2, 7)
+	if err != nil {
+		test.Errorf("Error setting track 2 to zero weighting: %s", err.Error())
+	}
+	assertWeighting(test, store, 1, 5, 5)
+	assertWeighting(test, store, 3, 5, 10)
+	assertWeighting(test, store, 2, 7, 17)
+}
+func TestZeroWeightingAfterDelete(test *testing.T) {
+	clearData()
+	store := DBInit("testweighting.sqlite", MockLoganne{})
+	_, err := store.DB.Exec("INSERT INTO track (url,fingerprint,duration) values ('/track1','abc',3),('/track2','def',6),('/track3','hij',9),('/track4','klm',12)")
+	if err != nil {
+		test.Errorf("Error inserting track 1: %s", err.Error())
+	}
+	err = store.setTrackWeighting(1, 5)
+	if err != nil {
+		test.Errorf("Error setting weighting 1: %s", err.Error())
+	}
+	err = store.setTrackWeighting(2, 5)
+	if err != nil {
+		test.Errorf("Error setting weighting 2: %s", err.Error())
+	}
+	err = store.setTrackWeighting(3, 5)
+	if err != nil {
+		test.Errorf("Error setting weighting 3: %s", err.Error())
+	}
+	err = store.setTrackWeighting(4, 5)
+	if err != nil {
+		test.Errorf("Error setting weighting 4: %s", err.Error())
+	}
+	assertWeighting(test, store, 1, 5, 5)
+	assertWeighting(test, store, 2, 5, 10)
+	assertWeighting(test, store, 3, 5, 15)
+	assertWeighting(test, store, 4, 5, 20)
+
+	err = store.deleteTrack(2)
+	if err != nil {
+		test.Errorf("Error deleting track 2: %s", err.Error())
+	}
+	err = store.setTrackWeighting(3, 0)
+	if err != nil {
+		test.Errorf("Error setting track 3 to zero weighting: %s", err.Error())
+	}
+	assertWeighting(test, store, 1, 5, 5)
+	assertWeighting(test, store, 4, 5, 10)
+	assertWeighting(test, store, 3, 0, 0)
 }

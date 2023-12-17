@@ -186,16 +186,28 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	if newWeighting == oldWeighting {
 		return
 	}
-	diff := newWeighting - oldWeighting
-	max, err := store.getMaxCumWeighting()
-	if err != nil {
-		return
-	}
+
+	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
 	_, err = store.DB.Exec("UPDATE track SET cum_weighting = cum_weighting - $1 WHERE cum_weighting > (SELECT cum_weighting FROM track WHERE id = $2)", oldWeighting, trackid)
 	if err != nil {
 		return
 	}
-	_, err = store.DB.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", newWeighting, max+diff, trackid)
+	var newCumulativeWeighting float64
+
+	// If there's a non zero weighting, then stick this track to the end of the cumulative weighing list
+	if newWeighting > 0 {
+		var max float64
+		max, err = store.getMaxCumWeighting()
+		if err != nil {
+			return
+		}
+		newCumulativeWeighting = max + newWeighting
+
+	// If the weighting is zero, then set the cumulative weighting to zero too, to avoid 2 tracks with the same weighting
+	} else {
+		newCumulativeWeighting = 0
+	}
+	_, err = store.DB.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", newWeighting, newCumulativeWeighting, trackid)
 	if err != nil {
 		return
 	}

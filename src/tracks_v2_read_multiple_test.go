@@ -91,6 +91,61 @@ func TestRandomTracksV2(test *testing.T) {
 	}
 }
 
+/**
+ * Checks how random tracks endpoint handles deletes
+ * Creates 40 tracks with weightings, then deletes 38 of them and sets the weighting of track 39 to 0.
+ * Random endpoint should only return track 40 every time
+ */
+func TestRandomTracksDealsWithDeletesV2(test *testing.T) {
+	clearData()
+	path := "/v2/tracks/random"
+	makeRequest(test, "GET", path, "", 200, `{"tracks":[],"totalPages":0}`, true)
+
+	// Create 40 Tracks
+	for i := 1; i <= 40; i++ {
+		id := strconv.Itoa(i)
+		trackurl := "http://example.org/track/id" + id
+		escapedTrackUrl := url.QueryEscape(trackurl)
+		trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
+		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}, "weighting": 0}`
+		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+		makeRequest(test, "PUT", "/v2/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
+	}
+	// Delete 38 of them
+	for i := 1; i <= 38; i++ {
+		id := strconv.Itoa(i)
+		makeRequest(test, "DELETE", "/v2/tracks/" + id, "", 204, "", false)
+	}
+	// Set the weighting on the 39th to 0
+	makeRequest(test, "PUT", "/v2/tracks/39/weighting", "0", 200, "0", false)
+	url := server.URL + path
+	response, err := http.Get(url)
+	if err != nil {
+		test.Error(err)
+	}
+	responseData, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		test.Error(err)
+	}
+
+	expectedResponseCode := 200
+	if response.StatusCode != expectedResponseCode {
+		test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+	}
+
+	var output SearchResult
+	err = json.Unmarshal(responseData, &output)
+	if err != nil {
+		test.Errorf("Invalid JSON body: %s for %s", err.Error(), path)
+	}
+	if len(output.Tracks) != 20 {
+		test.Errorf("Wrong number of tracks.  Expected: 20, Actual: %d", len(output.Tracks))
+	}
+	for _, track := range output.Tracks {
+		assertEqual(test, "Random returned deleted track id", 40, track.ID)
+	}
+}
 
 /**
  * Checks whether the correct tracks are returned when doing a simple query
