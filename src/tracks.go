@@ -268,6 +268,13 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
  *
  */
 func (store Datastore) deleteTrack(trackid int) (err error) {
+
+	// Set the track's weighting to zero before deletion
+	// So that the cumulative weighting of higher tracks get updated appropriately
+	err = store.setTrackWeighting(trackid, 0)
+	if (err != nil) {
+		return
+	}
 	existingTrack, err := store.getTrackDataByField("id", trackid)
 	if (err != nil) {
 		return

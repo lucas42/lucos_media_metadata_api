@@ -32,6 +32,7 @@ func (mock MockLoganne) post(eventType string, humanReadable string, track Track
 
 func clearData() {
 	os.Remove("testrouting.sqlite")
+	os.Remove("testweighting.sqlite")
 	restartServer()
 }
 func TestMain(m *testing.M) {
