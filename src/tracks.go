@@ -73,14 +73,14 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		updateFields = append(updateFields, "duration = :duration")
 	}
 	if track.URL != "" {
-		err = store.checkForDuplicate("url", track.URL, filterField, value)
+		err = store.checkForDuplicateTrack("url", track.URL, filterField, value)
 		if err != nil {
 			return
 		}
 		updateFields = append(updateFields, "url = :url")
 	}
 	if track.Fingerprint != "" {
-		err = store.checkForDuplicate("fingerprint", track.Fingerprint, filterField, value)
+		err = store.checkForDuplicateTrack("fingerprint", track.Fingerprint, filterField, value)
 		if err != nil {
 			return
 		}
@@ -158,7 +158,7 @@ func (store Datastore) trackExists(field string, value interface{}) (found bool,
  * Checks whether any other tracks are duplicating a given field
  *
  */
-func (store Datastore) checkForDuplicate(compareField string, compareValue interface{}, filterField string, filterValue interface{}) (err error) {
+func (store Datastore) checkForDuplicateTrack(compareField string, compareValue interface{}, filterField string, filterValue interface{}) (err error) {
 	var trackid int
 	err = store.DB.Get(&trackid, "SELECT id FROM track WHERE "+compareField+" = $1 AND "+filterField+" != $2", compareValue, filterValue)
 	if err != nil && err.Error() == "sql: no rows in result set" {

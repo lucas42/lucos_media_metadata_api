@@ -55,6 +55,29 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		`
 		database.DB.MustExec(sqlStmt)
 	}
+	if !database.TableExists("collection") {
+		log.Print("Creating table `collection`")
+		sqlStmt := `
+		CREATE TABLE "collection" (
+			"slug" TEXT PRIMARY KEY NOT NULL,
+			"name" TEXT UNIQUE NOT NULL
+		);
+		`
+		database.DB.MustExec(sqlStmt)
+	}
+	if !database.TableExists("collection_track") {
+		log.Print("Creating table `collection_track`")
+		sqlStmt := `
+		CREATE TABLE "collection_track" (
+			"collectionslug" TEXT NOT NULL,
+			"trackid" TEXT NOT NULL,
+			FOREIGN KEY (collectionslug) REFERENCES collection(slug),
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			CONSTRAINT track_collection_unique UNIQUE (collectionslug, trackid)
+		);
+		`
+		database.DB.MustExec(sqlStmt)
+	}
 	return
 }
 
