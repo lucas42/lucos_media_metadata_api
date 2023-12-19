@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"strconv"
 )
 
 type Collection struct {
@@ -80,6 +81,18 @@ func (store Datastore) checkForDuplicateCollection(compareField string, compareV
 }
 
 /**
+ * Checks whether a collection exists based on its slug
+ *
+ */
+func (store Datastore) collectionExists(slug string) (found bool, err error) {
+	err = store.DB.Get(&found, "SELECT 1 FROM collection WHERE slug=$1", slug)
+	if err != nil && err.Error() == "sql: no rows in result set" {
+		err = nil
+	}
+	return
+}
+
+/**
  * Updates or Creates a collection
  *
  */
@@ -119,6 +132,31 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 		action = "collectionCreated"
 		store.Loganne.collectionPost(action, "New Music Collection Created: "+newCollection.Name, newCollection, existingCollection)
 	}
+	return
+}
+/**
+ * Checks whether a collection contains a given track
+ */
+func (store Datastore) isTrackInCollection(collectionslug string, trackid int) (contains bool, err error) {
+	err = store.DB.Get(&contains, "SELECT TRUE FROM collection_track WHERE collectionslug == $1 AND trackid == $2", collectionslug, trackid)
+	if err != nil && err.Error() == "sql: no rows in result set" {
+		err = nil
+		contains = false
+	}
+	return
+}
+/**
+ * Checks whether a collection contains a given track
+ */
+func (store Datastore) addTrackToCollection(collectionslug string, trackid int) (err error) {
+	_, err = store.DB.Exec("INSERT OR IGNORE INTO collection_track (collectionslug, trackid) VALUES ($1, $2)", collectionslug, trackid)
+	return
+}
+/**
+ * Checks whether a collection contains a given track
+ */
+func (store Datastore) removeTrackFromCollection(collectionslug string, trackid int) (err error) {
+	_, err = store.DB.Exec("DELETE FROM collection_track WHERE collectionslug == $1 AND trackid == $2", collectionslug, trackid)
 	return
 }
 
@@ -170,7 +208,44 @@ func (store Datastore) CollectionsV2Controller(w http.ResponseWriter, r *http.Re
 				MethodNotAllowed(w, []string{"GET", "PUT", "DELETE"})
 			}
 		} else {
-			writeErrorResponse(w, errors.New("Sub Endpoint Not Implemented"))
+			collectionFound, err := store.collectionExists(slug)
+			if err != nil {
+				writeErrorResponse(w, err)
+				return
+			}
+			if !collectionFound {
+				writeErrorResponse(w, errors.New("Collection Not Found"))
+				return
+			}
+			trackid, err := strconv.Atoi(pathparts[2])
+			if err != nil {
+				http.Error(w, "Track ID must be a number", http.StatusBadRequest)
+				return
+			}
+			trackFound, err := store.trackExists("id", trackid)
+			if err != nil {
+				writeErrorResponse(w, err)
+				return
+			}
+			if !trackFound {
+				writeErrorResponse(w, errors.New("Track Not Found"))
+				return
+			}
+			switch r.Method{
+			case "GET":
+				contains, err := store.isTrackInCollection(slug, trackid)
+				if contains {
+					writePlainResponse(w, "Track In Collection\n", err)
+				} else {
+					writePlainResponseWithStatus(w, http.StatusNotFound, "Track Not In Collection\n", err)
+				}
+			case "PUT":
+				err = store.addTrackToCollection(slug, trackid)
+				writePlainResponse(w, "Track In Collection\n", err)
+			case "DELETE":
+				err = store.removeTrackFromCollection(slug, trackid)
+				writePlainResponse(w, "Track Not In Collection\n", err)
+			}
 		}
 	}
 }

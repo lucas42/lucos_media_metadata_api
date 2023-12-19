@@ -162,7 +162,7 @@ func makeRawRequest(t *testing.T, request *http.Request, expectedResponseCode in
 		}
 	} else {
 		if actualResponseBody != expectedResponseBody {
-			t.Errorf("Unexpected body: \"%s\", expected: \"%s\"", actualResponseBody, expectedResponseBody)
+			t.Errorf("Unexpected body for %s: \"%s\", expected: \"%s\"", url, actualResponseBody, expectedResponseBody)
 		}
 	}
 	return

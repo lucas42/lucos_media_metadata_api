@@ -55,16 +55,22 @@ func writeJSONResponse(w http.ResponseWriter, data interface{}, err error) {
 }
 
 /**
- * Writes a http plain text response based on string
+ * Writes a http plain text response based on string (defaults to status code OK)
  */
 func writePlainResponse(w http.ResponseWriter, data string, err error) {
+	writePlainResponseWithStatus(w, http.StatusOK, data, err)
+}
+/**
+ * Writes a http plain text response based on string and a status code
+ */
+func writePlainResponseWithStatus(w http.ResponseWriter, status int, data string, err error) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, max-age=0, no-store, must-revalidate")
 	if err != nil {
 		writeErrorResponse(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(status)
 	w.Write([]byte(data))
 }
 
