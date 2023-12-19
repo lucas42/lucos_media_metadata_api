@@ -245,6 +245,8 @@ func (store Datastore) CollectionsV2Controller(w http.ResponseWriter, r *http.Re
 			case "DELETE":
 				err = store.removeTrackFromCollection(slug, trackid)
 				writePlainResponse(w, "Track Not In Collection\n", err)
+			default:
+				MethodNotAllowed(w, []string{"GET", "PUT", "DELETE"})
 			}
 		}
 	}

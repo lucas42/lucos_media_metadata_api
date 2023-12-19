@@ -107,4 +107,6 @@ func TestAddTracksToCollection(test *testing.T) {
 	makeRequest(test, "PUT", "/v2/collections/third/4", "", 404, "Collection Not Found\n", false) // Neither Collection 'third' or Track 4 exist.  Erroring on collection as it comes first in URL
 
 	makeRequest(test, "PUT", "/v2/collections/first/something", "", 400, "Track ID must be a number\n", false)
+
+	makeRequestWithUnallowedMethod(test, "/v2/collections/first/2", "POST", []string{"PUT", "GET", "DELETE"})
 }
