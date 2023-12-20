@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"strconv"
 )
@@ -119,6 +120,13 @@ func (store Datastore) collectionExists(slug string) (found bool, err error) {
  *
  */
 func (store Datastore) updateCreateCollection(existingCollection Collection, newCollection Collection) (storedCollection Collection, action string, err error) {
+	// Prevent slugs being created using some reserved words which may cause confusion
+	reservedSlugs := []string{"new","all","collection"}
+	if slices.Contains(reservedSlugs, newCollection.Slug) {
+		err = errors.New("Collection with slug "+newCollection.Slug+" not allowed")
+		return
+	}
+
 	action = "noChange"
 	storedCollection = existingCollection
 	if newCollection.Tracks == nil {

@@ -95,6 +95,8 @@ func writeErrorResponse(w http.ResponseWriter, err error) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 	} else if strings.HasPrefix(err.Error(), "Duplicate:"){
 		http.Error(w, err.Error(), http.StatusBadRequest)
+	} else if strings.HasSuffix(err.Error(), "not allowed"){
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	} else {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Printf("Internal Server Error: %s", err.Error())

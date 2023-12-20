@@ -126,3 +126,9 @@ func TestListCollections(test *testing.T) {
 	makeRequest(test, "GET", "/v2/collections/", "", 200, `[{"slug":"first","name": "The Collection", "tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0},{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}]},{"slug":"second","name": "Another Collection", "tracks":[]},{"slug":"third","name": "Collecty McCollectFace", "tracks":[{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}]}]`, true)
 
 }
+func TestReservedCollectionSlugs(test *testing.T) {
+	clearData()
+	makeRequest(test, "PUT", "/v2/collections/all", `{"name": "Mega Collection"}`, 400, "Collection with slug all not allowed\n", false)
+	makeRequest(test, "PUT", "/v2/collections/new", `{"name": "Shiney Collection"}`, 400, "Collection with slug new not allowed\n", false)
+	makeRequest(test, "PUT", "/v2/collections/collection", `{"name": "Meta Collection"}`, 400, "Collection with slug collection not allowed\n", false)
+}
