@@ -110,3 +110,19 @@ func TestAddTracksToCollection(test *testing.T) {
 
 	makeRequestWithUnallowedMethod(test, "/v2/collections/first/2", "POST", []string{"PUT", "GET", "DELETE"})
 }
+func TestListCollections(test *testing.T) {
+	clearData()
+	makeRequest(test, "GET", "/v2/collections", "", 200, `[]`, true)
+	makeRequest(test, "PUT", "/v2/collections/first", `{"name": "The Collection"}`, 200, `{"slug":"first","name": "The Collection", "tracks":[]}`, true)
+	makeRequest(test, "PUT", "/v2/collections/second", `{"name": "Another Collection"}`, 200, `{"slug":"second","name": "Another Collection", "tracks":[]}`, true)
+	makeRequest(test, "PUT", "/v2/collections/third", `{"name": "Collecty McCollectFace"}`, 200, `{"slug":"third","name": "Collecty McCollectFace", "tracks":[]}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=def2", `{"url":"http://example.org/track2", "duration": 14,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"}}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/collections/first/1", "", 200, "Track In Collection\n", false)
+	makeRequest(test, "PUT", "/v2/collections/first/2", "", 200, "Track In Collection\n", false)
+	makeRequest(test, "PUT", "/v2/collections/third/2", "", 200, "Track In Collection\n", false)
+	restartServer()
+	makeRequest(test, "GET", "/v2/collections", "", 200, `[{"slug":"first","name": "The Collection", "tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0},{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}]},{"slug":"second","name": "Another Collection", "tracks":[]},{"slug":"third","name": "Collecty McCollectFace", "tracks":[{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}]}]`, true)
+	makeRequest(test, "GET", "/v2/collections/", "", 200, `[{"slug":"first","name": "The Collection", "tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0},{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}]},{"slug":"second","name": "Another Collection", "tracks":[]},{"slug":"third","name": "Collecty McCollectFace", "tracks":[{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}]}]`, true)
+
+}

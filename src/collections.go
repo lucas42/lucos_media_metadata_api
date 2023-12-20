@@ -17,7 +17,7 @@ type Collection struct {
 
 
 /**
- * Gets data about a track for a given value of a given field
+ * Gets data about a collection for a given slug
  *
  */
 func (store Datastore) getCollection(slug string) (collection Collection, err error) {
@@ -30,6 +30,28 @@ func (store Datastore) getCollection(slug string) (collection Collection, err er
 		return
 	}
 	collection.Tracks, err = store.getTracksInCollection(collection.Slug)
+	return
+}
+
+/**
+ * Gets data about all collections
+ *
+ */
+func (store Datastore) getAllCollections() (collections []Collection, err error) {
+	collections = []Collection{}
+	err = store.DB.Select(&collections, "SELECT slug, name FROM collection")
+	if err != nil {
+		return
+	}
+
+	// Loop through all the collection and add tracks for each one
+	for i := range collections {
+		collection := &collections[i]
+		collection.Tracks, err = store.getTracksInCollection(collection.Slug)
+		if err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -177,7 +199,8 @@ func (store Datastore) CollectionsV2Controller(w http.ResponseWriter, r *http.Re
 	pathparts := strings.Split(normalisedpath, "/")
 
 	if len(pathparts) <= 1 {
-		writeErrorResponse(w, errors.New("Base Endpoint Not Implemented"))
+		collections, err := store.getAllCollections()
+		writeJSONResponse(w, collections, err)
 	} else {
 		slug := pathparts[1]
 		if len(pathparts) == 2 {
