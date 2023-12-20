@@ -132,3 +132,21 @@ func TestReservedCollectionSlugs(test *testing.T) {
 	makeRequest(test, "PUT", "/v2/collections/new", `{"name": "Shiney Collection"}`, 400, "Collection with slug new not allowed\n", false)
 	makeRequest(test, "PUT", "/v2/collections/collection", `{"name": "Meta Collection"}`, 400, "Collection with slug collection not allowed\n", false)
 }
+func TestDeleteCollection(test *testing.T) {
+	clearData()
+	makeRequest(test, "PUT", "/v2/collections/first", `{"name": "The Collection"}`, 200, `{"slug":"first","name": "The Collection", "tracks":[]}`, true)
+	makeRequest(test, "PUT", "/v2/collections/second", `{"name": "Another Collection"}`, 200, `{"slug":"second","name": "Another Collection", "tracks":[]}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/collections/first/1", "", 200, "Track In Collection\n", false)
+	makeRequest(test, "GET", "/v2/collections/first", "", 200, `{"slug":"first","name": "The Collection", "tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}]}`, true)
+	restartServer()
+	makeRequest(test, "DELETE", "/v2/collections/first", "", 204, "", false)
+	assertEqual(test, "Loganne event type", "collectionDeleted", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable", "Collection \"The Collection\" deleted", lastLoganneMessage)
+	assertEqual(test, "Loganne updatedCollection slug", "", lastLoganneUpdatedCollection.Slug)
+	assertEqual(test, "Loganne existingCollection slug", "first", lastLoganneExistingCollection.Slug)
+	makeRequest(test, "GET", "/v2/collections/first", "", 404, "Collection Not Found\n", false)
+	makeRequest(test, "GET", "/v2/collections/first/1", "", 404, "Collection Not Found\n", false)
+	makeRequest(test, "GET", "/v2/collections/second", "", 200, `{"slug":"second","name": "Another Collection", "tracks":[]}`, true)
+
+}

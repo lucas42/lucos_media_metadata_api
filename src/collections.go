@@ -116,6 +116,34 @@ func (store Datastore) collectionExists(slug string) (found bool, err error) {
 }
 
 /**
+ * Deletes a collection
+ */
+func (store Datastore) deleteCollection(slug string) (err error) {
+	// If the collection already doesn't exist, return without doing anything
+	// (Don't error, as DELETEs should be idempotent)
+	found, err := store.collectionExists(slug)
+	if (!found || err != nil) {
+		return
+	}
+
+	// Get the existing collection data to send to loganne later
+	existingCollection, err := store.getCollection(slug)
+	if (err != nil) {
+		return
+	}
+	_, err = store.DB.Exec("DELETE FROM collection_track WHERE collectionslug=$1", slug)
+	if (err != nil) {
+		return
+	}
+	_, err = store.DB.Exec("DELETE FROM collection WHERE slug=$1", slug)
+	if (err != nil) {
+		return
+	}
+	store.Loganne.collectionPost("collectionDeleted", "Collection \""+existingCollection.Name+"\" deleted", Collection{}, existingCollection)
+	return
+}
+
+/**
  * Updates or Creates a collection
  *
  */
@@ -222,7 +250,8 @@ func (store Datastore) CollectionsV2Controller(w http.ResponseWriter, r *http.Re
 			}
 			switch r.Method {
 			case "DELETE":
-				writeErrorResponse(w, errors.New("DELETE Not Implemented"))
+				err = store.deleteCollection(slug)
+				writeContentlessResponse(w, err)
 			case "PUT":
 				var newCollection Collection
 				newCollection, err = DecodeCollection(r.Body)
