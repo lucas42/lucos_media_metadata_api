@@ -71,9 +71,9 @@ func TestRenameClashCollection(test *testing.T) {
 }
 func TestAddTracksToCollection(test *testing.T) {
 	clearData()
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=def2", `{"url":"http://example.org/track2", "duration": 14,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"}}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}`, true)
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=ghi3", `{"url":"http://example.org/track3", "duration": 21,"tags":{"artist":"Pachabel", "title":"Canon in D"}}`, 200, `{"fingerprint":"ghi3","duration":21,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Pachabel", "title":"Canon in D"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=def2", `{"url":"http://example.org/track2", "duration": 14,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"}}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=ghi3", `{"url":"http://example.org/track3", "duration": 21,"tags":{"artist":"Pachabel", "title":"Canon in D"}}`, 200, `{"fingerprint":"ghi3","duration":21,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Pachabel", "title":"Canon in D"},"collections":[],"weighting": 0}`, true)
 
 	makeRequest(test, "PUT", "/v2/collections/first", `{"name": "The Collection"}`, 200, `{"slug":"first","name": "The Collection", "tracks":[]}`, true)
 	makeRequest(test, "PUT", "/v2/collections/second", `{"name": "Another Collection"}`, 200, `{"slug":"second","name": "Another Collection", "tracks":[]}`, true)
@@ -90,6 +90,10 @@ func TestAddTracksToCollection(test *testing.T) {
 	makeRequest(test, "GET", "/v2/collections/first/2", "", 200, "Track In Collection\n", false)
 	makeRequest(test, "GET", "/v2/collections/first/3", "", 200, "Track In Collection\n", false)
 	makeRequest(test, "GET", "/v2/collections/first/4", "", 404, "Track Not Found\n", false)
+	makeRequest(test, "GET", "/v2/tracks/1", "", 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks/2", "", 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[{"slug":"first","name": "The Collection"}],"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks/3", "", 200, `{"fingerprint":"ghi3","duration":21,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Pachabel", "title":"Canon in D"},"collections":[{"slug":"first","name": "The Collection"}],"weighting": 0}`, true)
+
 	makeRequest(test, "DELETE", "/v2/collections/first/3", "", 200, "Track Not In Collection\n", false) // Feels slightly odd, but 200 is correct for having deleting something
 	makeRequest(test, "DELETE", "/v2/collections/first/4", "", 404, "Track Not Found\n", false)
 	makeRequest(test, "GET", "/v2/collections/first", "", 200, `{"slug":"first","name": "The Collection", "tracks":[{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}]}`, true)
@@ -98,6 +102,10 @@ func TestAddTracksToCollection(test *testing.T) {
 	makeRequest(test, "GET", "/v2/collections/first/2", "", 200, "Track In Collection\n", false)
 	makeRequest(test, "GET", "/v2/collections/first/3", "", 404, "Track Not In Collection\n", false)
 	makeRequest(test, "GET", "/v2/collections/first/4", "", 404, "Track Not Found\n", false)
+	makeRequest(test, "GET", "/v2/tracks/1", "", 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks/2", "", 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[{"slug":"first","name": "The Collection"}],"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks/3", "", 200, `{"fingerprint":"ghi3","duration":21,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Pachabel", "title":"Canon in D"},"collections":[],"weighting": 0}`, true)
+
 	makeRequest(test, "DELETE", "/v2/collections/first/3", "", 200, "Track Not In Collection\n", false) // Feels really odd as track wasn't in collection.  But DELETE should be idempotent.
 	makeRequest(test, "GET", "/v2/collections/first/3", "", 404, "Track Not In Collection\n", false)
 	makeRequest(test, "GET", "/v2/collections/first", "", 200, `{"slug":"first","name": "The Collection", "tracks":[{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}]}`, true)
@@ -116,8 +124,8 @@ func TestListCollections(test *testing.T) {
 	makeRequest(test, "PUT", "/v2/collections/first", `{"name": "The Collection"}`, 200, `{"slug":"first","name": "The Collection", "tracks":[]}`, true)
 	makeRequest(test, "PUT", "/v2/collections/second", `{"name": "Another Collection"}`, 200, `{"slug":"second","name": "Another Collection", "tracks":[]}`, true)
 	makeRequest(test, "PUT", "/v2/collections/third", `{"name": "Collecty McCollectFace"}`, 200, `{"slug":"third","name": "Collecty McCollectFace", "tracks":[]}`, true)
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=def2", `{"url":"http://example.org/track2", "duration": 14,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"}}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=def2", `{"url":"http://example.org/track2", "duration": 14,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"}}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[],"weighting": 0}`, true)
 	makeRequest(test, "PUT", "/v2/collections/first/1", "", 200, "Track In Collection\n", false)
 	makeRequest(test, "PUT", "/v2/collections/first/2", "", 200, "Track In Collection\n", false)
 	makeRequest(test, "PUT", "/v2/collections/third/2", "", 200, "Track In Collection\n", false)
@@ -136,7 +144,7 @@ func TestDeleteCollection(test *testing.T) {
 	clearData()
 	makeRequest(test, "PUT", "/v2/collections/first", `{"name": "The Collection"}`, 200, `{"slug":"first","name": "The Collection", "tracks":[]}`, true)
 	makeRequest(test, "PUT", "/v2/collections/second", `{"name": "Another Collection"}`, 200, `{"slug":"second","name": "Another Collection", "tracks":[]}`, true)
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
 	makeRequest(test, "PUT", "/v2/collections/first/1", "", 200, "Track In Collection\n", false)
 	makeRequest(test, "GET", "/v2/collections/first", "", 200, `{"slug":"first","name": "The Collection", "tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}]}`, true)
 	restartServer()

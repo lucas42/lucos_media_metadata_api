@@ -31,6 +31,11 @@ func (store Datastore) trackSearch(query string, offset int, limit int) (tracks 
 		if err != nil {
 			return
 		}
+		collections, err := store.getCollectionsByTrack(track.ID)
+		if err != nil {
+			return tracks, totalTracks, err
+		}
+		track.Collections = &collections
 	}
 	err = store.DB.Get(&totalTracks, "SELECT COUNT(*) FROM (SELECT id, url, fingerprint, duration, weighting FROM tag LEFT JOIN track ON tag.trackid = track.id WHERE value LIKE $1 UNION SELECT id, url, fingerprint, duration, weighting FROM track WHERE url LIKE $1 GROUP BY id ORDER BY id)", query)
 	return
@@ -67,6 +72,11 @@ func (store Datastore) searchByPredicates(predicates map[string]string, offset i
 		if err != nil {
 			return
 		}
+		collections, err := store.getCollectionsByTrack(track.ID)
+		if err != nil {
+			return tracks, totalTracks, err
+		}
+		track.Collections = &collections
 	}
 	err = store.DB.Get(&totalTracks, "SELECT COUNT(*) FROM ("+countQuery+")", values...)
 	return

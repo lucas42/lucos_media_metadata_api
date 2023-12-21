@@ -23,6 +23,7 @@ type Track struct {
 	Weighting   float64           `json:"weighting"`
 	RandWeight  float64           `json:"_random_weighting,omitempty"` // Only for debug purposes
 	Cumweight   float64           `json:"_cum_weighting,omitempty"`    // Only for debug purposes
+	Collections *[]Collection     `json:"collections,omitempty"`
 }
 
 func (track Track) getName() (string) {
@@ -140,6 +141,11 @@ func (store Datastore) getTrackDataByField(field string, value interface{}) (tra
 		return
 	}
 	track.Tags, err = store.getAllTagsForTrack(track.ID)
+	if err != nil {
+		return
+	}
+	collections, err := store.getCollectionsByTrack(track.ID)
+	track.Collections = &collections
 	return
 }
 

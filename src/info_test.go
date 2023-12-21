@@ -20,7 +20,7 @@ func TestInfoEndpoint(test *testing.T) {
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}, "weighting": 0}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {},"collections":[], "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/v2/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}

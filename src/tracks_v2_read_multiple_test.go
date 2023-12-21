@@ -21,10 +21,10 @@ func TestGetAllTracksV2(test *testing.T) {
 	escapedTrack2Url := url.QueryEscape(track2url)
 	input1Json := `{"fingerprint": "aoecu1234", "duration": 300}`
 	input2Json := `{"fingerprint": "blahdebo", "duration": 150}`
-	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}`
-	output2Json := `{"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {}, "weighting": 0}`
-	alloutputJson1 := `{"tracks":[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}], "totalPages": 1}`
-	alloutputJson2 := `{"tracks":[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {}, "weighting": 0}, {"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {}, "weighting": 0}], "totalPages": 1}`
+	output1Json := `{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {},"collections":[], "weighting": 0}`
+	output2Json := `{"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {},"collections":[], "weighting": 0}`
+	alloutputJson1 := `{"tracks":[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {},"collections":[], "weighting": 0}], "totalPages": 1}`
+	alloutputJson2 := `{"tracks":[{"fingerprint": "aoecu1234", "duration": 300, "url": "http://example.org/track/1256", "trackid": 1, "tags": {},"collections":[], "weighting": 0}, {"fingerprint": "blahdebo", "duration": 150, "url": "http://example.org/track/abcdef", "trackid": 2, "tags": {},"collections":[], "weighting": 0}], "totalPages": 1}`
 	path1 := fmt.Sprintf("/v2/tracks?url=%s", escapedTrack1Url)
 	path2 := fmt.Sprintf("/v2/tracks?url=%s", escapedTrack2Url)
 	pathall := "/v2/tracks"
@@ -53,7 +53,7 @@ func TestRandomTracksV2(test *testing.T) {
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}, "weighting": 0}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {},"collections":[], "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/v2/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
@@ -108,7 +108,7 @@ func TestRandomTracksDealsWithDeletesV2(test *testing.T) {
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}, "weighting": 0}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {},"collections":[], "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/v2/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
@@ -154,21 +154,21 @@ func TestSimpleQueryV2(test *testing.T) {
 	clearData()
 
 	// Mentions blue in the title
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"Eiffel 65", "title":"I'm blue"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"Eiffel 65", "title":"I'm blue"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"Eiffel 65", "title":"I'm blue"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"Eiffel 65", "title":"I'm blue"},"collections":[],"weighting": 0}`, true)
 	// Artist is Blue (with a captial B)
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":"Blue", "title":"I can"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Blue", "title":"I can"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":"Blue", "title":"I can"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Blue", "title":"I can"},"collections":[],"weighting": 0}`, true)
 	// No mention of blue
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":"Coldplay", "title":"Yellow"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Coldplay", "title":"Yellow"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":"Coldplay", "title":"Yellow"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Coldplay", "title":"Yellow"},"collections":[],"weighting": 0}`, true)
 	// Genre is blues
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"collections":[],"weighting": 0}`, true)
 	// URL contains blue
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc5", `{"url":"http://example.org/blue", "duration": 7}`, 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/blue","trackid":5,"tags":{},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc5", `{"url":"http://example.org/blue", "duration": 7}`, 200, `{"fingerprint":"abc5","duration":7,"url":"http://example.org/blue","trackid":5,"tags":{},"collections":[],"weighting": 0}`, true)
 
 	makeRequest(test, "GET", "/v2/tracks?q=blue", "", 200, `{"tracks":[
-		{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"Eiffel 65", "title":"I'm blue"},"weighting": 0},
-		{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Blue", "title":"I can"},"weighting": 0},
-		{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"weighting": 0},
-		{"fingerprint":"abc5","duration":7,"url":"http://example.org/blue","trackid":5,"tags":{},"weighting": 0}
+		{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"Eiffel 65", "title":"I'm blue"},"collections":[],"weighting": 0},
+		{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Blue", "title":"I can"},"collections":[],"weighting": 0},
+		{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"collections":[],"weighting": 0},
+		{"fingerprint":"abc5","duration":7,"url":"http://example.org/blue","trackid":5,"tags":{},"collections":[],"weighting": 0}
 	], "totalPages": 1}`, true)
 }
 
@@ -180,16 +180,16 @@ func TestPredicateQueryV2(test *testing.T) {
 	clearData()
 
 	// Title is Yellow Submarine
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
 	// Title contains Yellow Submarine
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds", "title":"Want to visit a Yellow Submarine"},"collections":[],"weighting": 0}`, true)
 	// Artist is Yellow Submarine
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Yellow Submarine", "title":"Love Me Do"},"collections":[],"weighting": 0}`, true)
 	// No mention of Yellow Submarine
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"collections":[],"weighting": 0}`, true)
 
 	makeRequest(test, "GET", "/v2/tracks?p.title=Yellow%20Submarine", "", 200, `{"tracks":[
-		{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}
+		{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}
 	], "totalPages": 1}`, true)
 }
 
@@ -200,16 +200,16 @@ func TestMultiPredicateQueryV2(test *testing.T) {
 	clearData()
 
 	// Album is Now 42
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Corrs", "title":"What Can I Do"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Corrs", "title":"What Can I Do"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Corrs", "title":"What Can I Do"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Corrs", "title":"What Can I Do"},"collections":[],"weighting": 0}`, true)
 	// Album is Now 42 AND Artist is Beatiful South
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"},"collections":[],"weighting": 0}`, true)
 	// Album is Now 42
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Divine Comedy", "title":"National Express"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Divine Comedy", "title":"National Express"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Divine Comedy", "title":"National Express"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"album": "Now That's What I Call Music! 42","artist":"The Divine Comedy", "title":"National Express"},"collections":[],"weighting": 0}`, true)
 	// Artist is Beautiful South
-	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"album": "Now That's What I Call Music! 41","artist":"The Beautiful South", "title":"Perfect 10"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"album": "Now That's What I Call Music! 41","artist":"The Beautiful South", "title":"Perfect 10"},"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"album": "Now That's What I Call Music! 41","artist":"The Beautiful South", "title":"Perfect 10"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"album": "Now That's What I Call Music! 41","artist":"The Beautiful South", "title":"Perfect 10"},"collections":[],"weighting": 0}`, true)
 
 	makeRequest(test, "GET", "/v2/tracks?p.artist=The%20Beautiful%20South&p.album=Now%20That%27s%20What%20I%20Call%20Music!%2042", "", 200, `{"tracks":[
-		{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"},"weighting": 0}
+		{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"album": "Now That's What I Call Music! 42", "artist":"The Beautiful South", "title":"How Long's A Tear Take To Dry"},"collections":[],"weighting": 0}
 	], "totalPages": 1}`, true)
 }
 
@@ -231,7 +231,7 @@ func TestAllTracksPaginationV2(test *testing.T) {
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350}`
-		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {}, "weighting": 0}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {},"collections":[], "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/v2/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
@@ -281,7 +281,7 @@ func TestTrackQueryPaginationV2(test *testing.T) {
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "tags":{"title":"test"}}`
-		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {"title":"test"}, "weighting": 0}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {"title":"test"},"collections":[], "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/v2/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}

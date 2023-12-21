@@ -41,7 +41,7 @@ func createTracks(test *testing.T, totalTracks int) {
 		escapedTrackUrl := url.QueryEscape(trackurl)
 		trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
 		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "tags":{"title":"Yellow Submarine"}}`
-		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {"title":"Yellow Submarine"}, "weighting": 0}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {"title":"Yellow Submarine"},"collections":[], "weighting": 0}`
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 	}
 }

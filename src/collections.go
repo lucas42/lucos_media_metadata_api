@@ -11,9 +11,9 @@ import (
 )
 
 type Collection struct {
-	Slug   string  `json:"slug"`
-	Name   string  `json:"name"`
-	Tracks []Track `json:"tracks"`
+	Slug   string   `json:"slug"`
+	Name   string   `json:"name"`
+	Tracks *[]Track `json:"tracks,omitempty"`
 }
 
 
@@ -30,7 +30,8 @@ func (store Datastore) getCollection(slug string) (collection Collection, err er
 		}
 		return
 	}
-	collection.Tracks, err = store.getTracksInCollection(collection.Slug)
+	tracks, err := store.getTracksInCollection(collection.Slug)
+	collection.Tracks = &tracks
 	return
 }
 
@@ -48,10 +49,11 @@ func (store Datastore) getAllCollections() (collections []Collection, err error)
 	// Loop through all the collection and add tracks for each one
 	for i := range collections {
 		collection := &collections[i]
-		collection.Tracks, err = store.getTracksInCollection(collection.Slug)
+		tracks, err := store.getTracksInCollection(collection.Slug)
 		if err != nil {
-			return
+			return collections, err
 		}
+		collection.Tracks = &tracks
 	}
 	return
 }
@@ -59,7 +61,7 @@ func (store Datastore) getAllCollections() (collections []Collection, err error)
 
 
 /**
- * Gets all the tags for a given track (in a map of key/value pairs)
+ * Gets all the tracks for a given collection
  *
  */
 func (store Datastore) getTracksInCollection(slug string) (tracks []Track, err error) {
@@ -77,6 +79,15 @@ func (store Datastore) getTracksInCollection(slug string) (tracks []Track, err e
 			return
 		}
 	}
+	return
+}
+
+/**
+ * Gets all the collections a given track is in
+ */
+func (store Datastore) getCollectionsByTrack(trackid int) (collections []Collection, err error) {
+	collections = []Collection{}
+	err = store.DB.Select(&collections, "SELECT slug, name FROM collection_track LEFT JOIN collection ON collection_track.collectionslug = collection.slug WHERE collection_track.trackid = $1", trackid)
 	return
 }
 
@@ -158,7 +169,7 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 	action = "noChange"
 	storedCollection = existingCollection
 	if newCollection.Tracks == nil {
-		newCollection.Tracks = []Track{}
+		newCollection.Tracks = &[]Track{}
 	}
 
 	// If no changes are needed, return the existing collection
