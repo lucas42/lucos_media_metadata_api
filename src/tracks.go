@@ -56,6 +56,35 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 			return true
 		}
 	}
+	if changeSet.Collections != nil {
+		if (original.Collections == nil) {
+			return true
+		}
+		// Check for collections which are on the existing track but not the new one
+		for _, existingCollection := range *original.Collections {
+			remove := true
+			for _, newCollection := range *changeSet.Collections {
+				if existingCollection.Slug == newCollection.Slug {
+					remove = false
+				}
+			}
+			if remove {
+				return true
+			}
+		}
+		// Check for collections which are on the new track and not the existing one
+		for _, newCollection := range *changeSet.Collections {
+			add := true
+			for _, existingCollection := range *original.Collections {
+				if existingCollection.Slug == newCollection.Slug {
+					add = false
+				}
+			}
+			if add {
+				return true
+			}
+		}
+	}
 	return false
 }
 
@@ -115,6 +144,53 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 	if err != nil {
 		return
 	}
+
+	// If Collections are given, add and remove collection to match
+	// Only looks at the collection's slug to identify it.  All other fields are ignored.
+	if track.Collections != nil {
+		if (existingTrack.Collections != nil) {
+			// Check for collections which are on the existing track but not the new one, and remove them
+			for _, existingCollection := range *existingTrack.Collections {
+				remove := true
+				for _, newCollection := range *track.Collections {
+					if existingCollection.Slug == newCollection.Slug {
+						remove = false
+					}
+				}
+				if remove {
+					err = store.removeTrackFromCollection(existingCollection.Slug, storedTrack.ID)
+					if err != nil {
+						return
+					}
+				}
+			}
+			// Check for collections which are on the new track and not the existing one, and add them
+			for _, newCollection := range *track.Collections {
+				add := true
+				for _, existingCollection := range *existingTrack.Collections {
+					if existingCollection.Slug == newCollection.Slug {
+						add = false
+					}
+				}
+				if add {
+					err = store.addTrackToCollection(newCollection.Slug, storedTrack.ID)
+					if err != nil {
+						return
+					}
+				}
+			}
+		} else {
+			// If there's no existing Collections add all the new ones
+			for _, newCollection := range *track.Collections {
+				err = store.addTrackToCollection(newCollection.Slug, storedTrack.ID)
+				if err != nil {
+					return
+				}
+			}
+
+		}
+	}
+
 	storedTrack, err = store.getTrackDataByField(filterField, value)
 	if existingTrack.ID > 0 {
 		action = "trackUpdated"

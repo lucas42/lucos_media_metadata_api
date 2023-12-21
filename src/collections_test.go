@@ -69,7 +69,7 @@ func TestRenameClashCollection(test *testing.T) {
 	makeRequest(test, "GET", "/v2/collections/first", "", 200, `{"slug":"first","name": "The Collection", "tracks":[]}`, true)
 	makeRequest(test, "GET", "/v2/collections/second", "", 200, `{"slug":"second","name": "Another Collection", "tracks":[]}`, true)
 }
-func TestAddTracksToCollection(test *testing.T) {
+func TestAddTracksToCollectionOnDedicatedEndpoint(test *testing.T) {
 	clearData()
 	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
 	makeRequest(test, "PUT", "/v2/tracks?fingerprint=def2", `{"url":"http://example.org/track2", "duration": 14,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"}}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[],"weighting": 0}`, true)
@@ -117,6 +117,39 @@ func TestAddTracksToCollection(test *testing.T) {
 	makeRequest(test, "PUT", "/v2/collections/first/something", "", 400, "Track ID must be a number\n", false)
 
 	makeRequestWithUnallowedMethod(test, "/v2/collections/first/2", "POST", []string{"PUT", "GET", "DELETE"})
+}
+func TestAddTracksToCollectionOnTracksEndpoint(test *testing.T) {
+	clearData()
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=def2", `{"url":"http://example.org/track2", "duration": 14,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"}}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=ghi3", `{"url":"http://example.org/track3", "duration": 21,"tags":{"artist":"Pachabel", "title":"Canon in D"}}`, 200, `{"fingerprint":"ghi3","duration":21,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Pachabel", "title":"Canon in D"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/collections/first", `{"name": "The Collection"}`, 200, `{"slug":"first","name": "The Collection", "tracks":[]}`, true)
+	makeRequest(test, "PUT", "/v2/collections/second", `{"name": "Another Collection"}`, 200, `{"slug":"second","name": "Another Collection", "tracks":[]}`, true)
+
+	restartServer()
+	makeRequest(test, "PATCH", "/v2/tracks/1", `{"collections":[{"slug":"first"}]}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[{"slug":"first","name": "The Collection"}],"weighting": 0}`, true)
+	makeRequest(test, "PATCH", "/v2/tracks/2", `{"collections":[{"slug":"first"},{"slug":"second"}]}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[{"slug":"first","name": "The Collection"},{"slug":"second","name": "Another Collection"}],"weighting": 0}`, true)
+	makeRequest(test, "PATCH", "/v2/tracks/3", `{"collections":[{"slug":"first"},{"slug":"second"}]}`, 200, `{"fingerprint":"ghi3","duration":21,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Pachabel", "title":"Canon in D"},"collections":[{"slug":"first","name": "The Collection"},{"slug":"second","name": "Another Collection"}],"weighting": 0}`, true)
+	assertEqual(test, "Loganne call", "trackUpdated", lastLoganneType)
+	assertEqual(test, "Number of Loganne requests", 3, loganneRequestCount)
+	restartServer()
+	makeRequest(test, "GET", "/v2/tracks/1", "", 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[{"slug":"first","name": "The Collection"}],"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks/2", "", 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[{"slug":"first","name": "The Collection"},{"slug":"second","name": "Another Collection"}],"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/tracks/3", "", 200, `{"fingerprint":"ghi3","duration":21,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Pachabel", "title":"Canon in D"},"collections":[{"slug":"first","name": "The Collection"},{"slug":"second","name": "Another Collection"}],"weighting": 0}`, true)
+
+	makeRequest(test, "PATCH", "/v2/tracks/2", `{"collections":[{"slug":"second"}]}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[{"slug":"second","name": "Another Collection"}],"weighting": 0}`, true)
+	makeRequest(test, "GET", "/v2/collections/first", "", 200, `{"slug":"first","name": "The Collection", "tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0},{"fingerprint":"ghi3","duration":21,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Pachabel", "title":"Canon in D"},"weighting": 0}]}`, true)
+	makeRequest(test, "GET", "/v2/collections/second", "", 200, `{"slug":"second","name": "Another Collection", "tracks":[{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"weighting": 0},{"fingerprint":"ghi3","duration":21,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Pachabel", "title":"Canon in D"},"weighting": 0}]}`, true)
+
+	restartServer()
+	// Setting a track to the same collections as it already has, shouldn't update anything
+	makeRequest(test, "PATCH", "/v2/tracks/2", `{"collections":[{"slug":"second"}]}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[{"slug":"second","name": "Another Collection"}],"weighting": 0}`, true)
+	assertEqual(test, "Number of Loganne requests", 0, loganneRequestCount) // No requests to loganne made since server restart
+
+	// Create a new track with collections on it from the start
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=jkl4", `{"url":"http://example.org/track4", "duration": 28,"tags":{"artist":"Penguin Café Orchestra", "title":"Music for a found Harmonium"},"collections":[{"slug":"first"},{"slug":"second"}]}`, 200, `{"fingerprint":"jkl4","duration":28,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Penguin Café Orchestra", "title":"Music for a found Harmonium"},"collections":[{"slug":"first","name": "The Collection"},{"slug":"second","name": "Another Collection"}],"weighting": 0}`, true)
+	assertEqual(test, "Loganne call", "trackAdded", lastLoganneType)
+	assertEqual(test, "Number of Loganne requests", 1, loganneRequestCount)
 }
 func TestListCollections(test *testing.T) {
 	clearData()
