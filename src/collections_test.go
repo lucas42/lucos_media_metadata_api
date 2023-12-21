@@ -150,3 +150,7 @@ func TestDeleteCollection(test *testing.T) {
 	makeRequest(test, "GET", "/v2/collections/second", "", 200, `{"slug":"second","name": "Another Collection", "tracks":[]}`, true)
 
 }
+func TestCollectionPutWithNoData(test *testing.T) {
+	clearData()
+	makeRequest(test, "PUT", "/v2/collections/first", "", 400, "No Data Sent\n", false)
+}

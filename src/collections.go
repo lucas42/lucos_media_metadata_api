@@ -256,7 +256,11 @@ func (store Datastore) CollectionsV2Controller(w http.ResponseWriter, r *http.Re
 				var newCollection Collection
 				newCollection, err = DecodeCollection(r.Body)
 				if err != nil {
-					writeErrorResponse(w, err)
+					if err.Error() == "EOF" {
+						writePlainResponseWithStatus(w, http.StatusBadRequest, "No Data Sent\n", nil)
+					} else {
+						writeErrorResponse(w, err)
+					}
 					return
 				}
 				newCollection.Slug = slug
