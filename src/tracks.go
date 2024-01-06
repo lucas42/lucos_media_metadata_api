@@ -276,7 +276,7 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	}
 	var newCumulativeWeighting float64
 
-	// If there's a non zero weighting, then stick this track to the end of the cumulative weighing list
+	// If there's a non zero weighting, then stick this track to the end of the cumulative weighting list
 	if newWeighting > 0 {
 		var max float64
 		max, err = store.getMaxCumWeighting()
@@ -290,6 +290,10 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 		newCumulativeWeighting = 0
 	}
 	_, err = store.DB.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", newWeighting, newCumulativeWeighting, trackid)
+	if err != nil {
+		return
+	}
+	err = store.updateTrackAllCollectionsCumWeighting(trackid, oldWeighting, newWeighting)
 	if err != nil {
 		return
 	}

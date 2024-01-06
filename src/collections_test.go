@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -120,7 +121,7 @@ func TestAddTracksToCollectionOnDedicatedEndpoint(test *testing.T) {
 	makeRequest(test, "PUT", "/v2/collections/third/2", "", 404, "Collection Not Found\n", false) // Collection 'third' doesn't exist.
 	makeRequest(test, "PUT", "/v2/collections/third/4", "", 404, "Collection Not Found\n", false) // Neither Collection 'third' or Track 4 exist.  Erroring on collection as it comes first in URL
 
-	makeRequest(test, "PUT", "/v2/collections/first/something", "", 400, "Track ID must be a number\n", false)
+	makeRequest(test, "PUT", "/v2/collections/first/something", "", 404, "Collection Endpoint Not Found\n", false)
 
 	makeRequestWithUnallowedMethod(test, "/v2/collections/first/2", "POST", []string{"PUT", "GET", "DELETE"})
 }
@@ -254,4 +255,105 @@ func TestDeleteCollection(test *testing.T) {
 func TestCollectionPutWithNoData(test *testing.T) {
 	clearData()
 	makeRequest(test, "PUT", "/v2/collections/first", "", 400, "No Data Sent\n", false)
+}
+
+/**
+ * Checks random tracks endpoint of a collection
+ */
+func TestCollectionRandomTracks(test *testing.T) {
+	clearData()
+	path := "/v2/collections/rand-coll/random"
+	makeRequest(test, "PUT", "/v2/collections/rand-coll", `{"name": "Random Collection"}`, 200, `{"slug":"rand-coll","name": "Random Collection", "tracks":[], "totalPages":0}`, true)
+
+	// Check the random function when the collection is empty
+	makeRequest(test, "GET", path, "", 200, `{"slug":"rand-coll","name": "Random Collection", "tracks":[], "totalPages":0}`, true)
+
+	// Create 40 Tracks
+	for i := 1; i <= 40; i++ {
+		id := strconv.Itoa(i)
+		trackurl := "http://example.org/track/id" + id
+		escapedTrackUrl := url.QueryEscape(trackurl)
+		trackpath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
+		inputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "collections":[{"slug":"rand-coll"}]}`
+		outputJson := `{"fingerprint": "abcde` + id + `", "duration": 350, "url": "` + trackurl + `", "trackid": ` + id + `, "tags": {},"collections":[{"slug":"rand-coll","name": "Random Collection"}], "weighting": 0}`
+		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+		makeRequest(test, "PUT", "/v2/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
+	}
+	url := server.URL + path
+	response, err := http.Get(url)
+	if err != nil {
+		test.Error(err)
+	}
+	responseData, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		test.Error(err)
+	}
+
+	expectedResponseCode := 200
+	if response.StatusCode != expectedResponseCode {
+		test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+	}
+
+	var output SearchResult
+	err = json.Unmarshal(responseData, &output)
+	if err != nil {
+		test.Errorf("Invalid JSON body: %s for %s", err.Error(), path)
+	}
+	if len(output.Tracks) != 20 {
+		test.Errorf("Wrong number of tracks.  Expected: 20, Actual: %d", len(output.Tracks))
+	}
+	if output.TotalPages != 1 {
+		test.Errorf("Wrong number of totalPages.  Expected: 1, Actual: %d", output.TotalPages)
+	}
+	if !strings.Contains(response.Header.Get("Cache-Control"), "no-cache") {
+		test.Errorf("Random track list is cachable")
+	}
+	if !strings.Contains(response.Header.Get("Cache-Control"), "max-age=0") {
+		test.Errorf("Random track missing max-age of 0")
+	}
+}
+
+/**
+ * Checks random tracks endpoint when a collection isn't large enough to have 20 tracks
+ */
+func TestSmallCollectionRandomTracks(test *testing.T) {
+	clearData()
+	makeRequest(test, "PUT", "/v2/collections/rand-coll", `{"name": "Random Collection"}`, 200, `{"slug":"rand-coll","name": "Random Collection", "tracks":[], "totalPages":0}`, true)
+
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}, "collections":[{"slug":"rand-coll"}]}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[{"slug":"rand-coll","name": "Random Collection"}],"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks/1/weighting", "0.7", 200, "0.7", false)
+
+	path := "/v2/collections/rand-coll/random"
+	url := server.URL + path
+	response, err := http.Get(url)
+	if err != nil {
+		test.Error(err)
+	}
+	responseData, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		test.Error(err)
+	}
+
+	expectedResponseCode := 200
+	if response.StatusCode != expectedResponseCode {
+		test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+	}
+
+	var output SearchResult
+	err = json.Unmarshal(responseData, &output)
+	if err != nil {
+		test.Errorf("Invalid JSON body: %s for %s", err.Error(), path)
+	}
+	if len(output.Tracks) != 20 {
+		test.Errorf("Wrong number of tracks.  Expected: 20, Actual: %d", len(output.Tracks))
+	}
+	if output.TotalPages != 1 {
+		test.Errorf("Wrong number of totalPages.  Expected: 1, Actual: %d", output.TotalPages)
+	}
+	if !strings.Contains(response.Header.Get("Cache-Control"), "no-cache") {
+		test.Errorf("Random track list is cachable")
+	}
+	if !strings.Contains(response.Header.Get("Cache-Control"), "max-age=0") {
+		test.Errorf("Random track missing max-age of 0")
+	}
 }

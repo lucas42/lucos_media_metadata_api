@@ -71,6 +71,7 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		CREATE TABLE "collection_track" (
 			"collectionslug" TEXT NOT NULL,
 			"trackid" TEXT NOT NULL,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0,
 			FOREIGN KEY (collectionslug) REFERENCES collection(slug),
 			FOREIGN KEY (trackid) REFERENCES track(id),
 			CONSTRAINT track_collection_unique UNIQUE (collectionslug, trackid)

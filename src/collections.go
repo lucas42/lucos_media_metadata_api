@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"math/rand"
 	"net/http"
 	"slices"
 	"strings"
@@ -20,16 +21,28 @@ type Collection struct {
 
 
 /**
- * Gets data about a collection for a given slug
+ * Gets basic metadata about a collection for a given slug, without any associated tracks
  *
  */
-func (store Datastore) getCollection(slug string, rawpagenumber string) (collection Collection, err error) {
+func (store Datastore) getBasicCollection(slug string) (collection Collection, err error) {
 	collection = Collection{}
 	err = store.DB.Get(&collection, "SELECT slug, name FROM collection WHERE slug=$1", slug)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			err = errors.New("Collection Not Found")
 		}
+		return
+	}
+	return
+}
+
+/**
+ * Gets data about a collection for a given slug
+ *
+ */
+func (store Datastore) getCollection(slug string, rawpagenumber string) (collection Collection, err error) {
+	collection, err = store.getBasicCollection(slug)
+	if err != nil {
 		return
 	}
 	standardLimit := 20
@@ -236,6 +249,14 @@ func (store Datastore) isTrackInCollection(collectionslug string, trackid int) (
  */
 func (store Datastore) addTrackToCollection(collectionslug string, trackid int) (err error) {
 	_, err = store.DB.Exec("INSERT OR IGNORE INTO collection_track (collectionslug, trackid) VALUES ($1, $2)", collectionslug, trackid)
+	if err != nil {
+		return
+	}
+	weighting, err := store.getTrackWeighting(trackid)
+	if err != nil {
+		return
+	}
+	err = store.updateTrackCollectionCumWeighting(collectionslug, trackid, 0, weighting)
 	return
 }
 /**
@@ -253,6 +274,107 @@ func DecodeCollection(r io.Reader) (Collection, error) {
 	collection := new(Collection)
 	err := json.NewDecoder(r).Decode(collection)
 	return *collection, err
+}
+
+/**
+ * Gets the highest cumulative weighting value for a given Collection (defaults to 0)
+ *
+ */
+func (store Datastore) getCollectionMaxCumWeighting(slug string) (maxcumweighting float64, err error) {
+	err = store.DB.Get(&maxcumweighting, "SELECT IFNULL(MAX(cum_weighting), 0) FROM collection_track WHERE collectionslug == $1", slug)
+	if maxcumweighting < 0 {
+		err = errors.New("cum_weightings are negative, max: " + strconv.FormatFloat(maxcumweighting, 'f', -1, 64))
+	}
+	return
+}
+
+/**
+ * Updates the cumulative weightings for a given track across all its collections
+ *
+ */
+func (store Datastore) updateTrackAllCollectionsCumWeighting(trackid int, oldWeighting float64, newWeighting float64) (err error) {
+	collections, err := store.getCollectionsByTrack(trackid)
+	if err != nil {
+		return
+	}
+	for i := range collections {
+		err = store.updateTrackCollectionCumWeighting(collections[i].Slug, trackid, oldWeighting, newWeighting)
+		if err != nil {
+			return
+		}
+	}
+	return
+}
+/**
+ * Updates the cumulative weightings for a given track in a given collection
+ *
+ */
+func (store Datastore) updateTrackCollectionCumWeighting(collectionslug string, trackid int, oldWeighting float64, newWeighting float64) (err error) {
+
+	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
+	_, err = store.DB.Exec("UPDATE collection_track SET cum_weighting = cum_weighting - $1 WHERE collectionslug == $2 AND cum_weighting > (SELECT cum_weighting FROM collection_track WHERE collectionslug == $3 AND trackid == $4)", oldWeighting, collectionslug, collectionslug, trackid)
+	if err != nil {
+		return
+	}
+	var newCumulativeWeighting float64
+
+	// If there's a non zero weighting, then stick this track to the end of the cumulative weighting list
+	if newWeighting > 0 {
+		var max float64
+		max, err = store.getCollectionMaxCumWeighting(collectionslug)
+		if err != nil {
+			return
+		}
+		newCumulativeWeighting = max + newWeighting
+
+	// If the weighting is zero, then set the cumulative weighting to zero too, to avoid 2 tracks with the same weighting
+	} else {
+		newCumulativeWeighting = 0
+	}
+	_, err = store.DB.Exec("UPDATE collection_track SET cum_weighting = $1 WHERE collectionslug == $2 AND trackid == $3", newCumulativeWeighting, collectionslug, trackid)
+	return
+}
+
+/**
+ * Gets data about a random set of tracks for a given collection
+ *
+ */
+func (store Datastore) getRandomTracksInCollection(slug string, count int) (collection Collection, err error) {
+	collection, err = store.getBasicCollection(slug)
+	if err != nil {
+		return
+	}
+	tracks := []Track{}
+
+	max, err := store.getCollectionMaxCumWeighting(slug)
+	if err != nil {
+		return
+	}
+
+	if max > 0 {
+		for i := 0; i < count; i++ {
+			var trackid int
+			var track Track
+			weighting := rand.Float64() * max
+			err = store.DB.Get(&trackid, "SELECT trackid FROM collection_track WHERE collectionslug == $1 AND cum_weighting > $2 ORDER BY cum_weighting ASC LIMIT 1", slug, weighting)
+			if err != nil {
+				return
+			}
+			track, err = store.getTrackDataByField("id", trackid)
+			if err != nil {
+				return
+			}
+			tracks = append(tracks, track)
+		}
+	}
+
+	totalPages := 0
+	if (len(tracks) > 0) {
+		totalPages = 1
+	}
+	collection.Tracks = &tracks
+	collection.TotalPages = &totalPages
+	return
 }
 
 /**
@@ -311,34 +433,40 @@ func (store Datastore) CollectionsV2Controller(w http.ResponseWriter, r *http.Re
 			}
 			trackid, err := strconv.Atoi(pathparts[2])
 			if err != nil {
-				http.Error(w, "Track ID must be a number", http.StatusBadRequest)
-				return
-			}
-			trackFound, err := store.trackExists("id", trackid)
-			if err != nil {
-				writeErrorResponse(w, err)
-				return
-			}
-			if !trackFound {
-				writeErrorResponse(w, errors.New("Track Not Found"))
-				return
-			}
-			switch r.Method{
-			case "GET":
-				contains, err := store.isTrackInCollection(slug, trackid)
-				if contains {
-					writePlainResponse(w, "Track In Collection\n", err)
-				} else {
-					writePlainResponseWithStatus(w, http.StatusNotFound, "Track Not In Collection\n", err)
+				switch pathparts[2]{
+				case "random":
+					result, err := store.getRandomTracksInCollection(slug, 20)
+					writeJSONResponse(w, result, err)
+				default:
+					http.Error(w, "Collection Endpoint Not Found", http.StatusNotFound)
 				}
-			case "PUT":
-				err = store.addTrackToCollection(slug, trackid)
-				writePlainResponse(w, "Track In Collection\n", err)
-			case "DELETE":
-				err = store.removeTrackFromCollection(slug, trackid)
-				writePlainResponse(w, "Track Not In Collection\n", err)
-			default:
-				MethodNotAllowed(w, []string{"GET", "PUT", "DELETE"})
+			} else {
+				trackFound, err := store.trackExists("id", trackid)
+				if err != nil {
+					writeErrorResponse(w, err)
+					return
+				}
+				if !trackFound {
+					writeErrorResponse(w, errors.New("Track Not Found"))
+					return
+				}
+				switch r.Method{
+				case "GET":
+					contains, err := store.isTrackInCollection(slug, trackid)
+					if contains {
+						writePlainResponse(w, "Track In Collection\n", err)
+					} else {
+						writePlainResponseWithStatus(w, http.StatusNotFound, "Track Not In Collection\n", err)
+					}
+				case "PUT":
+					err = store.addTrackToCollection(slug, trackid)
+					writePlainResponse(w, "Track In Collection\n", err)
+				case "DELETE":
+					err = store.removeTrackFromCollection(slug, trackid)
+					writePlainResponse(w, "Track Not In Collection\n", err)
+				default:
+					MethodNotAllowed(w, []string{"GET", "PUT", "DELETE"})
+				}
 			}
 		}
 	}
