@@ -56,7 +56,7 @@ func (store Datastore) getAllCollections() (collections []Collection, err error)
 	for i := range collections {
 		collection := &collections[i]
 		standardLimit := 20
-		tracks, totalTracks, err := store.getTracksInCollection(collection.Slug, 0, standardLimit)
+		tracks, totalTracks, err := store.getTracksInCollection(collection.Slug, 0, -1)
 		totalPages := int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
 		collection.TotalPages = &totalPages
 		if err != nil {
