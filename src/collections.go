@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"slices"
 	"strings"
@@ -14,6 +15,7 @@ type Collection struct {
 	Slug   string   `json:"slug"`
 	Name   string   `json:"name"`
 	Tracks *[]Track `json:"tracks,omitempty"`
+	TotalPages *int  `json:"totalPages,omitempty"`
 }
 
 
@@ -21,7 +23,7 @@ type Collection struct {
  * Gets data about a collection for a given slug
  *
  */
-func (store Datastore) getCollection(slug string) (collection Collection, err error) {
+func (store Datastore) getCollection(slug string, rawpagenumber string) (collection Collection, err error) {
 	collection = Collection{}
 	err = store.DB.Get(&collection, "SELECT slug, name FROM collection WHERE slug=$1", slug)
 	if err != nil {
@@ -30,8 +32,12 @@ func (store Datastore) getCollection(slug string) (collection Collection, err er
 		}
 		return
 	}
-	tracks, err := store.getTracksInCollection(collection.Slug)
+	standardLimit := 20
+	offset, limit := parsePageParam(rawpagenumber, standardLimit)
+	tracks, totalTracks, err := store.getTracksInCollection(collection.Slug, offset, limit)
 	collection.Tracks = &tracks
+	totalPages := int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
+	collection.TotalPages = &totalPages
 	return
 }
 
@@ -46,10 +52,13 @@ func (store Datastore) getAllCollections() (collections []Collection, err error)
 		return
 	}
 
-	// Loop through all the collection and add tracks for each one
+	// Loop through all the collection and add first page of tracks for each one
 	for i := range collections {
 		collection := &collections[i]
-		tracks, err := store.getTracksInCollection(collection.Slug)
+		standardLimit := 20
+		tracks, totalTracks, err := store.getTracksInCollection(collection.Slug, 0, standardLimit)
+		totalPages := int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
+		collection.TotalPages = &totalPages
 		if err != nil {
 			return collections, err
 		}
@@ -64,9 +73,9 @@ func (store Datastore) getAllCollections() (collections []Collection, err error)
  * Gets all the tracks for a given collection
  *
  */
-func (store Datastore) getTracksInCollection(slug string) (tracks []Track, err error) {
+func (store Datastore) getTracksInCollection(slug string, offset int, limit int) (tracks []Track, totalTracks int, err error) {
 	tracks = []Track{}
-	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM collection_track LEFT JOIN track ON collection_track.trackid = track.id WHERE collection_track.collectionslug = $1", slug)
+	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM collection_track LEFT JOIN track ON collection_track.trackid = track.id WHERE collection_track.collectionslug = $1 LIMIT $2, $3", slug, offset, limit)
 	if err != nil {
 		return
 	}
@@ -79,6 +88,8 @@ func (store Datastore) getTracksInCollection(slug string) (tracks []Track, err e
 			return
 		}
 	}
+
+	err = store.DB.Get(&totalTracks, "SELECT COUNT(*) FROM collection_track WHERE collectionslug = $1", slug)
 	return
 }
 
@@ -138,7 +149,7 @@ func (store Datastore) deleteCollection(slug string) (err error) {
 	}
 
 	// Get the existing collection data to send to loganne later
-	existingCollection, err := store.getCollection(slug)
+	existingCollection, err := store.getCollection(slug, "")
 	if (err != nil) {
 		return
 	}
@@ -158,7 +169,7 @@ func (store Datastore) deleteCollection(slug string) (err error) {
  * Updates or Creates a collection
  *
  */
-func (store Datastore) updateCreateCollection(existingCollection Collection, newCollection Collection) (storedCollection Collection, action string, err error) {
+func (store Datastore) updateCreateCollection(existingCollection Collection, newCollection Collection, rawpagenumber string) (storedCollection Collection, action string, err error) {
 	// Prevent slugs being created using some reserved words which may cause confusion
 	reservedSlugs := []string{"new","all","collection"}
 	if slices.Contains(reservedSlugs, newCollection.Slug) {
@@ -193,7 +204,13 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 			return
 		}
 	}
-	// TODO: add/remove tracks
+	standardLimit := 20
+	offset, limit := parsePageParam(rawpagenumber, standardLimit)
+	tracks, totalTracks, err := store.getTracksInCollection(storedCollection.Slug, offset, limit)
+	storedCollection.Tracks = &tracks
+	totalPages := int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
+	storedCollection.TotalPages = &totalPages
+
 	if existingCollection.Slug != "" {
 		action = "collectionUpdated"
 		store.Loganne.collectionPost(action, "Music Collection "+newCollection.Name+" Updated", newCollection, existingCollection)
@@ -251,7 +268,7 @@ func (store Datastore) CollectionsV2Controller(w http.ResponseWriter, r *http.Re
 	} else {
 		slug := pathparts[1]
 		if len(pathparts) == 2 {
-			collection, err := store.getCollection(slug)
+			collection, err := store.getCollection(slug, r.URL.Query().Get("page"))
 			if err != nil && r.Method == "PUT" && err.Error() == "Collection Not Found" {
 				err = nil
 			}
@@ -275,7 +292,7 @@ func (store Datastore) CollectionsV2Controller(w http.ResponseWriter, r *http.Re
 					return
 				}
 				newCollection.Slug = slug
-				collection, _, err = store.updateCreateCollection(collection, newCollection)
+				collection, _, err = store.updateCreateCollection(collection, newCollection, r.URL.Query().Get("page"))
 				fallthrough
 			case "GET":
 				writeJSONResponse(w, collection, err)
