@@ -2,7 +2,7 @@ package main
 
 import (
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 )
 /**
@@ -11,5 +11,5 @@ import (
 func V1GoneController(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusGone)
 	io.WriteString(w, "Version 1 of the API is no longer available.  Find version 2 at /v2/tracks\n")
-	log.Printf("Request to deprecated v1 endpoint: %s", r.URL.Path)
+	slog.Warn("Request to deprecated v1 endpoint", "path", r.URL.Path)
 }

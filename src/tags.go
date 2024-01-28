@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"log/slog"
 )
 
 type Tag struct {
@@ -29,6 +30,7 @@ func (store Datastore) getTagValue(trackid int, predicate string) (value string,
  *
  */
 func (store Datastore) updateTag(trackid int, predicate string, value string) (err error) {
+	slog.Info("Update Tag", "trackid", trackid, "predicate", predicate, "value", value)
 	trackFound, err := store.trackExists("id", trackid)
 	if err != nil {
 		return
@@ -120,6 +122,7 @@ func (store Datastore) getAllTagsForTrack(trackid int) (tags map[string]string, 
  *
  */
 func (store Datastore) deleteTag(trackid int, predicate string) (err error) {
+	slog.Info("Delete Tag", "trackid", trackid, "predicate", predicate)
 	_, err = store.DB.Exec("DELETE FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, predicate)
 	if err != nil && err.Error() == "sql: no rows in result set" {
 		err = errors.New("Tag Not Found")

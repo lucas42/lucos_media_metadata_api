@@ -1,12 +1,13 @@
 package main
 
 import (
-	"io/ioutil"
 	"errors"
+	"io/ioutil"
+	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
-	"math"
 )
 
 func parsePageParam(rawpage string, standardLimit int) (offset int, limit int) {
@@ -144,6 +145,7 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 		filterfield = "fingerprint"
 		filtervalue = fingerprint
 	}
+	slog.Debug("Tracks v2 controller", "method", r.Method, "filterfield", filterfield, "filtervalue", filtervalue, "pathparts", pathparts)
 	if filterfield == "" {
 		if len(pathparts) <= 1 {
 			switch r.Method {

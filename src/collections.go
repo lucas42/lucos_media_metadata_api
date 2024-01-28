@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"math"
 	"math/rand"
 	"net/http"
@@ -160,6 +161,7 @@ func (store Datastore) deleteCollection(slug string) (err error) {
 	if (!found || err != nil) {
 		return
 	}
+	slog.Info("Delete Collection", "slug", slug)
 
 	// Get the existing collection data to send to loganne later
 	existingCollection, err := store.getCollection(slug, "")
@@ -186,6 +188,7 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 	// Prevent slugs being created using some reserved words which may cause confusion
 	reservedSlugs := []string{"new","all","collection"}
 	if slices.Contains(reservedSlugs, newCollection.Slug) {
+		slog.Warn("Collection slug not allowed", "slug", newCollection.Slug)
 		err = errors.New("Collection with slug "+newCollection.Slug+" not allowed")
 		return
 	}
@@ -198,8 +201,10 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 
 	// If no changes are needed, return the existing collection
 	if !existingCollection.updateNeeded(newCollection) {
+		slog.Debug("Update collection not needed", "newCollection", newCollection)
 		return
 	}
+	slog.Info("Update/Create collection", "newCollection", newCollection)
 	action = "Changed"
 	if newCollection.Name != "" {
 		err = store.checkForDuplicateCollection("name", newCollection.Name, "slug", newCollection.Slug)
@@ -248,6 +253,7 @@ func (store Datastore) isTrackInCollection(collectionslug string, trackid int) (
  * Checks whether a collection contains a given track
  */
 func (store Datastore) addTrackToCollection(collectionslug string, trackid int) (err error) {
+	slog.Info("Add track to collection", "collectionslug", collectionslug, "trackid", trackid)
 	_, err = store.DB.Exec("INSERT OR IGNORE INTO collection_track (collectionslug, trackid) VALUES ($1, $2)", collectionslug, trackid)
 	if err != nil {
 		return
@@ -263,6 +269,7 @@ func (store Datastore) addTrackToCollection(collectionslug string, trackid int) 
  * Checks whether a collection contains a given track
  */
 func (store Datastore) removeTrackFromCollection(collectionslug string, trackid int) (err error) {
+	slog.Info("Remove track from collection", "collectionslug", collectionslug, "trackid", trackid)
 	_, err = store.DB.Exec("DELETE FROM collection_track WHERE collectionslug == $1 AND trackid == $2", collectionslug, trackid)
 	return
 }
@@ -310,7 +317,7 @@ func (store Datastore) updateTrackAllCollectionsCumWeighting(trackid int, oldWei
  *
  */
 func (store Datastore) updateTrackCollectionCumWeighting(collectionslug string, trackid int, oldWeighting float64, newWeighting float64) (err error) {
-
+	slog.Debug("Set Cumulative Weighting in collection", "collectionslug", collectionslug, "trackid", trackid, "oldWeighting", oldWeighting, "newWeighting", newWeighting)
 	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
 	_, err = store.DB.Exec("UPDATE collection_track SET cum_weighting = cum_weighting - $1 WHERE collectionslug == $2 AND cum_weighting > (SELECT cum_weighting FROM collection_track WHERE collectionslug == $3 AND trackid == $4)", oldWeighting, collectionslug, collectionslug, trackid)
 	if err != nil {
@@ -383,6 +390,8 @@ func (store Datastore) getRandomTracksInCollection(slug string, count int) (coll
 func (store Datastore) CollectionsV2Controller(w http.ResponseWriter, r *http.Request) {
 	normalisedpath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v2/collections"), "/")
 	pathparts := strings.Split(normalisedpath, "/")
+
+	slog.Debug("Collections v2 controller", "method", r.Method, "pathparts", pathparts)
 
 	if len(pathparts) <= 1 {
 		collections, err := store.getAllCollections()

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -95,8 +96,11 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, existingTrack Track, onlyMissing bool) (storedTrack Track, action string, err error) {
 	// If no changes are needed, return the existing track
 	if !existingTrack.updateNeeded(track, onlyMissing) {
+		slog.Debug("Update track not needed", "filterField", filterField, "value", value, "onlyMissing", onlyMissing)
 		return existingTrack, "noChange", nil
 	}
+
+	slog.Info("update/create track", "filterField", filterField, "value", value)
 	action = "Changed"
 	updateFields := []string{}
 	if track.Duration != 0 {
@@ -268,6 +272,7 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	if newWeighting == oldWeighting {
 		return
 	}
+	slog.Info("Set Track Weighting", "trackid", trackid, "oldWeighting", oldWeighting, "newWeighting", newWeighting)
 
 	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
 	_, err = store.DB.Exec("UPDATE track SET cum_weighting = cum_weighting - $1 WHERE cum_weighting > (SELECT cum_weighting FROM track WHERE id = $2)", oldWeighting, trackid)
@@ -366,6 +371,7 @@ func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
  *
  */
 func (store Datastore) deleteTrack(trackid int) (err error) {
+	slog.Info("Delete Track", "trackid", trackid)
 
 	// Set the track's weighting to zero before deletion
 	// So that the cumulative weighting of higher tracks get updated appropriately

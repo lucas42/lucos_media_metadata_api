@@ -1,5 +1,9 @@
 package main
 
+import(
+	"log/slog"
+)
+
 type Predicate struct {
 	ID string `json:"id"`
 }
@@ -21,6 +25,7 @@ func (store Datastore) hasPredicate(id string) (found bool, err error) {
  *
  */
 func (store Datastore) createPredicate(id string) (err error) {
+	slog.Info("Created Predicate", "id", id)
 	_, err = store.DB.Exec("REPLACE INTO predicate(id) values($1)", id)
 	return
 }

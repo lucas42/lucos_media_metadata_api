@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"net/http"
 )
 
@@ -28,6 +29,7 @@ type Metric struct {
  */
 func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
+		slog.Debug("Info controller")
 		info := InfoStruct{System: "lucos_media_metadata_api"}
 
 		dbCheck := Check{TechDetail: "Does basic SELECT query from database"}
@@ -51,6 +53,7 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSONResponse(w, info, nil)
 	} else {
+		slog.Warn("Info Controller - MethodNotAllowed", "method", r.Method)
 		MethodNotAllowed(w, []string{"GET"})
 	}
 }

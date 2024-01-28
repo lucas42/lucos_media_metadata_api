@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -34,8 +34,10 @@ func FrontController(store Datastore) *http.ServeMux {
 
 func HomepageController(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
+		slog.Debug("Homepage controller redirect", "path", r.URL.Path)
 		http.Redirect(w, r, "/v2/tracks", http.StatusTemporaryRedirect)
 	} else {
+		slog.Warn("Homepage controller - Not Found", "path", r.URL.Path)
 		http.NotFound(w, r)
 	}
 }
@@ -99,7 +101,7 @@ func writeErrorResponse(w http.ResponseWriter, err error) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	} else {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Printf("Internal Server Error: %s", err.Error())
+		slog.Error("Internal Server Error", slog.Any("error", err))
 	}
  }
 
@@ -110,6 +112,13 @@ func writeErrorResponse(w http.ResponseWriter, err error) {
  * Uses the PORT environment variable to specify which tcp port to listen on (defaults to 8080)
  */
 func main() {
+
+	// Check for DEBUG environment variable to drop the log level to Debug
+	if os.Getenv("DEBUG") != "" {
+		// Can be replaced with `slog.SetLogLoggerLevel(slog.LevelDebug)` in golang 1.22
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	}
+
 	loganne := Loganne{
 		host: "https://loganne.l42.eu",
 		source: "lucos_media_metadata_api",
@@ -121,8 +130,10 @@ func main() {
 	} else {
 		port = "8080"
 	}
-	log.Printf("Listen on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, FrontController(store)))
+	slog.Info("Listening for incoming connections", "port", port)
+	err := http.ListenAndServe(":"+port, FrontController(store))
+	slog.Error("HTTP server errored", slog.Any("error", err))
+	os.Exit(1)
 }
 
 /**

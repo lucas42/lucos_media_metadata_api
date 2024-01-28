@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
-	"log"
+	"log/slog"
 )
 
 /**
@@ -19,7 +19,7 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 	database = Datastore{db, loganne}
 	database.DB.MustExec("PRAGMA foreign_keys = ON;")
 	if !database.TableExists("track") {
-		log.Print("Creating table `track`")
+		slog.Info("Creating table `track`")
 		sqlStmt := `
 		CREATE TABLE "track" (
 			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
@@ -33,7 +33,7 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		database.DB.MustExec(sqlStmt)
 	}
 	if !database.TableExists("predicate") {
-		log.Print("Creating table `predicate`")
+		slog.Info("Creating table `predicate`")
 		sqlStmt := `
 		CREATE TABLE "predicate" (
 			"id" TEXT PRIMARY KEY NOT NULL
@@ -42,7 +42,7 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		database.DB.MustExec(sqlStmt)
 	}
 	if !database.TableExists("tag") {
-		log.Print("Creating table `tag`")
+		slog.Info("Creating table `tag`")
 		sqlStmt := `
 		CREATE TABLE "tag" (
 			"trackid" TEXT NOT NULL,
@@ -56,7 +56,7 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		database.DB.MustExec(sqlStmt)
 	}
 	if !database.TableExists("collection") {
-		log.Print("Creating table `collection`")
+		slog.Info("Creating table `collection`")
 		sqlStmt := `
 		CREATE TABLE "collection" (
 			"slug" TEXT PRIMARY KEY NOT NULL,
@@ -66,7 +66,7 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		database.DB.MustExec(sqlStmt)
 	}
 	if !database.TableExists("collection_track") {
-		log.Print("Creating table `collection_track`")
+		slog.Info("Creating table `collection_track`")
 		sqlStmt := `
 		CREATE TABLE "collection_track" (
 			"collectionslug" TEXT NOT NULL,
