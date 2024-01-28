@@ -240,7 +240,7 @@ func TestInvalidTrackIDsV2(test *testing.T) {
 
 
 /**
- * Checks whether a track can be updated using its trackid
+ * Checks whether a track can be deleted using its trackid
  */
 func TestTrackDeletionV2(test *testing.T) {
 	clearData()
@@ -274,6 +274,24 @@ func TestCantDeleteAllV2(test *testing.T) {
 	makeRequestWithUnallowedMethod(test, "/v2/tracks", "DELETE", []string{"GET"})
 	makeRequest(test, "GET", "/v2/tracks/2", "", 200, outputBJson, true)
 	makeRequest(test, "GET", "/v2/tracks/1", "", 200, outputAJson, true)
+}
+/**
+ * Checks whether a track that's in a collection can be safely deleted
+ */
+func TestDeletingTrackInCollection(test *testing.T) {
+	clearData()
+	makeRequest(test, "PUT", "/v2/collections/first", `{"name": "The Collection"}`, 200, `{"slug":"first","name": "The Collection", "tracks":[], "totalPages":0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/collections/first/1", "", 200, "Track In Collection\n", false)
+	makeRequest(test, "GET", "/v2/collections/first", "", 200, `{"slug":"first","name": "The Collection", "tracks":[{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"weighting": 0}],"totalPages":1}`, true)
+	restartServer()
+	makeRequest(test, "DELETE", "/v2/tracks/1", "", 204, "", false)
+	assertEqual(test, "Loganne event type", "trackDeleted", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable", "Track \"Yellow Submarine\" deleted", lastLoganneMessage)
+	assertEqual(test, "Loganne track ID", 0, lastLoganneTrack.ID)
+	assertEqual(test, "Loganne existingTrack ID", 1, lastLoganneExistingTrack.ID)
+	makeRequest(test, "GET", "/v2/tracks/1", "", 404, "Track Not Found\n", false)
+	makeRequest(test, "GET", "/v2/collections/first", "", 200, `{"slug":"first","name": "The Collection", "tracks":[],"totalPages":0}`, true)
 }
 
 

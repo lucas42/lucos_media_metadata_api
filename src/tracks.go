@@ -381,6 +381,10 @@ func (store Datastore) deleteTrack(trackid int) (err error) {
 	if (err != nil) {
 		return
 	}
+	_, err = store.DB.Exec("DELETE FROM collection_track WHERE trackid=$1", trackid)
+	if (err != nil) {
+		return
+	}
 	_, err = store.DB.Exec("DELETE FROM track WHERE id=$1", trackid)
 	if (err != nil) {
 		return
