@@ -17,6 +17,7 @@ type Collection struct {
 	Slug   string   `json:"slug"`
 	Name   string   `json:"name"`
 	Tracks *[]Track `json:"tracks,omitempty"`
+	TotalTracks *int  `json:"totalTracks,omitempty"`
 	TotalPages *int  `json:"totalPages,omitempty"`
 }
 
@@ -57,7 +58,7 @@ func (store Datastore) getCollection(slug string, rawpagenumber string) (collect
 
 /**
  * Gets data about all collections
- *
+ * Doesn't include list of tracks for each, instead has a totalTracks field which gives a count
  */
 func (store Datastore) getAllCollections() (collections []Collection, err error) {
 	collections = []Collection{}
@@ -70,13 +71,13 @@ func (store Datastore) getAllCollections() (collections []Collection, err error)
 	for i := range collections {
 		collection := &collections[i]
 		standardLimit := 20
-		tracks, totalTracks, err := store.getTracksInCollection(collection.Slug, 0, -1)
-		totalPages := int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
-		collection.TotalPages = &totalPages
+		totalTracks, err := store.getTrackCountForCollection(collection.Slug)
 		if err != nil {
 			return collections, err
 		}
-		collection.Tracks = &tracks
+		collection.TotalTracks = &totalTracks
+		totalPages := int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
+		collection.TotalPages = &totalPages
 	}
 	return
 }
@@ -103,9 +104,17 @@ func (store Datastore) getTracksInCollection(slug string, offset int, limit int)
 		}
 	}
 
-	err = store.DB.Get(&totalTracks, "SELECT COUNT(*) FROM collection_track WHERE collectionslug = $1", slug)
+	totalTracks, err = store.getTrackCountForCollection(slug)
 	return
 }
+
+/**
+ * Gets a count of how many tracks are in a collection
+ */
+ func (store Datastore) getTrackCountForCollection(slug string) (totalTracks int, err error) {
+	err = store.DB.Get(&totalTracks, "SELECT COUNT(*) FROM collection_track WHERE collectionslug = $1", slug)
+	return
+ }
 
 /**
  * Gets all the collections a given track is in
