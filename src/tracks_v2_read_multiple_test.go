@@ -57,8 +57,8 @@ func TestRandomTracksV2(test *testing.T) {
 		makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
 		makeRequest(test, "PUT", "/v2/tracks/"+id+"/weighting", "4.3", 200, "4.3", false)
 	}
-	url := server.URL + path
-	response, err := http.Get(url)
+	request := basicRequest(test, "GET", path, "")
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		test.Error(err)
 	}
@@ -69,7 +69,7 @@ func TestRandomTracksV2(test *testing.T) {
 
 	expectedResponseCode := 200
 	if response.StatusCode != expectedResponseCode {
-		test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+		test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, path)
 	}
 
 	var output SearchResult
@@ -119,8 +119,8 @@ func TestRandomTracksDealsWithDeletesV2(test *testing.T) {
 	}
 	// Set the weighting on the 39th to 0
 	makeRequest(test, "PUT", "/v2/tracks/39/weighting", "0", 200, "0", false)
-	url := server.URL + path
-	response, err := http.Get(url)
+	request := basicRequest(test, "GET", path, "")
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		test.Error(err)
 	}
@@ -131,7 +131,7 @@ func TestRandomTracksDealsWithDeletesV2(test *testing.T) {
 
 	expectedResponseCode := 200
 	if response.StatusCode != expectedResponseCode {
-		test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+		test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, path)
 	}
 
 	var output SearchResult
@@ -242,8 +242,9 @@ func TestAllTracksPaginationV2(test *testing.T) {
 	}
 	for page, count := range pages {
 
-		url := server.URL + "/v2/tracks/?page=" + page
-		response, err := http.Get(url)
+		path := "/v2/tracks/?page=" + page
+		request := basicRequest(test, "GET", path, "")
+		response, err := http.DefaultClient.Do(request)
 		if err != nil {
 			test.Error(err)
 		}
@@ -254,7 +255,7 @@ func TestAllTracksPaginationV2(test *testing.T) {
 
 		expectedResponseCode := 200
 		if response.StatusCode != expectedResponseCode {
-			test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+			test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, path)
 		}
 
 		var output SearchResult
@@ -292,8 +293,9 @@ func TestTrackQueryPaginationV2(test *testing.T) {
 	}
 	for page, count := range pages {
 
-		url := server.URL + "/v2/tracks?q=test&page=" + page
-		response, err := http.Get(url)
+		path := "/v2/tracks?q=test&page=" + page
+		request := basicRequest(test, "GET", path, "")
+		response, err := http.DefaultClient.Do(request)
 		if err != nil {
 			test.Error(err)
 		}
@@ -304,7 +306,7 @@ func TestTrackQueryPaginationV2(test *testing.T) {
 
 		expectedResponseCode := 200
 		if response.StatusCode != expectedResponseCode {
-			test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+			test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, path)
 		}
 
 		var output SearchResult
@@ -320,8 +322,9 @@ func TestTrackQueryPaginationV2(test *testing.T) {
 
 	for page, count := range pages {
 
-		url := server.URL + "/v2/tracks?p.title=test&page=" + page
-		response, err := http.Get(url)
+		path := "/v2/tracks?p.title=test&page=" + page
+		request := basicRequest(test, "GET", path, "")
+		response, err := http.DefaultClient.Do(request)
 		if err != nil {
 			test.Error(err)
 		}
@@ -332,7 +335,7 @@ func TestTrackQueryPaginationV2(test *testing.T) {
 
 		expectedResponseCode := 200
 		if response.StatusCode != expectedResponseCode {
-			test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, url)
+			test.Errorf("Got response code %d, expected %d for %s", response.StatusCode, expectedResponseCode, path)
 		}
 
 		var output SearchResult

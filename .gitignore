@@ -29,3 +29,5 @@ c.out
 media.sqlite~*
 
 coverage.*
+
+.env

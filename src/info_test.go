@@ -38,4 +38,9 @@ func TestInfoEndpoint(test *testing.T) {
 	makeRequest(test, "GET", "/_info", "", 200, expectedOutput, true)
 
 	makeRequestWithUnallowedMethod(test, "/_info", "POST", []string{"GET"})
+
+	// Make request with no authentication
+	request := basicRequest(test, "GET", "/_info", "")
+	request.Header.Del("Authorization")
+	makeRawRequest(test, request, 200, expectedOutput, true)
 }

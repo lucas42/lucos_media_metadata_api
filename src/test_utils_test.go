@@ -72,7 +72,7 @@ func restartServer() {
 	lastLoganneExistingCollection = Collection{}
 	loganneRequestCount = 0
 	store := DBInit("testrouting.sqlite", MockLoganne{})
-	server = httptest.NewServer(FrontController(store))
+	server = httptest.NewServer(FrontController(store, "test_app1:staging=validkey;test_app2:staging=2ndvalidkey"))
 }
 
 /**
@@ -102,7 +102,7 @@ func AreEqualJSON(s1, s2 string) (bool, error) {
 }
 
 /**
- * Constructs a http request and compares the response to some expected values
+ * Constructs an authenticated http request and compares the response to some expected values
  *
  */
 func makeRequest(t *testing.T, method string, path string, requestBody string, expectedResponseCode int, expectedResponseBody string, expectJSON bool) {
@@ -122,6 +122,7 @@ func basicRequest(t *testing.T, method string, path string, requestBody string) 
 	if err != nil {
 		t.Error(err)
 	}
+	request.Header.Add("Authorization", "key validkey")
 	return
 }
 
@@ -210,15 +211,15 @@ func checkResponseHeader(t *testing.T, response *http.Response, headerName strin
  *
  */
 func checkRedirect(t *testing.T, initialPath string, expectedPath string) {
-	initialURL := server.URL + initialPath
 	expectedDestination := server.URL + expectedPath
-	response, err := http.Get(initialURL)
+	request := basicRequest(t, "GET", initialPath, "")
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Error(err)
 	}
 	actualDestination := response.Request.URL.String()
 	if actualDestination != expectedDestination {
-		t.Errorf("Unexpected redirect destination: \"%s\", expected: \"%s\", from \"%s\"", actualDestination, expectedDestination, initialURL)
+		t.Errorf("Unexpected redirect destination: \"%s\", expected: \"%s\", from \"%s\"", actualDestination, expectedPath, initialPath)
 	}
 }
 

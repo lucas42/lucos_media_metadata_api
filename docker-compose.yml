@@ -9,6 +9,8 @@ services:
     volumes:
       - "db:/var/lib/media-metadata/"
     restart: always
+    environment:
+      - CLIENT_KEYS
 
 volumes:
   db:

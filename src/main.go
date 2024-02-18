@@ -12,7 +12,7 @@ import (
 /**
  * The front controller for all incoming requests
  */
-func FrontController(store Datastore) *http.ServeMux {
+func FrontController(store Datastore, clientKeys string) http.Handler {
 	router := http.NewServeMux()
 	router.HandleFunc("/v2/tracks", store.TracksV2Controller)
 	router.HandleFunc("/v2/tracks/", store.TracksV2Controller)
@@ -29,7 +29,7 @@ func FrontController(store Datastore) *http.ServeMux {
 	router.HandleFunc("/predicates/", V1GoneController)
 	router.HandleFunc("/tags/", V1GoneController)
 	router.HandleFunc("/search", V1GoneController)
-	return router
+	return NewAuthenticatedServer(router, clientKeys)
 }
 
 func HomepageController(w http.ResponseWriter, r *http.Request) {
@@ -131,7 +131,7 @@ func main() {
 		port = "8080"
 	}
 	slog.Info("Listening for incoming connections", "port", port)
-	err := http.ListenAndServe(":"+port, FrontController(store))
+	err := http.ListenAndServe(":"+port, FrontController(store, os.Getenv("CLIENT_KEYS")))
 	slog.Error("HTTP server errored", slog.Any("error", err))
 	os.Exit(1)
 }
