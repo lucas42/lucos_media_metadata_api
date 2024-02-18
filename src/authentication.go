@@ -3,7 +3,6 @@ package main
 import (
 	"log/slog"
 	"net/http"
-	//"net/url"
 	"strings"
 )
 
