@@ -185,3 +185,53 @@ func TestDeletingTrackCorrectsWeightingInCollection(test *testing.T) {
 	assertCollectionWeighting(test, store, 1, "main-collection", 5, 5)
 	assertCollectionWeighting(test, store, 3, "main-collection", 5, 10)
 }
+
+func TestMultiChangeWeighting(test *testing.T) {
+	clearData()
+	store := DBInit("testweighting.sqlite", MockLoganne{})
+	_, err := store.DB.Exec("INSERT INTO track (url,fingerprint,duration) values ('/track1','abc',3),('/track2','def',6),('/track3','hij',9)")
+	if err != nil {
+		test.Errorf("Error inserting tracks: %s", err.Error())
+	}
+	_, err = store.DB.Exec("INSERT INTO collection (slug,name) values ('main-collection','Main')")
+	if err != nil {
+		test.Errorf("Error inserting collection: %s", err.Error())
+	}
+	_, err = store.DB.Exec("INSERT INTO collection_track (collectionslug, trackid) values ('main-collection',1),('main-collection',2),('main-collection',3)")
+	if err != nil {
+		test.Errorf("Error inserting collection_track: %s", err.Error())
+	}
+	err = store.setTrackWeighting(1, 75)
+	if err != nil {
+		test.Errorf("Error setting weighting 1: %s", err.Error())
+	}
+	err = store.setTrackWeighting(2, 89)
+	if err != nil {
+		test.Errorf("Error setting weighting 2: %s", err.Error())
+	}
+	err = store.setTrackWeighting(1, 72)
+	if err != nil {
+		test.Errorf("Error changing weighting 1: %s", err.Error())
+	}
+	err = store.setTrackWeighting(3, 32)
+	if err != nil {
+		test.Errorf("Error setting weighting 3: %s", err.Error())
+	}
+	assertWeighting(test, store, 2, 89, 89)
+	assertWeighting(test, store, 1, 72, 161)
+	assertWeighting(test, store, 3, 32, 193)
+	assertCollectionWeighting(test, store, 2, "main-collection", 89, 89)
+	assertCollectionWeighting(test, store, 1, "main-collection", 72, 161)
+	assertCollectionWeighting(test, store, 3, "main-collection", 32, 193)
+
+	err = store.setTrackWeighting(1, 75)
+	if err != nil {
+		test.Errorf("Error changing weighting 1: %s", err.Error())
+	}
+	assertWeighting(test, store, 2, 89, 89)
+	assertWeighting(test, store, 3, 32, 121)
+	assertWeighting(test, store, 1, 75, 196)
+	assertCollectionWeighting(test, store, 2, "main-collection", 89, 89)
+	assertCollectionWeighting(test, store, 3, "main-collection", 32, 121)
+	assertCollectionWeighting(test, store, 1, "main-collection", 75, 196)
+}

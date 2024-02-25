@@ -275,7 +275,7 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	slog.Info("Set Track Weighting", "trackid", trackid, "oldWeighting", oldWeighting, "newWeighting", newWeighting)
 
 	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
-	_, err = store.DB.Exec("UPDATE track SET cum_weighting = cum_weighting - $1 WHERE cum_weighting > (SELECT cum_weighting FROM track WHERE id = $2)", oldWeighting, trackid)
+	_, err = store.DB.Exec("UPDATE track SET cum_weighting = cum_weighting - $1 WHERE cum_weighting >= (SELECT cum_weighting FROM track WHERE id = $2)", oldWeighting, trackid)
 	if err != nil {
 		return
 	}

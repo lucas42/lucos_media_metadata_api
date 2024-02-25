@@ -328,7 +328,7 @@ func (store Datastore) updateTrackAllCollectionsCumWeighting(trackid int, oldWei
 func (store Datastore) updateTrackCollectionCumWeighting(collectionslug string, trackid int, oldWeighting float64, newWeighting float64) (err error) {
 	slog.Debug("Set Cumulative Weighting in collection", "collectionslug", collectionslug, "trackid", trackid, "oldWeighting", oldWeighting, "newWeighting", newWeighting)
 	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
-	_, err = store.DB.Exec("UPDATE collection_track SET cum_weighting = cum_weighting - $1 WHERE collectionslug == $2 AND cum_weighting > (SELECT cum_weighting FROM collection_track WHERE collectionslug == $3 AND trackid == $4)", oldWeighting, collectionslug, collectionslug, trackid)
+	_, err = store.DB.Exec("UPDATE collection_track SET cum_weighting = cum_weighting - $1 WHERE collectionslug == $2 AND cum_weighting >= (SELECT cum_weighting FROM collection_track WHERE collectionslug == $3 AND trackid == $4)", oldWeighting, collectionslug, collectionslug, trackid)
 	if err != nil {
 		return
 	}
