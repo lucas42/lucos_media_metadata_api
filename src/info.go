@@ -72,7 +72,7 @@ func TrackCount(store Datastore) (Check, Metric) {
 func WeightingCheck(store Datastore) (weightingCheck Check, weightingDrift Metric) {
 	weightingCheck = Check{TechDetail: "Does the maximum cumulative weighting value match the sum of all weightings"}
 	weightingDrift = Metric{TechDetail: "Difference between maximum cumulativeweighting and the sum of all weightings"}
-	err := store.DB.Get(&weightingDrift.Value, "SELECT MAX(cum_weighting) - SUM(weighting) from track;")
+	err := store.DB.Get(&weightingDrift.Value, "SELECT CAST(MAX(cum_weighting) - SUM(weighting) AS INT) from track;")
 	if err != nil {
 		weightingCheck.OK = false
 		weightingCheck.Debug = err.Error()
