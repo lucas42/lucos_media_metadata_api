@@ -91,7 +91,7 @@ func CollectionsWeightingCheck(store Datastore) (weightingCheck Check, driftingC
 	weightingCheck = Check{TechDetail: "Whether maximum cumulative weighting for each collection matches the sum of all its weightings"}
 	driftingCollectionsCount = Metric{TechDetail: "The number of collections whose maximum cumulative weighting doesn't match the sum of all its weightings"}
 	var driftingCollections []string
-	err := store.DB.Select(&driftingCollections, "SELECT slug from collection WHERE (SELECT MAX(collection_track.cum_weighting) - SUM (weighting) FROM collection_track LEFT JOIN track on trackid=track.id WHERE collectionslug = collection.slug) != 0;")
+	err := store.DB.Select(&driftingCollections, "SELECT slug from collection WHERE (SELECT MAX(collection_track.cum_weighting) - SUM (weighting) FROM collection_track LEFT JOIN track on trackid=track.id WHERE collectionslug = collection.slug) > 0.1;") // Comparison to 0.1, rather than zero, to account for float point arithmetic
 	driftingCollectionsCount.Value = len(driftingCollections)
 	if err != nil {
 		weightingCheck.OK = false
