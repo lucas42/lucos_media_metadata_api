@@ -29,11 +29,13 @@ func TestInfoEndpoint(test *testing.T) {
 		"system": "lucos_media_metadata_api",
 		"checks": {
 			"db": {"techDetail":"Does basic SELECT query from database", "ok": true},
-			"weighting": {"techDetail":"Does the maximum cumulative weighting value match the sum of all weightings", "ok":true}
+			"weighting": {"techDetail":"Does the maximum cumulative weighting value match the sum of all weightings", "ok":true},
+			"collections-weighting": {"techDetail":"Whether maximum cumulative weighting for each collection matches the sum of all its weightings", "ok":true}
 		},
 		"metrics": {
 			"track-count": {"techDetail":"Number of tracks in database", "value": 37},
-			"weighting-drift": {"techDetail":"Difference between maximm cumulativeweighting and the sum of all weightings", "value":0}
+			"weighting-drift": {"techDetail":"Difference between maximum cumulativeweighting and the sum of all weightings", "value":0},
+			"collections-weighting-drift": {"techDetail":"The number of collections whose maximum cumulative weighting doesn't match the sum of all its weightings", "value":0}
 		},
 		"ci":{"circle":"gh/lucas42/lucos_media_metadata_api"}
 	}`

@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 type InfoStruct struct {
@@ -34,14 +35,17 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 
 		dbCheck, trackCount := TrackCount(store)
 		weightingCheck, weightingDrift := WeightingCheck(store)
+		collectionsWeightingCheck, collectionsWeightingDrift:= CollectionsWeightingCheck(store)
 
 		info.Checks = map[string]Check{
 			"db": dbCheck,
 			"weighting": weightingCheck,
+			"collections-weighting": collectionsWeightingCheck,
 		}
 		info.Metrics = map[string]Metric{
 			"track-count": trackCount,
 			"weighting-drift": weightingDrift,
+			"collections-weighting-drift": collectionsWeightingDrift,
 		}
 		info.CI = map[string]string{
 			"circle": "gh/lucas42/lucos_media_metadata_api",
@@ -67,7 +71,7 @@ func TrackCount(store Datastore) (Check, Metric) {
 }
 func WeightingCheck(store Datastore) (weightingCheck Check, weightingDrift Metric) {
 	weightingCheck = Check{TechDetail: "Does the maximum cumulative weighting value match the sum of all weightings"}
-	weightingDrift = Metric{TechDetail: "Difference between maximm cumulativeweighting and the sum of all weightings"}
+	weightingDrift = Metric{TechDetail: "Difference between maximum cumulativeweighting and the sum of all weightings"}
 	err := store.DB.Get(&weightingDrift.Value, "SELECT MAX(cum_weighting) - SUM(weighting) from track;")
 	if err != nil {
 		weightingCheck.OK = false
@@ -82,4 +86,21 @@ func WeightingCheck(store Datastore) (weightingCheck Check, weightingDrift Metri
 		weightingCheck.OK = true
 	}
 	return weightingCheck, weightingDrift
+}
+func CollectionsWeightingCheck(store Datastore) (weightingCheck Check, driftingCollectionsCount Metric) {
+	weightingCheck = Check{TechDetail: "Whether maximum cumulative weighting for each collection matches the sum of all its weightings"}
+	driftingCollectionsCount = Metric{TechDetail: "The number of collections whose maximum cumulative weighting doesn't match the sum of all its weightings"}
+	var driftingCollections []string
+	err := store.DB.Select(&driftingCollections, "SELECT slug from collection WHERE (SELECT MAX(collection_track.cum_weighting) - SUM (weighting) FROM collection_track LEFT JOIN track on trackid=track.id WHERE collectionslug = collection.slug) != 0;")
+	driftingCollectionsCount.Value = len(driftingCollections)
+	if err != nil {
+		weightingCheck.OK = false
+		weightingCheck.Debug = err.Error()
+	} else if driftingCollectionsCount.Value != 0 {
+		weightingCheck.OK = false
+		weightingCheck.Debug = "The following collections have a maximum `cum_weighting` value which doesn't match the sum of the `weighting` values for all constituent tracks: "+strings.Join(driftingCollections, ", ")
+	} else {
+		weightingCheck.OK = true
+	}
+	return weightingCheck, driftingCollectionsCount
 }
