@@ -16,7 +16,7 @@ func TestParallelWritesV2(test *testing.T) {
 	clearData()
 	totalTracks := 1000 // This number is total guess work.  Too low and the DB never locks; too high and the test itself segfaults
 	
-	// Create lots of tracks (not in parralel, to ensure ids are predictable)
+	// Create lots of tracks (not in parallel, to ensure ids are predictable)
 	createTracks(test, totalTracks)
 
 	var wg sync.WaitGroup
