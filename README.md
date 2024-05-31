@@ -43,3 +43,5 @@ Then, to view coverage report in browser, run:
 
 ## Backing Up
 Copy the file from the docker host at /var/lib/docker/volumes/lucos_media_metadata_api_db/_data/media.sqlite
+For example:
+cp /var/lib/docker/volumes/lucos_media_metadata_api_db/_data/media.sqlite manual-backups/media-`date +%F`.sqlite
