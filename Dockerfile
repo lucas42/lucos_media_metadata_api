@@ -1,4 +1,4 @@
-FROM golang:1.22
+FROM golang:1.23
 
 WORKDIR /go/src/lucos_media_metadata_api
 
