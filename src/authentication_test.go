@@ -7,12 +7,14 @@ import (
 func TestNoCredentials(test *testing.T) {
 	request := basicRequest(test, "GET", "/v2/tracks", "")
 	request.Header.Del("Authorization")
-	makeRawRequest(test, request, 403, "Authentication Failed\n", false)
+	response := makeRawRequest(test, request, 401, "Authentication Failed\n", false)
+	checkResponseHeader(test, response, "WWW-Authenticate", "key")
 }
 func TestUnauthorizedKey(test *testing.T) {
 	request := basicRequest(test, "GET", "/v2/tracks", "")
 	request.Header.Set("Authorization", "key notavalidkey")
-	makeRawRequest(test, request, 403, "Authentication Failed\n", false)
+	response := makeRawRequest(test, request, 401, "Authentication Failed\n", false)
+	checkResponseHeader(test, response, "WWW-Authenticate", "key")
 }
 
 func TestClientKeyParsing(test *testing.T) {

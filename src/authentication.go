@@ -22,7 +22,8 @@ func (server AuthentictedServer) ServeHTTP(writer http.ResponseWriter, request *
 	if server.isAuthenticated(request) {
 		server.unauthenticatedHandler.ServeHTTP(writer, request)
 	} else {
-		http.Error(writer, "Authentication Failed", http.StatusForbidden)
+		writer.Header().Set("WWW-Authenticate", "key")
+		http.Error(writer, "Authentication Failed", http.StatusUnauthorized)
 	}
 }
 
