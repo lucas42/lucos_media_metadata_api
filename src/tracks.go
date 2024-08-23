@@ -387,10 +387,19 @@ func (store Datastore) deleteTrack(trackid int) (err error) {
 	if (err != nil) {
 		return
 	}
-	_, err = store.DB.Exec("DELETE FROM collection_track WHERE trackid=$1", trackid)
+
+	// Loop through each collection and remove separately, so that cum_weightings get updated appropriately
+	collections, err := store.getCollectionsByTrack(trackid)
 	if (err != nil) {
 		return
 	}
+	for _, collection := range collections {
+		err = store.removeTrackFromCollection(collection.Slug, trackid)
+		if (err != nil) {
+			return
+		}
+	}
+
 	_, err = store.DB.Exec("DELETE FROM track WHERE id=$1", trackid)
 	if (err != nil) {
 		return

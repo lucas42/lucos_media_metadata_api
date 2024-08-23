@@ -279,6 +279,14 @@ func (store Datastore) addTrackToCollection(collectionslug string, trackid int) 
  */
 func (store Datastore) removeTrackFromCollection(collectionslug string, trackid int) (err error) {
 	slog.Info("Remove track from collection", "collectionslug", collectionslug, "trackid", trackid)
+	oldWeighting, err := store.getTrackWeighting(trackid)
+	if err != nil {
+		return
+	}
+	err = store.updateTrackCollectionCumWeighting(collectionslug, trackid, oldWeighting, 0)
+	if err != nil {
+		return
+	}
 	_, err = store.DB.Exec("DELETE FROM collection_track WHERE collectionslug == $1 AND trackid == $2", collectionslug, trackid)
 	return
 }
