@@ -166,12 +166,13 @@ func TestListCollections(test *testing.T) {
 	makeRequest(test, "PUT", "/v2/collections/third", `{"name": "Collecty McCollectFace"}`, 200, `{"slug":"third","name": "Collecty McCollectFace", "tracks":[], "totalPages":0}`, true)
 	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine"},"collections":[],"weighting": 0}`, true)
 	makeRequest(test, "PUT", "/v2/tracks?fingerprint=def2", `{"url":"http://example.org/track2", "duration": 14,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"}}`, 200, `{"fingerprint":"def2","duration":14,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"Dropkick Murphys", "title":"The Spicy McHaggis Jig"},"collections":[],"weighting": 0}`, true)
+	makeRequest(test, "PUT", "/v2/tracks/1/weighting", "0.7", 200, "0.7", false)
 	makeRequest(test, "PUT", "/v2/collections/first/1", "", 200, "Track In Collection\n", false)
 	makeRequest(test, "PUT", "/v2/collections/first/2", "", 200, "Track In Collection\n", false)
 	makeRequest(test, "PUT", "/v2/collections/third/2", "", 200, "Track In Collection\n", false)
 	restartServer()
-	makeRequest(test, "GET", "/v2/collections", "", 200, `[{"slug":"first","name": "The Collection", "totalTracks":2, "totalPages":1},{"slug":"second","name": "Another Collection", "totalTracks":0, "totalPages":0},{"slug":"third","name": "Collecty McCollectFace", "totalTracks":1, "totalPages":1}]`, true)
-	makeRequest(test, "GET", "/v2/collections/", "", 200, `[{"slug":"first","name": "The Collection", "totalTracks":2, "totalPages":1},{"slug":"second","name": "Another Collection", "totalTracks":0, "totalPages":0},{"slug":"third","name": "Collecty McCollectFace", "totalTracks":1, "totalPages":1}]`, true)
+	makeRequest(test, "GET", "/v2/collections", "", 200, `[{"slug":"first","name": "The Collection", "totalTracks":2, "totalPages":1, "isPlayable": true},{"slug":"second","name": "Another Collection", "totalTracks":0, "totalPages":0, "isPlayable": false},{"slug":"third","name": "Collecty McCollectFace", "totalTracks":1, "totalPages":1, "isPlayable": false}]`, true)
+	makeRequest(test, "GET", "/v2/collections/", "", 200, `[{"slug":"first","name": "The Collection", "totalTracks":2, "totalPages":1, "isPlayable": true},{"slug":"second","name": "Another Collection", "totalTracks":0, "totalPages":0, "isPlayable": false},{"slug":"third","name": "Collecty McCollectFace", "totalTracks":1, "totalPages":1, "isPlayable": false}]`, true)
 
 }
 

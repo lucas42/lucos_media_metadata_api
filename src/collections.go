@@ -14,11 +14,12 @@ import (
 )
 
 type Collection struct {
-	Slug   string   `json:"slug"`
-	Name   string   `json:"name"`
-	Tracks *[]Track `json:"tracks,omitempty"`
-	TotalTracks *int  `json:"totalTracks,omitempty"`
+	Slug   string    `json:"slug"`
+	Name   string    `json:"name"`
+	Tracks *[]Track  `json:"tracks,omitempty"`
+	TotalTracks *int `json:"totalTracks,omitempty"`
 	TotalPages *int  `json:"totalPages,omitempty"`
+	IsPlayable *bool `json:"isPlayable,omitempty"` // Whether calling `getRandomTracksInCollection` on this collection will return any results
 }
 
 
@@ -78,6 +79,13 @@ func (store Datastore) getAllCollections() (collections []Collection, err error)
 		collection.TotalTracks = &totalTracks
 		totalPages := int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
 		collection.TotalPages = &totalPages
+
+		maxCumWeighting, err := store.getCollectionMaxCumWeighting(collection.Slug)
+		if err != nil {
+			return collections, err
+		}
+		isPlayable := (maxCumWeighting > 0) // To be playable, a collection needs to contain at least one non-zero-weighted track
+		collection.IsPlayable = &isPlayable
 	}
 	return
 }
