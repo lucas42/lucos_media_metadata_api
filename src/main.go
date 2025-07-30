@@ -21,7 +21,7 @@ func main() {
 	}
 
 	loganne := Loganne{
-		host: "https://loganne.l42.eu",
+		endpoint: os.Getenv("LOGANNE_ENDPOINT"),
 		source: "lucos_media_metadata_api",
 	}
 	store := DBInit("/var/lib/media-metadata/media.sqlite", loganne)

@@ -15,12 +15,11 @@ type LoganneInterface interface {
 
 type Loganne struct {
 	source string
-	host   string
+	endpoint   string
 }
 
 func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack Track, existingTrack Track) {
-	url := loganne.host + "/events"
-	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "url", url, "updatedTrack", updatedTrack, "existingTrack", existingTrack)
+	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "url", loganne.endpoint, "updatedTrack", updatedTrack, "existingTrack", existingTrack)
 
 	data := map[string]interface{}{
 		"source":  loganne.source,
@@ -39,15 +38,14 @@ func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack
 		data["track"] = existingTrack
 	}
 	postData, _ := json.Marshal(data)
-	_, err := http.Post(url, "application/json", bytes.NewBuffer(postData))
+	_, err := http.Post(loganne.endpoint, "application/json", bytes.NewBuffer(postData))
 	if err != nil {
 		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
 	}
 }
 
 func (loganne Loganne) collectionPost(eventType string, humanReadable string, updatedCollection Collection, existingCollection Collection) {
-	url := loganne.host + "/events"
-	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "url", url, "updatedCollection", updatedCollection, "existingCollection", existingCollection)
+	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "url", loganne.endpoint, "updatedCollection", updatedCollection, "existingCollection", existingCollection)
 
 	data := map[string]interface{}{
 		"source":  loganne.source,
@@ -66,7 +64,7 @@ func (loganne Loganne) collectionPost(eventType string, humanReadable string, up
 		data["collection"] = existingCollection
 	}
 	postData, _ := json.Marshal(data)
-	_, err := http.Post(url, "application/json", bytes.NewBuffer(postData))
+	_, err := http.Post(loganne.endpoint, "application/json", bytes.NewBuffer(postData))
 	if err != nil {
 		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
 	}

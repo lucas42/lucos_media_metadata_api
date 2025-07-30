@@ -10,6 +10,7 @@ services:
     restart: always
     environment:
       - CLIENT_KEYS
+      - LOGANNE_ENDPOINT
 
 volumes:
   db:

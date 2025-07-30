@@ -26,7 +26,7 @@ func mockLoganneEvent(w http.ResponseWriter, request *http.Request) {
 func TestLoganneEvent(test *testing.T) {
 	go mockLoganneServer()
 	loganne := Loganne{
-		host: "http://localhost:7999",
+		endpoint: "http://localhost:7999/events",
 		source: "metadata_api_test",
 	}
 	track := Track{
@@ -50,7 +50,7 @@ func TestLoganneEvent(test *testing.T) {
 }
 func TestLoganneDeleteEvent(test *testing.T) {
 	loganne := Loganne{
-		host: "http://localhost:7999",
+		endpoint: "http://localhost:7999/events",
 		source: "metadata_api_test",
 	}
 	track := Track{
@@ -80,7 +80,7 @@ func TestLoganneDeleteEvent(test *testing.T) {
  **/
 func TestBulkEvent(test *testing.T) {
 	loganne := Loganne{
-		host: "http://localhost:7999",
+		endpoint: "http://localhost:7999/events",
 		source: "metadata_api_test",
 	}
 	loganne.post("bulkTestEvent", "This event is from the bulk test", Track{}, Track{})
