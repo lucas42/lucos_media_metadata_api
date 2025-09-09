@@ -133,7 +133,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 
 	// Memory
 	case "memory":
-		return "http://example.org/ontology/memory",
+		return MEDIA_MANAGER_BASE+"ontology/memory",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	// Soundtrack
@@ -153,11 +153,11 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 
 	// Availability
 	case "availability":
-		return "http://example.org/ontology/availability",
+		return MEDIA_MANAGER_BASE+"ontology/availability",
 			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	default:
-		return "http://example.org/ontology/" + predicateID,
+		return MEDIA_MANAGER_BASE+"ontology/" + predicateID,
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 	}
 }
@@ -178,11 +178,12 @@ func (store Datastore) RDFHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var lastTrackID string
+	var lastTrackID int
 	var subject rdf2go.Term
 
 	for rows.Next() {
-		var trackID, url string
+		var url string
+		var trackID int
 		var duration *int
 		var predicateID, value *string
 
@@ -192,7 +193,7 @@ func (store Datastore) RDFHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if trackID != lastTrackID {
-			subject = rdf2go.NewResource("http://example.org/track/" + trackID)
+			subject = rdf2go.NewResource(fmt.Sprintf("%stracks/%d", MEDIA_MANAGER_BASE, trackID))
 			g.AddTriple(subject,
 				rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
 				rdf2go.NewResource("http://purl.org/ontology/mo/Track"))
