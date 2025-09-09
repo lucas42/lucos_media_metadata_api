@@ -7,7 +7,7 @@ jobs:
       - image: cimg/go:1.25
     environment:
       GO111MODULE: auto
-    working_directory: ~/repo/server
+    working_directory: ~/repo/api
     steps:
       - checkout:
           path: ~/repo
