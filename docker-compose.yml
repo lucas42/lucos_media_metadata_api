@@ -11,6 +11,18 @@ services:
     environment:
       - CLIENT_KEYS
       - LOGANNE_ENDPOINT
+  exporter:
+    build: exporter
+    container_name: media_metadata_api_exporter
+    image: lucas42/lucos_media_metadata_api_exporter
+    volumes:
+      - db:/data:ro
+      - exports:/exports
+    restart: always
+    environment:
+      - SQLITE_DB_PATH=/data/media.sqlite
+      - RDF_OUTPUT_PATH=/exports/all-media.ttl
 
 volumes:
   db:
+  exports:
