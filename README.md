@@ -32,6 +32,7 @@ Accepts the following environment variables:
 * *PORT* The tcp port to listen on.  Defaults to 8080
 
 ## Testing
+Run from the `api` directory (`cd api`)
 Run `go test ./src`
 
 [![CircleCI](https://circleci.com/gh/lucas42/lucos_media_metadata_api.svg?style=shield)](https://circleci.com/gh/lucas42/lucos_media_metadata_api)

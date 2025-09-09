@@ -4,11 +4,13 @@ orbs:
 jobs:
   test:
     docker:
-      - image: cimg/go:1.22
+      - image: cimg/go:1.25
     environment:
       GO111MODULE: auto
+    working_directory: ~/repo/server
     steps:
-      - checkout
+      - checkout:
+          path: ~/repo
       - run:
           name: Install Dependencies
           command: go get ./...

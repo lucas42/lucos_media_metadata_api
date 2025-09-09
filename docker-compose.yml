@@ -1,6 +1,6 @@
 services:
   media_metadata_api:
-    build: .
+    build: api
     container_name: media_metadata_api
     ports: 
       - "3002:3002"
