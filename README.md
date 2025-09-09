@@ -31,7 +31,7 @@ Accepts the following environment variables:
 
 * *PORT* The tcp port to listen on.  Defaults to 8080
 
-## Testing
+## Testing api
 Run from the `api` directory (`cd api`)
 Run `go test ./src`
 
@@ -39,6 +39,17 @@ Run `go test ./src`
 
 For code coverage, run tests with:
 `go test ./src -coverprofile=coverage.out`
+Then, to view coverage report in browser, run:
+`go tool cover -html=coverage.out`
+
+## Testing exporter
+Run from the `exporter` directory (`cd exporter`)
+Run `go test .`
+
+[![CircleCI](https://circleci.com/gh/lucas42/lucos_media_metadata_api.svg?style=shield)](https://circleci.com/gh/lucas42/lucos_media_metadata_api)
+
+For code coverage, run tests with:
+`go test . -coverprofile=coverage.out`
 Then, to view coverage report in browser, run:
 `go tool cover -html=coverage.out`
 
