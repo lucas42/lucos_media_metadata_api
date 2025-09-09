@@ -62,13 +62,13 @@ func TestRDFHandler_ResourcesAndLiterals(t *testing.T) {
 		t.Errorf("expected title literal, got:\n%s", turtle)
 	}
 
-	// Composer split into Alice and Bob (literals)
-	if !strings.Contains(turtle, `"Alice"`) || !strings.Contains(turtle, `"Bob"`) {
+	// Composer split into Alice and Bob (resources)
+	if !strings.Contains(turtle, `<https://media-metadata.l42.eu/search?p.composer=Alice>`) || !strings.Contains(turtle, `<https://media-metadata.l42.eu/search?p.composer=Bob>`) {
 		t.Errorf("expected composer literals Alice and Bob, got:\n%s", turtle)
 	}
 
 	// Producer
-	if !strings.Contains(turtle, `"Charlie"`) {
+	if !strings.Contains(turtle, `<https://media-metadata.l42.eu/search?p.producer=Charlie>`) {
 		t.Errorf("expected producer literal Charlie, got:\n%s", turtle)
 	}
 
@@ -78,13 +78,13 @@ func TestRDFHandler_ResourcesAndLiterals(t *testing.T) {
 		t.Errorf("expected language resources for en and fr, got:\n%s", turtle)
 	}
 
-	// Offence split into literals
-	if !strings.Contains(turtle, `"violence"`) || !strings.Contains(turtle, `"bad words"`) {
+	// Offence split into resources
+	if !strings.Contains(turtle, `<https://media-metadata.l42.eu/search?p.offence=violence>`) || !strings.Contains(turtle, `<https://media-metadata.l42.eu/search?p.offence=bad+words>`) {
 		t.Errorf("expected offence literals, got:\n%s", turtle)
 	}
 
-	// Artist as literal
-	if !strings.Contains(turtle, `"Eve"`) {
+	// Artist as resource
+	if !strings.Contains(turtle, `<https://media-metadata.l42.eu/search?p.artist=Eve>`) {
 		t.Errorf("expected artist literal, got:\n%s", turtle)
 	}
 

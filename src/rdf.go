@@ -1,12 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/deiu/rdf2go"
 )
+
+const MEDIA_MANAGER_BASE = "https://media-metadata.l42.eu/"
 
 // Helper: split CSV values and trim whitespace
 func splitCSV(s string) []string {
@@ -15,6 +19,10 @@ func splitCSV(s string) []string {
 		parts[i] = strings.TrimSpace(parts[i])
 	}
 	return parts
+}
+
+func getSearchUrl(predicateID, value string) (rdf2go.Term) {
+	return rdf2go.NewResource(fmt.Sprintf("%ssearch?p.%s=%s", MEDIA_MANAGER_BASE, predicateID, url.QueryEscape(value)))
 }
 
 // Map a predicate/value pair into predicate URI + list of RDF objects
@@ -34,17 +42,17 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 	// Artist name (text literal, unless you mint URIs)
 	case "artist":
 		return "http://purl.org/dc/terms/creator",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	// Album
 	case "album":
 		return "http://purl.org/dc/terms/isPartOf",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	// Genre
 	case "genre":
 		return "http://purl.org/dc/terms/subject",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	// Composer: CSV list of names
 	case "composer":
@@ -52,7 +60,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 		terms := make([]rdf2go.Term, 0, len(vals))
 		for _, v := range vals {
 			if v != "" {
-				terms = append(terms, rdf2go.NewLiteral(v))
+				terms = append(terms, getSearchUrl(predicateID, v))
 			}
 		}
 		return "http://purl.org/dc/terms/contributor", terms
@@ -63,7 +71,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 		terms := make([]rdf2go.Term, 0, len(vals))
 		for _, v := range vals {
 			if v != "" {
-				terms = append(terms, rdf2go.NewLiteral(v))
+				terms = append(terms, getSearchUrl(predicateID, v))
 			}
 		}
 		return "http://purl.org/dc/terms/contributor", terms
@@ -85,7 +93,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 		terms := make([]rdf2go.Term, 0, len(vals))
 		for _, v := range vals {
 			if v != "" {
-				terms = append(terms, rdf2go.NewLiteral(v))
+				terms = append(terms, getSearchUrl(predicateID, v))
 			}
 		}
 		return "http://purl.org/dc/terms/subject", terms
@@ -121,7 +129,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 	// Provenance
 	case "provenance":
 		return "http://purl.org/dc/terms/source",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	// Memory
 	case "memory":
@@ -131,12 +139,12 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 	// Soundtrack
 	case "soundtrack":
 		return "http://purl.org/ontology/mo/soundtrack",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	// Theme tune
 	case "theme_tune":
 		return "http://purl.org/ontology/mo/theme",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	// Year
 	case "year":
@@ -146,7 +154,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 	// Availability
 	case "availability":
 		return "http://example.org/ontology/availability",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	default:
 		return "http://example.org/ontology/" + predicateID,
