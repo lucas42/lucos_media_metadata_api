@@ -7,10 +7,12 @@ services:
     image: lucas42/lucos_media_metadata_api
     volumes:
       - "db:/var/lib/media-metadata/"
+      - "exports:/var/lib/exports/"
     restart: always
     environment:
       - CLIENT_KEYS
       - LOGANNE_ENDPOINT
+      - RDF_OUTPUT_PATH=/var/lib/exports/all-media.ttl
   exporter:
     build: exporter
     container_name: media_metadata_api_exporter
