@@ -25,7 +25,7 @@ func TestSplitCSV(t *testing.T) {
 // Test mapPredicate returns URIs and terms
 func TestMapPredicate(t *testing.T) {
 	pred, terms := mapPredicate("title", "Song A")
-	if pred != "http://purl.org/dc/terms/title" {
+	if pred != "http://www.w3.org/2004/02/skos/core#prefLabel" {
 		t.Errorf("unexpected predicate URI: %s", pred)
 	}
 	if len(terms) != 1 {
@@ -39,7 +39,7 @@ func TestMapPredicateCSV(t *testing.T) {
 	if len(terms) != 2 {
 		t.Errorf("expected 2 terms, got %d", len(terms))
 	}
-	if pred != "http://purl.org/dc/terms/contributor" {
+	if pred != "http://purl.org/ontology/mo/composer" {
 		t.Errorf("unexpected predicate: %s", pred)
 	}
 }
@@ -59,10 +59,11 @@ func TestMapPredicateMultipleCSV(t *testing.T) {
 			t.Errorf("expected non-empty RDF term")
 		}
 	}
-	if pred1 != "http://purl.org/dc/terms/contributor" || pred2 != "http://purl.org/dc/terms/contributor" {
+	if pred1 != "http://purl.org/ontology/mo/composer" || pred2 != "http://purl.org/ontology/mo/producer" {
 		t.Errorf("expected predicate URI to be contributor for CSV fields")
 	}
 }
+
 
 // Test copySQLiteDB creates a temp copy
 func TestCopySQLiteDB(t *testing.T) {

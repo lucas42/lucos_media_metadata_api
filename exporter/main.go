@@ -38,15 +38,17 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 	switch predicateID {
 
 	case "added":
-		return "http://purl.org/dc/terms/dateAccepted",
+		return MEDIA_MANAGER_BASE + "ontology#dateAdded",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "title":
-		return "http://purl.org/dc/terms/title",
+		// Uses skos:prefLabel for consistency with other items in the triplestore
+		// But might be useful to also add a dc:title predicate too.
+		return "http://www.w3.org/2004/02/skos/core#prefLabel",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "artist":
-		return "http://purl.org/dc/terms/creator",
+		return "http://xmlns.com/foaf/0.1/maker",
 			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	case "album":
@@ -54,7 +56,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	case "genre":
-		return "http://purl.org/dc/terms/subject",
+		return "http://purl.org/ontology/mo/genre",
 			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	case "composer":
@@ -65,7 +67,9 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 				terms = append(terms, getSearchUrl(predicateID, v))
 			}
 		}
-		return "http://purl.org/dc/terms/contributor", terms
+		// Technically the music ontology says a composer is of a composition, rather than the track.
+		// But trying to model all that is a faff.  Here we misuse the composer predicate for simplicity.
+		return "http://purl.org/ontology/mo/composer", terms
 
 	case "producer":
 		vals := splitCSV(value)
@@ -75,13 +79,15 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 				terms = append(terms, getSearchUrl(predicateID, v))
 			}
 		}
-		return "http://purl.org/dc/terms/contributor", terms
+		return "http://purl.org/ontology/mo/producer", terms
 
 	case "language":
 		vals := splitCSV(value)
 		terms := make([]rdf2go.Term, 0, len(vals))
 		for _, v := range vals {
 			if v != "" {
+				// Currently the DB has a mix of iso639-1, iso639-3, iso639-6 and custom x- language codes
+				// For now, just pretend they're iso639-3
 				terms = append(terms, rdf2go.NewResource("http://lexvo.org/id/iso639-3/"+v))
 			}
 		}
@@ -95,7 +101,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 				terms = append(terms, getSearchUrl(predicateID, v))
 			}
 		}
-		return "http://purl.org/dc/terms/subject", terms
+		return MEDIA_MANAGER_BASE + "ontology#trigger", terms
 
 	case "mbid_artist":
 		return "http://purl.org/dc/terms/creator",
@@ -114,10 +120,14 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "lyrics":
+		// Technically, the music ontology uses mo:lyrics to link to a mo:Lyrics node, which then has mo:text to the literal lyrics.
+		// But for now, just misuse the relationship straight to the literal
 		return "http://purl.org/ontology/mo/lyrics",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "rating":
+		// Technically, this should be an attribute of a sdo:Rating class (which can explain what the rating is out of etc)
+		// But for now, just misuse it by placing directly on the Track
 		return "http://schema.org/ratingValue",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
@@ -126,15 +136,16 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	case "memory":
-		return MEDIA_MANAGER_BASE + "ontology/memory",
+		return MEDIA_MANAGER_BASE + "ontology#memory",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "soundtrack":
-		return "http://purl.org/ontology/mo/soundtrack",
+		return MEDIA_MANAGER_BASE + "ontology#soundtrack",
 			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	case "theme_tune":
-		return "http://purl.org/ontology/mo/theme",
+		// This should be treated as a subClass of soundtrack.  But rather than adding both predicates here, best to specify that in the ontology and apply inferencing
+		return MEDIA_MANAGER_BASE + "ontology#theme_tune",
 			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	case "year":
@@ -142,11 +153,11 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "availability":
-		return MEDIA_MANAGER_BASE + "ontology/availability",
+		return MEDIA_MANAGER_BASE + "ontology#availability",
 			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
 	default:
-		return MEDIA_MANAGER_BASE + "ontology/" + predicateID,
+		return MEDIA_MANAGER_BASE + "ontology#" + predicateID,
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 	}
 }
