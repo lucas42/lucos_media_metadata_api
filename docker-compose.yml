@@ -24,6 +24,7 @@ services:
     environment:
       - SQLITE_DB_PATH=/data/media.sqlite
       - RDF_OUTPUT_PATH=/exports/all-media.ttl
+      - SCHEDULE_TRACKER_ENDPOINT
 
 volumes:
   db:

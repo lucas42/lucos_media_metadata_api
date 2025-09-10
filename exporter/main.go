@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -258,6 +261,11 @@ func main() {
 		log.Fatal("RDF_OUTPUT_PATH must be set")
 	}
 
+	scheduleTracker := os.Getenv("SCHEDULE_TRACKER_ENDPOINT")
+	if scheduleTracker == "" {
+		log.Fatal("SCHEDULE_TRACKER_ENDPOINT must be set")
+	}
+
 	tmpDB, cleanup, err := copySQLiteDB(dbPath)
 	if err != nil {
 		log.Fatalf("failed to copy db: %v", err)
@@ -265,8 +273,21 @@ func main() {
 	defer cleanup()
 
 	if err := exportRDF(tmpDB, outFile); err != nil {
+		scheduleTrackerData, _ := json.Marshal(map[string]interface{}{
+			"system":    "media_metadata_api_exporter",
+			"frequency": 60*60, // 1 hour in seconds
+			"status":    "error",
+			"message":   err.Error(),
+		})
+		http.Post(scheduleTracker, "application/json", bytes.NewBuffer(scheduleTrackerData))
 		log.Fatalf("failed to export RDF: %v", err)
 	}
 
 	log.Printf("RDF export written to %s", outFile)
+	scheduleTrackerData, _ := json.Marshal(map[string]interface{}{
+		"system":    "media_metadata_api_exporter",
+		"frequency": 60*60, // 1 hour in seconds
+		"status":    "success",
+	})
+	http.Post(scheduleTracker, "application/json", bytes.NewBuffer(scheduleTrackerData))
 }
