@@ -218,7 +218,7 @@ func exportRDF(dbPath, outFile string) error {
 
 			if urlStr != "" {
 				g.AddTriple(subject, rdf2go.NewResource("http://purl.org/dc/terms/identifier"),
-					rdf2go.NewResource(urlStr))
+					rdf2go.NewLiteral(urlStr))
 			}
 			if duration != nil {
 				durLiteral := rdf2go.NewLiteralWithDatatype(
