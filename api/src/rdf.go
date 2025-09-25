@@ -28,6 +28,6 @@ func RDFHandler(w http.ResponseWriter, r *http.Request) {
 		contentType = "application/octet-stream"
 	}
 
-	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Type", contentType+"; charset=utf-8")
 	http.ServeFile(w, r, rdfPath)
 }

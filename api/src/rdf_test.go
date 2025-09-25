@@ -29,8 +29,7 @@ func TestRDFHandler_ServesFile(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected status 200, got %d", rr.Code)
 	}
-
-	if ct := rr.Header().Get("Content-Type"); ct != "text/turtle" {
+	if ct := rr.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/turtle") {
 		t.Errorf("expected Content-Type text/turtle, got %s", ct)
 	}
 
