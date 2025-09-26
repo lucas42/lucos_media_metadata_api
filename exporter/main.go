@@ -156,6 +156,23 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 		return MEDIA_MANAGER_BASE + "ontology#availability",
 			[]rdf2go.Term{getSearchUrl(predicateID, value)}
 
+	case "about":
+		vals := splitCSV(value)
+		terms := make([]rdf2go.Term, 0, len(vals))
+		for _, v := range vals {
+			terms = append(terms, rdf2go.NewResource(v))
+		}
+		return MEDIA_MANAGER_BASE + "ontology#about", terms
+
+	case "mentions":
+		vals := splitCSV(value)
+		terms := make([]rdf2go.Term, 0, len(vals))
+		for _, v := range vals {
+			terms = append(terms, rdf2go.NewResource(v))
+		}
+		return MEDIA_MANAGER_BASE + "ontology#mentions", terms
+
+
 	default:
 		return MEDIA_MANAGER_BASE + "ontology#" + predicateID,
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
