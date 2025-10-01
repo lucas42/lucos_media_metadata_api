@@ -1,8 +1,6 @@
-module exporter
+module lucos_media_metadata_api
 
 go 1.25.1
-
-toolchain go1.24.7
 
 require (
 	github.com/deiu/gon3 v0.0.0-20241212124032-93153c038193 // indirect

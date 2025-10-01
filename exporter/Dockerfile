@@ -4,7 +4,14 @@ WORKDIR /app
 
 # Install dependencies for CGO + sqlite3
 RUN apk add --no-cache git gcc musl-dev
-COPY . .
+
+# Copy Go modules
+COPY go.* .
+RUN go mod download
+
+# Copy source
+COPY rdfgen/ ./rdfgen/
+COPY exporter/main.go ./main.go
 ENV CGO_ENABLED=1
 RUN go build -o /rdf-exporter ./main.go
 
@@ -17,9 +24,6 @@ RUN apk add --no-cache ca-certificates bash busybox-extras
 # Copy the built binary
 COPY --from=builder /rdf-exporter /usr/local/bin/rdf-exporter
 
-# Create directories for DB and exports
-#RUN mkdir -p /data /exports
-
-COPY crontab /etc/crontabs/root
+COPY exporter/crontab /etc/crontabs/root
 
 CMD ["crond", "-f", "-L", "/dev/stdout"]
