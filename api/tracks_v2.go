@@ -262,7 +262,12 @@ func (store Datastore) TracksV2Controller(w http.ResponseWriter, r *http.Request
 			w.Header().Set("Track-Action", action)
 			writeJSONResponse(w, savedTrack, err)
 		case "GET":
-			writeTrackDataByField(store, w, filterfield, filtervalue)
+			isRDF, mime := prefersRDF(r)
+			if isRDF {
+				writeTrackRDFByField(store, w, filterfield, filtervalue, mime)
+			} else {
+				writeTrackDataByField(store, w, filterfield, filtervalue)
+			}
 		case "DELETE":
 			deleteTrackHandler(store, w, trackid)
 		default:

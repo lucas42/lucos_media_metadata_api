@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"lucos_media_metadata_api/rdfgen"
 )
 
 /**
@@ -414,6 +415,28 @@ func (store Datastore) deleteTrack(trackid int) (err error) {
 func writeTrackDataByField(store Datastore, w http.ResponseWriter, field string, value interface{}) {
 	track, err := store.getTrackDataByField(field, value)
 	writeJSONResponse(w, track, err)
+}
+
+/**
+ * Writes a http response with a RDF representation of a given track
+ */
+func writeTrackRDFByField(store Datastore, w http.ResponseWriter, field string, value interface{}, rdfType string) {
+	rows, err := store.DB.Query(`
+		SELECT t.id, t.url, t.duration, tg.predicateid, tg.value
+		FROM track t
+		LEFT JOIN tag tg ON tg.trackid = t.id WHERE `+field+"=$1", value)
+	defer rows.Close()
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			err = errors.New("Track Not Found")
+		}
+		return
+	}
+	graph, err := rdfgen.TrackToRdf(rows)
+	if err != nil {
+		return
+	}
+	writeRDFResponse(w, graph, rdfType, err)
 }
 
 /**

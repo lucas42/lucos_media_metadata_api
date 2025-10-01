@@ -12,6 +12,19 @@ import (
 	"github.com/deiu/rdf2go"
 )
 
+/**
+ * A struct for holding data about a given track
+ */
+type Track struct {
+	Fingerprint string            `json:"fingerprint"`
+	Duration    int               `json:"duration"`
+	URL         string            `json:"url"`
+	ID          int               `json:"trackid"`
+	Tags        map[string]string `json:"tags"`
+	Weighting   float64           `json:"weighting"`
+}
+
+
 const MEDIA_MANAGER_BASE = "https://media-metadata.l42.eu/"
 
 // Helper: split CSV values and trim whitespace
@@ -182,8 +195,6 @@ func ExportRDF(dbPath, outFile string) error {
 	}
 	defer db.Close()
 
-	g := rdf2go.NewGraph("")
-
 	rows, err := db.Query(`
 		SELECT t.id, t.url, t.duration, tg.predicateid, tg.value
 		FROM track t
@@ -195,6 +206,18 @@ func ExportRDF(dbPath, outFile string) error {
 	}
 	defer rows.Close()
 
+	g, err := TrackToRdf(rows)
+
+	f, err := os.Create(outFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return g.Serialize(f, "turtle")
+}
+func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
+	g := rdf2go.NewGraph("")
 	var lastTrackID int
 	var subject rdf2go.Term
 
@@ -205,7 +228,7 @@ func ExportRDF(dbPath, outFile string) error {
 		var predicateID, value *string
 
 		if err := rows.Scan(&trackID, &urlStr, &duration, &predicateID, &value); err != nil {
-			return err
+			return g, err
 		}
 
 		if trackID != lastTrackID {
@@ -236,11 +259,6 @@ func ExportRDF(dbPath, outFile string) error {
 		}
 	}
 
-	f, err := os.Create(outFile)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return g.Serialize(f, "turtle")
+	return g, nil
 }
+
