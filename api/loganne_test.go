@@ -26,8 +26,9 @@ func mockLoganneEvent(w http.ResponseWriter, request *http.Request) {
 func TestLoganneEvent(test *testing.T) {
 	go mockLoganneServer()
 	loganne := Loganne{
-		endpoint: "http://localhost:7999/events",
-		source: "metadata_api_test",
+		endpoint:           "http://localhost:7999/events",
+		source:             "metadata_api_test",
+		mediaMetadataManagerOrigin: "http://localhost:8020",
 	}
 	track := Track{
 		ID: 17,
@@ -46,7 +47,7 @@ func TestLoganneEvent(test *testing.T) {
 	assertEqual(test,"Loganne request wasn't POST request", "POST", latestRequest.Method)
 
 	assertNoError(test, "Failed to get request body", latestRequestError)
-	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","trackid":17,"tags":{"album":"Harvest Storm","artist":"Altan"},"weighting":9},"type":"testEvent","url":"https://media-metadata.l42.eu/tracks/17"}`, latestRequestBody)
+	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","trackid":17,"tags":{"album":"Harvest Storm","artist":"Altan"},"weighting":9},"type":"testEvent","url":"http://localhost:8020/tracks/17"}`, latestRequestBody)
 }
 func TestLoganneDeleteEvent(test *testing.T) {
 	loganne := Loganne{

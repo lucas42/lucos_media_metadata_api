@@ -21,8 +21,9 @@ func main() {
 	}
 
 	loganne := Loganne{
-		endpoint: os.Getenv("LOGANNE_ENDPOINT"),
-		source: "lucos_media_metadata_api",
+		endpoint:           os.Getenv("LOGANNE_ENDPOINT"),
+		source:             "lucos_media_metadata_api",
+		mediaMetadataManagerOrigin: os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN"),
 	}
 	store := DBInit("/var/lib/media-metadata/media.sqlite", loganne)
 	var port string

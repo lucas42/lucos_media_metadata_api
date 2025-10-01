@@ -126,6 +126,9 @@ func TestPrefersRDF(t *testing.T) {
  */
 func TestRDFOutputForSingleTrack(test *testing.T) {
 	clearData()
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	defer os.Unsetenv("MEDIA_METADATA_MANAGER_ORIGIN")
+
 	trackpath := "/v2/tracks/1"
 	inputJson := `{"fingerprint": "cdb567", "url": "http://example.org/track/879", "tags": {"title": "Rocky Diamond Forest"}, "duration": 300}`
 	outputJson := `{"fingerprint": "cdb567", "duration": 300, "url": "http://example.org/track/879", "trackid": 1, "tags": {"title": "Rocky Diamond Forest"}, "collections":[], "weighting": 0}`
@@ -152,7 +155,7 @@ func TestRDFOutputForSingleTrack(test *testing.T) {
 		test.Errorf("Got non 200 response code %d for %s", response.StatusCode, trackpath)
 	}
 
-	if !strings.Contains(actualResponseBody, "<https://media-metadata.l42.eu/tracks/1>") {
+	if !strings.Contains(actualResponseBody, "<http://localhost:8020/tracks/1>") {
 		test.Errorf("Track URI not returned in RDF representation `%s`", actualResponseBody)
 	}
 	if !strings.Contains(actualResponseBody, "<http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://purl.org/ontology/mo/Track>") {

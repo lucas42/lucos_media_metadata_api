@@ -24,7 +24,7 @@ func TestSplitCSV(t *testing.T) {
 
 // Test mapPredicate returns URIs and terms
 func TestMapPredicate(t *testing.T) {
-	pred, terms := mapPredicate("title", "Song A")
+	pred, terms := mapPredicate("title", "Song A", "http://localhost:8020")
 	if pred != "http://www.w3.org/2004/02/skos/core#prefLabel" {
 		t.Errorf("unexpected predicate URI: %s", pred)
 	}
@@ -35,7 +35,7 @@ func TestMapPredicate(t *testing.T) {
 
 // Test mapPredicate CSV handling
 func TestMapPredicateCSV(t *testing.T) {
-	pred, terms := mapPredicate("composer", "Alice,Bob")
+	pred, terms := mapPredicate("composer", "Alice,Bob", "http://localhost:8020")
 	if len(terms) != 2 {
 		t.Errorf("expected 2 terms, got %d", len(terms))
 	}
@@ -46,8 +46,8 @@ func TestMapPredicateCSV(t *testing.T) {
 
 // Test multiple CSV fields per track
 func TestMapPredicateMultipleCSV(t *testing.T) {
-	pred1, terms1 := mapPredicate("composer", "Alice,Bob")
-	pred2, terms2 := mapPredicate("producer", "Charlie, Dave ")
+	pred1, terms1 := mapPredicate("composer", "Alice,Bob", "http://localhost:8020")
+	pred2, terms2 := mapPredicate("producer", "Charlie, Dave ", "http://localhost:8020")
 	if len(terms1) != 2 {
 		t.Errorf("expected 2 composer terms, got %d", len(terms1))
 	}

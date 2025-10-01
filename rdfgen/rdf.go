@@ -25,7 +25,6 @@ type Track struct {
 }
 
 
-const MEDIA_MANAGER_BASE = "https://media-metadata.l42.eu/"
 
 // Helper: split CSV values and trim whitespace
 func splitCSV(s string) []string {
@@ -36,16 +35,16 @@ func splitCSV(s string) []string {
 	return parts
 }
 
-func getSearchUrl(predicateID, value string) rdf2go.Term {
-	return rdf2go.NewResource(fmt.Sprintf("%ssearch?p.%s=%s", MEDIA_MANAGER_BASE, predicateID, url.QueryEscape(value)))
+func getSearchUrl(predicateID string, value string, mediaMetadataManagerOrigin string) rdf2go.Term {
+	return rdf2go.NewResource(fmt.Sprintf("%s/search?p.%s=%s", mediaMetadataManagerOrigin, predicateID, url.QueryEscape(value)))
 }
 
 // Map a predicate/value pair into predicate URI + list of RDF objects
-func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
+func mapPredicate(predicateID string, value string, mediaMetadataManagerOrigin string) (string, []rdf2go.Term) {
 	switch predicateID {
 
 	case "added":
-		return MEDIA_MANAGER_BASE + "ontology#dateAdded",
+		return mediaMetadataManagerOrigin + "/ontology#dateAdded",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "title":
@@ -56,22 +55,22 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 
 	case "artist":
 		return "http://xmlns.com/foaf/0.1/maker",
-			[]rdf2go.Term{getSearchUrl(predicateID, value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "album":
 		return "http://purl.org/dc/terms/isPartOf",
-			[]rdf2go.Term{getSearchUrl(predicateID, value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "genre":
 		return "http://purl.org/ontology/mo/genre",
-			[]rdf2go.Term{getSearchUrl(predicateID, value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "composer":
 		vals := splitCSV(value)
 		terms := make([]rdf2go.Term, 0, len(vals))
 		for _, v := range vals {
 			if v != "" {
-				terms = append(terms, getSearchUrl(predicateID, v))
+				terms = append(terms, getSearchUrl(predicateID, v, mediaMetadataManagerOrigin))
 			}
 		}
 		// Technically the music ontology says a composer is of a composition, rather than the track.
@@ -83,7 +82,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 		terms := make([]rdf2go.Term, 0, len(vals))
 		for _, v := range vals {
 			if v != "" {
-				terms = append(terms, getSearchUrl(predicateID, v))
+				terms = append(terms, getSearchUrl(predicateID, v, mediaMetadataManagerOrigin))
 			}
 		}
 		return "http://purl.org/ontology/mo/producer", terms
@@ -105,10 +104,10 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 		terms := make([]rdf2go.Term, 0, len(vals))
 		for _, v := range vals {
 			if v != "" {
-				terms = append(terms, getSearchUrl(predicateID, v))
+				terms = append(terms, getSearchUrl(predicateID, v, mediaMetadataManagerOrigin))
 			}
 		}
-		return MEDIA_MANAGER_BASE + "ontology#trigger", terms
+		return mediaMetadataManagerOrigin + "/ontology#trigger", terms
 
 	case "mbid_artist":
 		return "http://purl.org/dc/terms/creator",
@@ -140,28 +139,28 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 
 	case "provenance":
 		return "http://purl.org/dc/terms/source",
-			[]rdf2go.Term{getSearchUrl(predicateID, value)}
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "memory":
-		return MEDIA_MANAGER_BASE + "ontology#memory",
+		return mediaMetadataManagerOrigin + "/ontology#memory",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "soundtrack":
-		return MEDIA_MANAGER_BASE + "ontology#soundtrack",
-			[]rdf2go.Term{getSearchUrl(predicateID, value)}
+		return mediaMetadataManagerOrigin + "/ontology#soundtrack",
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "theme_tune":
 		// This should be treated as a subClass of soundtrack.  But rather than adding both predicates here, best to specify that in the ontology and apply inferencing
-		return MEDIA_MANAGER_BASE + "ontology#theme_tune",
-			[]rdf2go.Term{getSearchUrl(predicateID, value)}
+		return mediaMetadataManagerOrigin + "/ontology#theme_tune",
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "year":
 		return "http://purl.org/dc/terms/date",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "availability":
-		return MEDIA_MANAGER_BASE + "ontology#availability",
-			[]rdf2go.Term{getSearchUrl(predicateID, value)}
+		return mediaMetadataManagerOrigin + "/ontology#availability",
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "about":
 		vals := splitCSV(value)
@@ -169,7 +168,7 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 		for _, v := range vals {
 			terms = append(terms, rdf2go.NewResource(v))
 		}
-		return MEDIA_MANAGER_BASE + "ontology#about", terms
+		return mediaMetadataManagerOrigin + "/ontology#about", terms
 
 	case "mentions":
 		vals := splitCSV(value)
@@ -177,11 +176,11 @@ func mapPredicate(predicateID, value string) (string, []rdf2go.Term) {
 		for _, v := range vals {
 			terms = append(terms, rdf2go.NewResource(v))
 		}
-		return MEDIA_MANAGER_BASE + "ontology#mentions", terms
+		return mediaMetadataManagerOrigin + "/ontology#mentions", terms
 
 
 	default:
-		return MEDIA_MANAGER_BASE + "ontology#" + predicateID,
+		return mediaMetadataManagerOrigin + "/ontology#" + predicateID,
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 	}
 }
@@ -217,6 +216,7 @@ func ExportRDF(dbPath, outFile string) error {
 	return g.Serialize(f, "turtle")
 }
 func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
+	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	g := rdf2go.NewGraph("")
 	var lastTrackID int
 	var subject rdf2go.Term
@@ -232,7 +232,7 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		}
 
 		if trackID != lastTrackID {
-			subject = rdf2go.NewResource(fmt.Sprintf("%stracks/%d", MEDIA_MANAGER_BASE, trackID))
+			subject = rdf2go.NewResource(fmt.Sprintf("%s/tracks/%d", mediaMetadataManagerOrigin, trackID))
 			g.AddTriple(subject,
 				rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
 				rdf2go.NewResource("http://purl.org/ontology/mo/Track"))
@@ -252,7 +252,7 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		}
 
 		if predicateID != nil && value != nil {
-			predURI, objs := mapPredicate(*predicateID, *value)
+			predURI, objs := mapPredicate(*predicateID, *value, mediaMetadataManagerOrigin)
 			for _, obj := range objs {
 				g.AddTriple(subject, rdf2go.NewResource(predURI), obj)
 			}

@@ -15,6 +15,7 @@ services:
       - CLIENT_KEYS
       - LOGANNE_ENDPOINT
       - RDF_OUTPUT_PATH=/var/lib/exports/all-media.ttl
+      - MEDIA_METADATA_MANAGER_ORIGIN=https://media-metadata.l42.eu
   exporter:
     build:
       dockerfile: exporter/Dockerfile
@@ -29,6 +30,7 @@ services:
       - SQLITE_DB_PATH=/data/media.sqlite
       - RDF_OUTPUT_PATH=/exports/all-media.ttl
       - SCHEDULE_TRACKER_ENDPOINT
+      - MEDIA_METADATA_MANAGER_ORIGIN=https://media-metadata.l42.eu
 
 volumes:
   db:

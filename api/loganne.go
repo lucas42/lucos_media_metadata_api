@@ -14,8 +14,9 @@ type LoganneInterface interface {
 }
 
 type Loganne struct {
-	source string
-	endpoint   string
+	source             string
+	endpoint           string
+	mediaMetadataManagerOrigin string
 }
 
 func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack Track, existingTrack Track) {
@@ -30,7 +31,7 @@ func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack
 	// If there's an updated track, include that in the data and link to it in loganne
 	if updatedTrack.ID > 0 {
 		data["track"] = updatedTrack
-		data["url"] = fmt.Sprintf("https://media-metadata.l42.eu/tracks/%d", updatedTrack.ID)
+		data["url"] = fmt.Sprintf("%s/tracks/%d", loganne.mediaMetadataManagerOrigin, updatedTrack.ID)
 
 	// If the was an existing track, but no updated one (ie a delete event)
 	// include the old track in the data, but don't link to it as the link will 404
@@ -56,9 +57,9 @@ func (loganne Loganne) collectionPost(eventType string, humanReadable string, up
 	// If there's an updated collection, include that in the data and link to it in loganne
 	if updatedCollection.Slug != "" {
 		data["collection"] = updatedCollection
-		data["url"] = fmt.Sprintf("https://media-metadata.l42.eu/collections/%s", updatedCollection.Slug)
+		data["url"] = fmt.Sprintf("%s/collections/%s", loganne.mediaMetadataManagerOrigin, updatedCollection.Slug)
 
-	// If the was an existing collection, but no updated one (ie a delete event)
+	// If there was an existing collection, but no updated one (ie a delete event)
 	// include the old collection in the data, but don't link to it as the link will 404
 	} else if existingCollection.Slug != "" {
 		data["collection"] = existingCollection
