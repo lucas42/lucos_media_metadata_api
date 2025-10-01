@@ -2,7 +2,7 @@ version: 2.1
 orbs:
   lucos: lucos/deploy@0
 jobs:
-  api_test:
+  test:
     docker:
       - image: cimg/go:1.25
     environment:
@@ -16,27 +16,7 @@ jobs:
           command: go get ./...
       - run:
           name: Unit Tests
-          command: go test ./src -coverprofile=coverage.out
-      - run:
-          name: Generate Code Coverage
-          command: go tool cover -html=coverage.out -o coverage.html
-      - store_artifacts:
-          path: coverage.html
-  exporter_test:
-    docker:
-      - image: cimg/go:1.25
-    environment:
-      GO111MODULE: auto
-    working_directory: ~/repo/exporter
-    steps:
-      - checkout:
-          path: ~/repo
-      - run:
-          name: Install Dependencies
-          command: go get ./...
-      - run:
-          name: Unit Tests
-          command: go test . -coverprofile=coverage.out
+          command: go test ./... -coverprofile=coverage.out
       - run:
           name: Generate Code Coverage
           command: go tool cover -html=coverage.out -o coverage.html
@@ -47,13 +27,11 @@ workflows:
   version: 2
   build-deploy:
     jobs:
-      - api_test
-      - exporter_test
+      - test
       - lucos/build-amd64
       - lucos/deploy-avalon:
           requires:
-            - api_test
-            - exporter_test
+            - test
             - lucos/build-amd64
           filters:
             branches:
