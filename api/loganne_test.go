@@ -53,6 +53,7 @@ func TestLoganneDeleteEvent(test *testing.T) {
 	loganne := Loganne{
 		endpoint: "http://localhost:7999/events",
 		source: "metadata_api_test",
+		mediaMetadataManagerOrigin: "http://localhost:8020",
 	}
 	track := Track{
 		ID: 18,
@@ -73,7 +74,7 @@ func TestLoganneDeleteEvent(test *testing.T) {
 	assertEqual(test,"Loganne request wasn't POST request", "POST", latestRequest.Method)
 
 	assertNoError(test, "Failed to get request body", latestRequestError)
-	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the delete test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","trackid":18,"tags":{"album":"Harvest Storm","artist":"Altan"},"weighting":9},"type":"deleteEvent"}`, latestRequestBody)
+	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the delete test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","trackid":18,"tags":{"album":"Harvest Storm","artist":"Altan"},"weighting":9},"type":"deleteEvent","url":"http://localhost:8020/tracks/18"}`, latestRequestBody)
 }
 
 /**
