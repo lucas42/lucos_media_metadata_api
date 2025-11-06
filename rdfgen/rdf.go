@@ -206,14 +206,6 @@ func ExportRDF(dbPath, outFile string) error {
 	defer rows.Close()
 
 	g, err := TrackToRdf(rows)
-	g.AddTriple(rdf2go.NewResource("http://purl.org/ontology/mo/Track"),
-		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
-		rdf2go.NewResource("http://www.w3.org/2002/07/owl#Class"),
-	)
-	g.AddTriple(rdf2go.NewResource("http://purl.org/ontology/mo/Track"),
-		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
-		rdf2go.NewLiteralWithLanguage("Track", "en"),
-	)
 
 	f, err := os.Create(outFile)
 	if err != nil {
@@ -226,6 +218,14 @@ func ExportRDF(dbPath, outFile string) error {
 func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	g := rdf2go.NewGraph("")
+	g.AddTriple(rdf2go.NewResource("http://purl.org/ontology/mo/Track"),
+		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		rdf2go.NewResource("http://www.w3.org/2002/07/owl#Class"),
+	)
+	g.AddTriple(rdf2go.NewResource("http://purl.org/ontology/mo/Track"),
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Track", "en"),
+	)
 	var lastTrackID int
 	var subject rdf2go.Term
 
