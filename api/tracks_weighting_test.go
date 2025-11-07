@@ -144,8 +144,8 @@ func assertCollectionWeighting(test *testing.T, store Datastore, trackid int, co
 	if err != nil {
 		test.Errorf("Error getting cumulative weighting for track %d: %s", trackid, err.Error())
 	}
-	assertEqual(test, "Incorrect Weighting for track "+strconv.Itoa(trackid), expectedWeighting, actualWeighting)
-	assertEqual(test, "Incorrect Cumulative Weighting for track "+strconv.Itoa(trackid), expectedCumulativeWeighting, actualCumulativeWeighting)
+	assertEqual(test, "Incorrect Collection Weighting for track "+strconv.Itoa(trackid), expectedWeighting, actualWeighting)
+	assertEqual(test, "Incorrect Cumulative Collection Weighting for track "+strconv.Itoa(trackid), expectedCumulativeWeighting, actualCumulativeWeighting)
 }
 
 func TestDeletingTrackCorrectsWeightingInCollection(test *testing.T) {

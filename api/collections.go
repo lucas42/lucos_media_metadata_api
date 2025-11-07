@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -270,32 +271,54 @@ func (store Datastore) isTrackInCollection(collectionslug string, trackid int) (
  * Checks whether a collection contains a given track
  */
 func (store Datastore) addTrackToCollection(collectionslug string, trackid int) (err error) {
+	tx, err := store.DB.Begin()
+	if err != nil {
+		return
+	}
 	slog.Info("Add track to collection", "collectionslug", collectionslug, "trackid", trackid)
 	_, err = store.DB.Exec("INSERT OR IGNORE INTO collection_track (collectionslug, trackid) VALUES ($1, $2)", collectionslug, trackid)
 	if err != nil {
+		_ = tx.Rollback()
 		return
 	}
 	weighting, err := store.getTrackWeighting(trackid)
 	if err != nil {
+		_ = tx.Rollback()
 		return
 	}
-	err = store.updateTrackCollectionCumWeighting(collectionslug, trackid, 0, weighting)
+	err = store.updateTrackCollectionCumWeighting(tx, collectionslug, trackid, 0, weighting)
+	if err != nil {
+		_ = tx.Rollback()
+		return
+	}
+	err = tx.Commit();
 	return
 }
 /**
  * Checks whether a collection contains a given track
  */
 func (store Datastore) removeTrackFromCollection(collectionslug string, trackid int) (err error) {
+	tx, err := store.DB.Begin()
+	if err != nil {
+		return
+	}
 	slog.Info("Remove track from collection", "collectionslug", collectionslug, "trackid", trackid)
 	oldWeighting, err := store.getTrackWeighting(trackid)
 	if err != nil {
+		_ = tx.Rollback()
 		return
 	}
-	err = store.updateTrackCollectionCumWeighting(collectionslug, trackid, oldWeighting, 0)
+	err = store.updateTrackCollectionCumWeighting(tx, collectionslug, trackid, oldWeighting, 0)
 	if err != nil {
+		_ = tx.Rollback()
 		return
 	}
-	_, err = store.DB.Exec("DELETE FROM collection_track WHERE collectionslug == $1 AND trackid == $2", collectionslug, trackid)
+	_, err = tx.Exec("DELETE FROM collection_track WHERE collectionslug == $1 AND trackid == $2", collectionslug, trackid)
+	if err != nil {
+		_ = tx.Rollback()
+		return
+	}
+	err = tx.Commit();
 	return
 }
 
@@ -324,13 +347,13 @@ func (store Datastore) getCollectionMaxCumWeighting(slug string) (maxcumweightin
  * Updates the cumulative weightings for a given track across all its collections
  *
  */
-func (store Datastore) updateTrackAllCollectionsCumWeighting(trackid int, oldWeighting float64, newWeighting float64) (err error) {
+func (store Datastore) updateTrackAllCollectionsCumWeighting(tx *sql.Tx, trackid int, oldWeighting float64, newWeighting float64) (err error) {
 	collections, err := store.getCollectionsByTrack(trackid)
 	if err != nil {
 		return
 	}
 	for i := range collections {
-		err = store.updateTrackCollectionCumWeighting(collections[i].Slug, trackid, oldWeighting, newWeighting)
+		err = store.updateTrackCollectionCumWeighting(tx, collections[i].Slug, trackid, oldWeighting, newWeighting)
 		if err != nil {
 			return
 		}
@@ -341,10 +364,10 @@ func (store Datastore) updateTrackAllCollectionsCumWeighting(trackid int, oldWei
  * Updates the cumulative weightings for a given track in a given collection
  *
  */
-func (store Datastore) updateTrackCollectionCumWeighting(collectionslug string, trackid int, oldWeighting float64, newWeighting float64) (err error) {
+func (store Datastore) updateTrackCollectionCumWeighting(tx *sql.Tx, collectionslug string, trackid int, oldWeighting float64, newWeighting float64) (err error) {
 	slog.Debug("Set Cumulative Weighting in collection", "collectionslug", collectionslug, "trackid", trackid, "oldWeighting", oldWeighting, "newWeighting", newWeighting)
 	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
-	_, err = store.DB.Exec("UPDATE collection_track SET cum_weighting = cum_weighting - $1 WHERE collectionslug == $2 AND cum_weighting >= (SELECT cum_weighting FROM collection_track WHERE collectionslug == $3 AND trackid == $4)", oldWeighting, collectionslug, collectionslug, trackid)
+	_, err = tx.Exec("UPDATE collection_track SET cum_weighting = cum_weighting - $1 WHERE collectionslug == $2 AND cum_weighting >= (SELECT cum_weighting FROM collection_track WHERE collectionslug == $3 AND trackid == $4)", oldWeighting, collectionslug, collectionslug, trackid)
 	if err != nil {
 		return
 	}
@@ -357,13 +380,13 @@ func (store Datastore) updateTrackCollectionCumWeighting(collectionslug string, 
 		if err != nil {
 			return
 		}
-		newCumulativeWeighting = max + newWeighting
+		newCumulativeWeighting = max - oldWeighting + newWeighting
 
 	// If the weighting is zero, then set the cumulative weighting to zero too, to avoid 2 tracks with the same weighting
 	} else {
 		newCumulativeWeighting = 0
 	}
-	_, err = store.DB.Exec("UPDATE collection_track SET cum_weighting = $1 WHERE collectionslug == $2 AND trackid == $3", newCumulativeWeighting, collectionslug, trackid)
+	_, err = tx.Exec("UPDATE collection_track SET cum_weighting = $1 WHERE collectionslug == $2 AND trackid == $3", newCumulativeWeighting, collectionslug, trackid)
 	return
 }
 

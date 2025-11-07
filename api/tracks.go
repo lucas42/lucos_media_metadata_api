@@ -275,9 +275,15 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	}
 	slog.Info("Set Track Weighting", "trackid", trackid, "oldWeighting", oldWeighting, "newWeighting", newWeighting)
 
-	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
-	_, err = store.DB.Exec("UPDATE track SET cum_weighting = cum_weighting - $1 WHERE cum_weighting >= (SELECT cum_weighting FROM track WHERE id = $2)", oldWeighting, trackid)
+	tx, err := store.DB.Begin()
 	if err != nil {
+		return
+	}
+
+	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
+	_, err = tx.Exec("UPDATE track SET cum_weighting = cum_weighting - $1 WHERE cum_weighting >= (SELECT cum_weighting FROM track WHERE id = $2)", oldWeighting, trackid)
+	if err != nil {
+		_ = tx.Rollback()
 		return
 	}
 	var newCumulativeWeighting float64
@@ -287,22 +293,31 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 		var max float64
 		max, err = store.getMaxCumWeighting()
 		if err != nil {
+			slog.Info("No getMaxCumWeighting")
+			_ = tx.Rollback()
 			return
 		}
-		newCumulativeWeighting = max + newWeighting
+		newCumulativeWeighting = max - oldWeighting + newWeighting
 
 	// If the weighting is zero, then set the cumulative weighting to zero too, to avoid 2 tracks with the same weighting
 	} else {
 		newCumulativeWeighting = 0
 	}
-	_, err = store.DB.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", newWeighting, newCumulativeWeighting, trackid)
+	_, err = tx.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", newWeighting, newCumulativeWeighting, trackid)
+	if err != nil {
+		_ = tx.Rollback()
+		return
+	}
+	err = store.updateTrackAllCollectionsCumWeighting(tx, trackid, oldWeighting, newWeighting)
+	if err != nil {
+		_ = tx.Rollback()
+		return
+	}
+	err = tx.Commit();
 	if err != nil {
 		return
 	}
-	err = store.updateTrackAllCollectionsCumWeighting(trackid, oldWeighting, newWeighting)
-	if err != nil {
-		return
-	}
+
 	updatedTrack := existingTrack
 	updatedTrack.Weighting = newWeighting
 	humanReadableMessage := "Weighting for track "+updatedTrack.getName()+" updated from "+strconv.FormatFloat(oldWeighting, 'f', -1, 64)+" to "+strconv.FormatFloat(newWeighting, 'f', -1, 64)
