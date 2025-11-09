@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/jmoiron/sqlx"
 	"encoding/json"
 	"errors"
 	"io"
@@ -275,7 +276,7 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	}
 	slog.Info("Set Track Weighting", "trackid", trackid, "oldWeighting", oldWeighting, "newWeighting", newWeighting)
 
-	tx, err := store.DB.Begin()
+	tx, err := store.DB.Beginx()
 	if err != nil {
 		return
 	}
@@ -283,6 +284,7 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
 	_, err = tx.Exec("UPDATE track SET cum_weighting = cum_weighting - $1 WHERE cum_weighting >= (SELECT cum_weighting FROM track WHERE id = $2)", oldWeighting, trackid)
 	if err != nil {
+		slog.Warn("Can't bulk update cum_weightings; rolling back")
 		_ = tx.Rollback()
 		return
 	}
@@ -291,13 +293,13 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	// If there's a non zero weighting, then stick this track to the end of the cumulative weighting list
 	if newWeighting > 0 {
 		var max float64
-		max, err = store.getMaxCumWeighting()
+		max, err = store.getMaxCumWeighting(tx)
 		if err != nil {
-			slog.Info("No getMaxCumWeighting")
+			slog.Warn("Can't get max cum_weighting; rolling back")
 			_ = tx.Rollback()
 			return
 		}
-		newCumulativeWeighting = max - oldWeighting + newWeighting
+		newCumulativeWeighting = max + newWeighting
 
 	// If the weighting is zero, then set the cumulative weighting to zero too, to avoid 2 tracks with the same weighting
 	} else {
@@ -305,11 +307,13 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	}
 	_, err = tx.Exec("UPDATE track SET weighting = $1, cum_weighting = $2 WHERE id = $3", newWeighting, newCumulativeWeighting, trackid)
 	if err != nil {
+		slog.Warn("Can't update this track's weighting; rolling back")
 		_ = tx.Rollback()
 		return
 	}
 	err = store.updateTrackAllCollectionsCumWeighting(tx, trackid, oldWeighting, newWeighting)
 	if err != nil {
+		slog.Warn("Can't update collection cum_weightings; rolling back")
 		_ = tx.Rollback()
 		return
 	}
@@ -341,8 +345,8 @@ func (store Datastore) getTrackWeighting(trackid int) (weighting float64, err er
  * Gets the highest cumulative weighting value (defaults to 0)
  *
  */
-func (store Datastore) getMaxCumWeighting() (maxcumweighting float64, err error) {
-	err = store.DB.Get(&maxcumweighting, "SELECT IFNULL(MAX(cum_weighting), 0) FROM track")
+func (store Datastore) getMaxCumWeighting(tx *sqlx.Tx) (maxcumweighting float64, err error) {
+	err = tx.Get(&maxcumweighting, "SELECT IFNULL(MAX(cum_weighting), 0) FROM track")
 	if maxcumweighting < 0 {
 		err = errors.New("cum_weightings are negative, max: " + strconv.FormatFloat(maxcumweighting, 'f', -1, 64))
 	}
@@ -355,30 +359,39 @@ func (store Datastore) getMaxCumWeighting() (maxcumweighting float64, err error)
  *
  */
 func (store Datastore) getRandomTracks(count int) (tracks []Track, err error) {
-	max, err := store.getMaxCumWeighting()
+	tx, err := store.DB.Beginx()
 	if err != nil {
+		return
+	}
+	max, err := store.getMaxCumWeighting(tx)
+	if err != nil {
+		_ = tx.Rollback()
 		return
 	}
 
 	tracks = []Track{}
 	if max == 0 {
+		_ = tx.Rollback()
 		return
 	}
 
 	for i := 0; i < count; i++ {
 		track := Track{}
 		weighting := rand.Float64() * max
-		err = store.DB.Get(&track, "SELECT id, url, fingerprint, duration, weighting, cum_weighting AS cumweight FROM track WHERE cum_weighting > $1 ORDER BY cum_weighting ASC LIMIT 1", weighting)
+		err = tx.Get(&track, "SELECT id, url, fingerprint, duration, weighting, cum_weighting AS cumweight FROM track WHERE cum_weighting > $1 ORDER BY cum_weighting ASC LIMIT 1", weighting)
 		track.RandWeight = weighting
 		if err != nil {
+			_ = tx.Rollback()
 			return
 		}
 		track.Tags, err = store.getAllTagsForTrack(track.ID)
 		if err != nil {
+			_ = tx.Rollback()
 			return
 		}
 		tracks = append(tracks, track)
 	}
+	err = tx.Commit();
 	return
 }
 
