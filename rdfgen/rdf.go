@@ -303,7 +303,7 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		rdf2go.NewLiteral("An ontology defining custom properties used by the Media Metadata Manager RDF exporter."))
 
 	// Helper for adding a property definition
-	addProperty := func(localName, label string, propertyType rdf2go.Term, rangeURI rdf2go.Term, comment string) {
+	addProperty := func(localName, label string, propertyType rdf2go.Term, rangeURI rdf2go.Term, comment string, inverse string, inverseLabel string) {
 		subject := rdf2go.NewResource(fmt.Sprintf("%s#%s", ontologyURI, localName))
 		g.AddTriple(subject,
 			rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
@@ -320,40 +320,58 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		g.AddTriple(subject,
 			rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#comment"),
 			rdf2go.NewLiteral(comment))
+		if inverse != "" {
+			inverse_uri := rdf2go.NewResource(fmt.Sprintf("%s#%s", ontologyURI, inverse))
+			g.AddTriple(subject,
+				rdf2go.NewResource("http://www.w3.org/2002/07/owl#inverseOf"),
+				inverse_uri)
+			g.AddTriple(inverse_uri,
+				rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+				propertyType)
+			g.AddTriple(inverse_uri,
+				rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+				rdf2go.NewLiteralWithLanguage(inverseLabel, "en"))
+		}
 	}
 
 	// Define all custom ontology properties from mapPredicate
 	addProperty("dateAdded", "Date added", owlDatatypeProperty,
 		rdf2go.NewResource("http://www.w3.org/2001/XMLSchema#dateTime"),
-		"The date the track was added to the collection.")
+		"The date the track was added to the collection.", "", "")
 
 	addProperty("trigger", "Trigger (offence)", owlObjectProperty,
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
-		"Any potential triggers or offence covered by the track's subject matter.")
+		"Any potential triggers or offence covered by the track's subject matter.", "", "")
 
 	addProperty("memory", "Memory", owlObjectProperty,
 		rdf2go.NewResource("https://eolas.l42.eu/ontology/Memory"),
-		"What this song reminds Luke of.")
+		"What this song reminds Luke of.", "", "")
 
 	addProperty("soundtrack", "Soundtrack", owlObjectProperty,
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
-		"Creative Work whose soundtrack this track appears in.")
+		"Creative Work whose soundtrack this track appears in.", "", "")
 
 	addProperty("theme_tune", "Theme tune", owlObjectProperty,
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
-		"Creative Work this track is the primary theme tune of.")
+		"Creative Work this track is the primary theme tune of.", "", "")
 
 	addProperty("availability", "Availability", owlObjectProperty,
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
-		"How easy it would be to replace this track if something happened to my collection.")
+		"How easy it would be to replace this track if something happened to my collection.", "", "")
 
 	addProperty("about", "About", owlObjectProperty,
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
-		"Concepts which are the primary topic of this track.")
+		"Concepts which are the primary topic of this track.", "subjectOf", "Subject Of")
 
 	addProperty("mentions", "Mentions", owlObjectProperty,
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
-		"Concepts which are mentioned or alluded to by this track.")
+		"Concepts which are mentioned or alluded to by this track.", "mentionedBy", "Mentioned By")
+
+	g.AddTriple(
+		rdf2go.NewResource(mediaMetadataManagerOrigin + "/ontology#about"),
+		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#subPropertyOf"),
+		rdf2go.NewResource(mediaMetadataManagerOrigin + "/ontology#mentions"),
+	)
 
 	return g, nil
 }
