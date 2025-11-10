@@ -93,8 +93,7 @@ func mapPredicate(predicateID string, value string, mediaMetadataManagerOrigin s
 		for _, v := range vals {
 			if v != "" {
 				// Currently the DB has a mix of iso639-1, iso639-3, iso639-6 and custom x- language codes
-				// For now, just pretend they're iso639-3
-				terms = append(terms, rdf2go.NewResource("http://lexvo.org/id/iso639-3/"+v))
+				terms = append(terms, rdf2go.NewResource(fmt.Sprintf("https://eolas.l42.eu/metadata/language/%s/", v)))
 			}
 		}
 		return "http://purl.org/dc/terms/language", terms
