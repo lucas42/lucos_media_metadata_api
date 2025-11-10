@@ -101,6 +101,7 @@ func TestExportRDF(t *testing.T) {
 	}
 
 	tmpFile := filepath.Join(tmpDir, "output.ttl")
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
 	if err := ExportRDF(dbPath, tmpFile); err != nil {
 		t.Fatalf("ExportRDF failed: %v", err)
 	}

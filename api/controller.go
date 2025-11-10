@@ -18,6 +18,7 @@ func FrontController(store Datastore, clientKeys string) http.Handler {
 	router.HandleFunc("/v2/collections", store.CollectionsV2Controller)
 	router.HandleFunc("/v2/collections/", store.CollectionsV2Controller)
 	router.HandleFunc("/v2/export", RDFHandler)
+	router.HandleFunc("/ontology", OntologyHandler)
 	router.HandleFunc("/_info", store.InfoController)
 	router.HandleFunc("/", HomepageController)
 

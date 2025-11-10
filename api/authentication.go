@@ -28,8 +28,8 @@ func (server AuthentictedServer) ServeHTTP(writer http.ResponseWriter, request *
 }
 
 func (server AuthentictedServer) isAuthenticated(request *http.Request) (bool) {
-	// Unauthenticated requests to the info path are allowed
-	if request.URL.Path == "/_info" {
+	// Unauthenticated requests to the info and ontology paths are allowed
+	if request.URL.Path == "/_info" || request.URL.Path == "/ontology" {
 		return true
 	}
 	authHeaderParts := strings.Split(request.Header.Get("Authorization"), " ")

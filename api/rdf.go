@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"github.com/deiu/rdf2go"
+	"lucos_media_metadata_api/rdfgen"
 )
 
 // RDFHandler serves the RDF file specified by RDF_OUTPUT_PATH.
@@ -32,6 +33,15 @@ func RDFHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", contentType+"; charset=utf-8")
 	http.ServeFile(w, r, rdfPath)
+}
+
+func OntologyHandler(w http.ResponseWriter, r *http.Request) {
+	graph, err := rdfgen.OntologyToRdf()
+	preferRDF, mime := prefersRDF(r)
+	if !preferRDF {
+		mime = "application/ld+json"
+	}
+	writeRDFResponse(w, graph, mime, err)
 }
 
 /**
