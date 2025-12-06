@@ -17,6 +17,7 @@ import (
 type Collection struct {
 	Slug   string    `json:"slug"`
 	Name   string    `json:"name"`
+	Icon   string    `json:"icon"`
 	Tracks *[]Track  `json:"tracks,omitempty"`
 	TotalTracks *int `json:"totalTracks,omitempty"`
 	TotalPages *int  `json:"totalPages,omitempty"`
@@ -30,7 +31,7 @@ type Collection struct {
  */
 func (store Datastore) getBasicCollection(slug string) (collection Collection, err error) {
 	collection = Collection{}
-	err = store.DB.Get(&collection, "SELECT slug, name FROM collection WHERE slug=$1", slug)
+	err = store.DB.Get(&collection, "SELECT slug, name, icon FROM collection WHERE slug=$1", slug)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			err = errors.New("Collection Not Found")
@@ -68,7 +69,7 @@ func (store Datastore) getAllCollections() (collections []Collection, err error)
 		return
 	}
 	collections = []Collection{}
-	err = store.DB.Select(&collections, "SELECT slug, name FROM collection")
+	err = store.DB.Select(&collections, "SELECT slug, name, icon FROM collection")
 	if err != nil {
 		_ = tx.Rollback()
 		return
@@ -138,7 +139,7 @@ func (store Datastore) getTracksInCollection(slug string, offset int, limit int)
  */
 func (store Datastore) getCollectionsByTrack(trackid int) (collections []Collection, err error) {
 	collections = []Collection{}
-	err = store.DB.Select(&collections, "SELECT slug, name FROM collection_track LEFT JOIN collection ON collection_track.collectionslug = collection.slug WHERE collection_track.trackid = $1", trackid)
+	err = store.DB.Select(&collections, "SELECT slug, name, icon FROM collection_track LEFT JOIN collection ON collection_track.collectionslug = collection.slug WHERE collection_track.trackid = $1", trackid)
 	return
 }
 /**
@@ -146,12 +147,15 @@ func (store Datastore) getCollectionsByTrack(trackid int) (collections []Collect
  */
 func (store Datastore) getCollectionsByTrackUsingTx(tx *sqlx.Tx, trackid int) (collections []Collection, err error) {
 	collections = []Collection{}
-	err = tx.Select(&collections, "SELECT slug, name FROM collection_track LEFT JOIN collection ON collection_track.collectionslug = collection.slug WHERE collection_track.trackid = $1", trackid)
+	err = tx.Select(&collections, "SELECT slug, name, icon FROM collection_track LEFT JOIN collection ON collection_track.collectionslug = collection.slug WHERE collection_track.trackid = $1", trackid)
 	return
 }
 
 func (original Collection) updateNeeded(changeSet Collection) bool {
 	if changeSet.Name != "" && changeSet.Name != original.Name {
+		return true
+	}
+	if changeSet.Icon != "" && changeSet.Icon != original.Icon {
 		return true
 	}
 	// TODO: check for different tracks in collection
@@ -238,18 +242,25 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 		slog.Debug("Update collection not needed", "newCollection", newCollection)
 		return
 	}
-	slog.Info("Update/Create collection", "newCollection", newCollection)
+	slog.Info("Update/Create collection", "existingCollection", existingCollection, "newCollection", newCollection)
 	action = "Changed"
-	if newCollection.Name != "" {
+	if newCollection.Name != "" || newCollection.Icon != "" {
 		err = store.checkForDuplicateCollection("name", newCollection.Name, "slug", newCollection.Slug)
 		if err != nil {
 			return
 		}
+		if newCollection.Name == "" {
+			newCollection.Name = existingCollection.Name
+		}
+		if newCollection.Icon == "" {
+			newCollection.Icon = existingCollection.Icon
+		}
 		if existingCollection.Slug != "" {
-			_, err = store.DB.NamedExec("UPDATE collection SET name = :name WHERE slug = :slug", newCollection)
+			_, err = store.DB.NamedExec("UPDATE collection SET name = :name, icon = :icon WHERE slug = :slug", newCollection)
 			storedCollection.Name = newCollection.Name
+			storedCollection.Icon = newCollection.Icon
 		} else {
-			_, err = store.DB.NamedExec("INSERT INTO collection(slug, name) values(:slug, :name)", newCollection)
+			_, err = store.DB.NamedExec("INSERT INTO collection(slug, name, icon) values(:slug, :name, :icon)", newCollection)
 			storedCollection = newCollection
 		}
 		if err != nil {
@@ -265,10 +276,10 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 
 	if existingCollection.Slug != "" {
 		action = "collectionUpdated"
-		store.Loganne.collectionPost(action, "Music Collection "+newCollection.Name+" Updated", newCollection, existingCollection)
+		store.Loganne.collectionPost(action, "Music Collection "+storedCollection.Name+" Updated", newCollection, existingCollection)
 	} else {
 		action = "collectionCreated"
-		store.Loganne.collectionPost(action, "New Music Collection Created: "+newCollection.Name, newCollection, existingCollection)
+		store.Loganne.collectionPost(action, "New Music Collection Created: "+storedCollection.Name, newCollection, existingCollection)
 	}
 	return
 }
