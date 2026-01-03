@@ -373,5 +373,11 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		rdf2go.NewResource(mediaMetadataManagerOrigin + "/ontology#mentions"),
 	)
 
+	g.AddTriple(
+		moTrack,
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"),
+	)
+
 	return g, nil
 }
