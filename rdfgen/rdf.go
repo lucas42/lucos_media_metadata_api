@@ -225,13 +225,19 @@ func ExportRDF(dbPath, outFile string) error {
 func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	g := rdf2go.NewGraph("")
-	g.AddTriple(rdf2go.NewResource("http://purl.org/ontology/mo/Track"),
+	moTrack := rdf2go.NewResource("http://purl.org/ontology/mo/Track")
+	g.AddTriple(moTrack,
 		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
 		rdf2go.NewResource("http://www.w3.org/2002/07/owl#Class"),
 	)
-	g.AddTriple(rdf2go.NewResource("http://purl.org/ontology/mo/Track"),
+	g.AddTriple(moTrack,
 		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
 		rdf2go.NewLiteralWithLanguage("Track", "en"),
+	)
+	g.AddTriple(
+		moTrack,
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"),
 	)
 	var lastTrackID int
 	var subject rdf2go.Term
@@ -371,12 +377,6 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		rdf2go.NewResource(mediaMetadataManagerOrigin + "/ontology#about"),
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#subPropertyOf"),
 		rdf2go.NewResource(mediaMetadataManagerOrigin + "/ontology#mentions"),
-	)
-
-	g.AddTriple(
-		moTrack,
-		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
-		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"),
 	)
 
 	return g, nil
