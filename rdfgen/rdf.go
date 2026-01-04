@@ -239,6 +239,11 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
 		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"),
 	)
+	g.AddTriple(
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"),
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Musical", "en"),
+	)
 	var lastTrackID int
 	var subject rdf2go.Term
 
