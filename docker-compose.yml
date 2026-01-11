@@ -5,7 +5,7 @@ services:
       context: . # Use root context, so rdfgen can be pulled in
     container_name: media_metadata_api
     ports: 
-      - "3002:3002"
+      - $PORT:$PORT
     image: lucas42/lucos_media_metadata_api
     volumes:
       - "db:/var/lib/media-metadata/"
@@ -16,6 +16,7 @@ services:
       - LOGANNE_ENDPOINT
       - RDF_OUTPUT_PATH=/var/lib/exports/all-media.ttl
       - MEDIA_METADATA_MANAGER_ORIGIN=https://media-metadata.l42.eu
+      - PORT
   exporter:
     build:
       dockerfile: exporter/Dockerfile

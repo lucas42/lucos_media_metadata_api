@@ -9,7 +9,4 @@ COPY rdfgen/ ./rdfgen/
 COPY api .
 RUN go install
 
-ENV PORT=3002
-EXPOSE $PORT
-
 CMD ["lucos_media_metadata_api"]
