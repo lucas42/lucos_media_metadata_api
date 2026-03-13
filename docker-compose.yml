@@ -11,6 +11,12 @@ services:
       - "db:/var/lib/media-metadata/"
       - "exports:/var/lib/exports/"
     restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${PORT}/_info"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     environment:
       - CLIENT_KEYS
       - LOGANNE_ENDPOINT
@@ -27,6 +33,12 @@ services:
       - db:/data:ro
       - exports:/exports
     restart: always
+    healthcheck:
+      test: ["CMD", "pgrep", "crond"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     environment:
       - SQLITE_DB_PATH=/data/media.sqlite
       - RDF_OUTPUT_PATH=/exports/all-media.ttl
