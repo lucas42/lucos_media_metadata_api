@@ -19,7 +19,7 @@ RUN go build -o /rdf-exporter ./main.go
 FROM alpine:3.20
 
 # Install ca-certificates + busybox cron
-RUN apk add --no-cache ca-certificates bash busybox-extras
+RUN apk add --no-cache ca-certificates bash busybox-extras procps
 
 # Copy the built binary
 COPY --from=builder /rdf-exporter /usr/local/bin/rdf-exporter
