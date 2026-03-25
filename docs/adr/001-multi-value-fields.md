@@ -140,7 +140,7 @@ This is preferred because:
 - Silently deleting tags is disproportionate — a track composed by "Bach" is still composed by "Bach" even if the Bach entity is removed from lucos_eolas
 - Keeping the `name` preserves data for humans while removing the broken link
 
-Note: this recommendation is awaiting final sign-off (see #45 discussion).
+Note: this recommendation was signed off in the #45 discussion.
 
 ## Consequences
 
@@ -168,8 +168,8 @@ The following systems read from or write to this API and will need migration pla
 | lucos_media_metadata_manager | PHP | Yes | Yes | Primary UI for tag editing |
 | lucos_media_manager | Java | Yes | No | Reads tags for playback weighting |
 | lucos_arachne ingestor | Python | Yes | No | Reads RDF export |
-| lucos_media_import | — | Yes | Yes | Bulk import |
-| lucos_media_weightings | — | Yes | Yes | Reads metadata, writes to `/v2/tracks/{id}/weighting` |
+| lucos_media_import | Python | No | Yes | Bulk import |
+| lucos_media_weightings | Python | Yes | Yes | Reads metadata, writes to `/v2/tracks/{id}/weighting` |
 
 ## Implementation Order
 
