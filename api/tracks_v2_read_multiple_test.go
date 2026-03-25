@@ -213,6 +213,47 @@ func TestMultiPredicateQueryV2(test *testing.T) {
 	], "totalPages": 1}`, true)
 }
 
+/**
+ * Checks whether the correct tracks are returned when querying for a null (missing) predicate
+ */
+func TestNullPredicateQueryV2(test *testing.T) {
+	clearData()
+
+	// Track with genre tag
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine", "genre": "pop"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine", "genre": "pop"},"collections":[],"weighting": 0}`, true)
+	// Track without genre tag
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":"The Ladybirds", "title":"Chirpy Chirpy"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds", "title":"Chirpy Chirpy"},"collections":[],"weighting": 0}`, true)
+	// Another track with genre tag
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"Robert Johnson", "title":"Sweet Home Chicago", "genre": "blues"},"collections":[],"weighting": 0}`, true)
+	// Track without genre tag
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"artist":"Vivaldi", "title":"Spring"}}`, 200, `{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Vivaldi", "title":"Spring"},"collections":[],"weighting": 0}`, true)
+
+	// Search for tracks missing the genre tag (empty value = null search)
+	makeRequest(test, "GET", "/v2/tracks?p.genre=", "", 200, `{"tracks":[
+		{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Ladybirds", "title":"Chirpy Chirpy"},"collections":[],"weighting": 0},
+		{"fingerprint":"abc4","duration":7,"url":"http://example.org/track4","trackid":4,"tags":{"artist":"Vivaldi", "title":"Spring"},"collections":[],"weighting": 0}
+	], "totalPages": 1}`, true)
+}
+
+/**
+ * Checks whether null and non-null predicate queries can be combined
+ */
+func TestMixedNullPredicateQueryV2(test *testing.T) {
+	clearData()
+
+	// Track with artist and genre
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":"The Beatles", "title":"Yellow Submarine", "genre": "pop"}}`, 200, `{"fingerprint":"abc1","duration":7,"url":"http://example.org/track1","trackid":1,"tags":{"artist":"The Beatles", "title":"Yellow Submarine", "genre": "pop"},"collections":[],"weighting": 0}`, true)
+	// Track with artist but no genre
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":"The Beatles", "title":"Let It Be"}}`, 200, `{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Beatles", "title":"Let It Be"},"collections":[],"weighting": 0}`, true)
+	// Track with different artist and no genre
+	makeRequest(test, "PUT", "/v2/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":"The Rolling Stones", "title":"Satisfaction"}}`, 200, `{"fingerprint":"abc3","duration":7,"url":"http://example.org/track3","trackid":3,"tags":{"artist":"The Rolling Stones", "title":"Satisfaction"},"collections":[],"weighting": 0}`, true)
+
+	// Search for Beatles tracks missing genre
+	makeRequest(test, "GET", "/v2/tracks?p.artist=The%20Beatles&p.genre=", "", 200, `{"tracks":[
+		{"fingerprint":"abc2","duration":7,"url":"http://example.org/track2","trackid":2,"tags":{"artist":"The Beatles", "title":"Let It Be"},"collections":[],"weighting": 0}
+	], "totalPages": 1}`, true)
+}
+
 func TestInvalidQueriesV2(test *testing.T) {
 	makeRequestWithUnallowedMethod(test, "/v2/tracks?q=blue", "POST", []string{"GET"})
 }

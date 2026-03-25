@@ -2,6 +2,7 @@ package main
 
 import (
 	"strconv"
+	"strings"
 )
 
 /**
@@ -49,12 +50,23 @@ func (store Datastore) searchByPredicates(predicates map[string]string, offset i
 	tracks = []Track{}
 	dbQuery := "SELECT id, url, fingerprint, duration, weighting FROM track"
 	var values []interface{}
+	var whereClauses []string
 	tagCount := 0
 	for key, value := range predicates {
 		tagCount++
 		table := "tag"+strconv.Itoa(tagCount)
-		dbQuery += " INNER JOIN tag AS "+table+" ON "+table+".trackid = track.id AND "+table+".predicateid = ? AND "+table+".value = ?"
-		values = append(values, key, value)
+		if value == "" {
+			// Empty value means search for tracks missing this predicate
+			dbQuery += " LEFT JOIN tag AS "+table+" ON "+table+".trackid = track.id AND "+table+".predicateid = ?"
+			values = append(values, key)
+			whereClauses = append(whereClauses, table+".value IS NULL")
+		} else {
+			dbQuery += " INNER JOIN tag AS "+table+" ON "+table+".trackid = track.id AND "+table+".predicateid = ? AND "+table+".value = ?"
+			values = append(values, key, value)
+		}
+	}
+	if len(whereClauses) > 0 {
+		dbQuery += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 	countQuery := dbQuery
 	dbQuery += " ORDER BY id LIMIT ?, ?"
