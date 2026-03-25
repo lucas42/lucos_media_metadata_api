@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 )
@@ -9,6 +10,56 @@ type Tag struct {
 	TrackID     int
 	PredicateID string
 	Value       string
+}
+
+// TagList is the internal representation of tags for a track.
+// It supports multiple values per predicate, unlike map[string]string.
+type TagList []Tag
+
+// MarshalJSON serialises TagList as map[string]string for v2 wire compatibility.
+// If multiple tags share a predicate, the last value wins.
+func (tl TagList) MarshalJSON() ([]byte, error) {
+	m := make(map[string]string, len(tl))
+	for _, tag := range tl {
+		m[tag.PredicateID] = tag.Value
+	}
+	return json.Marshal(m)
+}
+
+// UnmarshalJSON deserialises a map[string]string into a TagList.
+func (tl *TagList) UnmarshalJSON(data []byte) error {
+	m := make(map[string]string)
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	*tl = make(TagList, 0, len(m))
+	for k, v := range m {
+		*tl = append(*tl, Tag{PredicateID: k, Value: v})
+	}
+	return nil
+}
+
+// GetValue returns the value for the first tag matching the given predicate,
+// or an empty string if not found.
+func (tl TagList) GetValue(predicate string) string {
+	for _, tag := range tl {
+		if tag.PredicateID == predicate {
+			return tag.Value
+		}
+	}
+	return ""
+}
+
+// SetValue sets the value for a predicate. If the predicate already exists,
+// it updates the first occurrence. Otherwise it appends a new tag.
+func (tl *TagList) SetValue(predicate string, value string) {
+	for i, tag := range *tl {
+		if tag.PredicateID == predicate {
+			(*tl)[i].Value = value
+			return
+		}
+	}
+	*tl = append(*tl, Tag{PredicateID: predicate, Value: value})
 }
 
 /**
@@ -67,15 +118,15 @@ func (store Datastore) updateTagIfMissing(trackid int, predicate string, value s
 
 
 /**
- * Creates or updates a map of tags
+ * Creates or updates a set of tags
  *
  */
- func (store Datastore) updateTags(trackid int, tags map[string]string) (err error) {
-	for predicate, tagValue := range tags {
-		if tagValue != "" {
-			err = store.updateTag(trackid, predicate, tagValue)
+ func (store Datastore) updateTags(trackid int, tags TagList) (err error) {
+	for _, tag := range tags {
+		if tag.Value != "" {
+			err = store.updateTag(trackid, tag.PredicateID, tag.Value)
 		} else {
-			err = store.deleteTag(trackid, predicate)
+			err = store.deleteTag(trackid, tag.PredicateID)
 		}
 		if err != nil {
 			return
@@ -88,10 +139,10 @@ func (store Datastore) updateTagIfMissing(trackid int, predicate string, value s
  * Creates only the given tags which the given track doesn't already have
  *
  */
- func (store Datastore) updateTagsIfMissing(trackid int, tags map[string]string) (err error) {
-	for predicate, tagValue := range tags {
-		if tagValue != "" {
-			err = store.updateTagIfMissing(trackid, predicate, tagValue)
+ func (store Datastore) updateTagsIfMissing(trackid int, tags TagList) (err error) {
+	for _, tag := range tags {
+		if tag.Value != "" {
+			err = store.updateTagIfMissing(trackid, tag.PredicateID, tag.Value)
 		}
 		if err != nil {
 			return
@@ -101,19 +152,12 @@ func (store Datastore) updateTagIfMissing(trackid int, predicate string, value s
 }
 
 /**
- * Gets all the tags for a given track (in a map of key/value pairs)
+ * Gets all the tags for a given track
  *
  */
-func (store Datastore) getAllTagsForTrack(trackid int) (tags map[string]string, err error) {
-	tags = make(map[string]string)
-	tagList := []Tag{}
-	err = store.DB.Select(&tagList, "SELECT * FROM tag WHERE trackid = ?", trackid)
-	if err != nil {
-		return
-	}
-	for _, tag := range tagList {
-		tags[tag.PredicateID] = tag.Value
-	}
+func (store Datastore) getAllTagsForTrack(trackid int) (tags TagList, err error) {
+	tags = TagList{}
+	err = store.DB.Select(&tags, "SELECT * FROM tag WHERE trackid = ?", trackid)
 	return
 }
 
