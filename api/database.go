@@ -126,12 +126,15 @@ func (store Datastore) ColExists(tablename string, colname string) (found bool) 
 }
 
 func (store Datastore) hasTagUniqueConstraint() bool {
-	var found bool
-	err := store.DB.Get(&found, "SELECT 1 FROM sqlite_master WHERE type = 'index' AND tbl_name = 'tag' AND name = 'track_predicate_unique'")
-	if err != nil && err.Error() != "sql: no rows in result set" {
-		panic(err)
+	// Check the CREATE TABLE SQL for a UNIQUE keyword.
+	// SQLite stores auto-indexes from CONSTRAINT...UNIQUE as sqlite_autoindex_tag_N,
+	// not the constraint name, so we can't match by index name.
+	var sql string
+	err := store.DB.Get(&sql, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tag'")
+	if err != nil {
+		return false
 	}
-	return found
+	return strings.Contains(strings.ToUpper(sql), "UNIQUE")
 }
 
 func (store Datastore) migrateTagTableDropUnique() {
