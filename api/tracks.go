@@ -22,7 +22,7 @@ type Track struct {
 	Duration    int               `json:"duration"`
 	URL         string            `json:"url"`
 	ID          int               `json:"trackid"`
-	Tags        TagList `json:"tags"`
+	Tags        TagList           `json:"tags"`
 	Weighting   float64           `json:"weighting"`
 	RandWeight  float64           `json:"_random_weighting,omitempty"` // Only for debug purposes
 	Cumweight   float64           `json:"_cum_weighting,omitempty"`    // Only for debug purposes
