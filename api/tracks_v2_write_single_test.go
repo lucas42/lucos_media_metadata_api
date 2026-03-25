@@ -504,7 +504,7 @@ func TestAddedTagV2(test *testing.T) {
 	if err != nil {
 		test.Error(err)
 	}
-	addedTime, err := time.Parse(time.RFC3339, track.Tags["added"])
+	addedTime, err := time.Parse(time.RFC3339, track.Tags.GetValue("added"))
 	if err != nil {
 		test.Error(err)
 	}

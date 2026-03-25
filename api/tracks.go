@@ -22,7 +22,7 @@ type Track struct {
 	Duration    int               `json:"duration"`
 	URL         string            `json:"url"`
 	ID          int               `json:"trackid"`
-	Tags        map[string]string `json:"tags"`
+	Tags        TagList `json:"tags"`
 	Weighting   float64           `json:"weighting"`
 	RandWeight  float64           `json:"_random_weighting,omitempty"` // Only for debug purposes
 	Cumweight   float64           `json:"_cum_weighting,omitempty"`    // Only for debug purposes
@@ -30,8 +30,8 @@ type Track struct {
 }
 
 func (track Track) getName() (string) {
-	if track.Tags["title"] != "" {
-		return "\""+track.Tags["title"]+"\""
+	if track.Tags.GetValue("title") != "" {
+		return "\""+track.Tags.GetValue("title")+"\""
 	}
 	return "#"+strconv.Itoa(track.ID)
 }
@@ -48,14 +48,14 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 	if changeSet.Weighting != 0 && changeSet.Weighting != original.Weighting{
 		return true
 	}
-	for predicate, changeValue := range changeSet.Tags {
+	for _, changeTag := range changeSet.Tags {
 
 		// If only missing tags are being updated, then ignore any
 		// predicates where the original track already has a value
-		if onlyMissing && original.Tags[predicate] != "" {
+		if onlyMissing && original.Tags.GetValue(changeTag.PredicateID) != "" {
 			continue
 		}
-		if original.Tags[predicate] != changeValue {
+		if original.Tags.GetValue(changeTag.PredicateID) != changeTag.Value {
 			return true
 		}
 	}
@@ -137,10 +137,10 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		return
 	}
 	if track.Tags == nil {
-		track.Tags = map[string]string{}
+		track.Tags = TagList{}
 	}
-	if existingTrack.Tags["added"] == "" && track.Tags["added"] == "" {
-		track.Tags["added"] = time.Now().Format(time.RFC3339)
+	if existingTrack.Tags.GetValue("added") == "" && track.Tags.GetValue("added") == "" {
+		track.Tags.SetValue("added", time.Now().Format(time.RFC3339))
 	}
 	if !onlyMissing {
 		err = store.updateTags(storedTrack.ID, track.Tags);

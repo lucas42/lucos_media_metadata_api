@@ -36,9 +36,9 @@ func TestLoganneEvent(test *testing.T) {
 		Fingerprint: "abc",
 		Duration: 137,
 		Weighting: 9,
-		Tags: map[string]string {
-			"artist": "Altan",
-			"album": "Harvest Storm",
+		Tags: TagList{
+			Tag{PredicateID: "artist", Value: "Altan"},
+			Tag{PredicateID: "album", Value: "Harvest Storm"},
 		},
 	}
 	loganne.post("testEvent", "This event is from the test", track, Track{})
@@ -61,9 +61,9 @@ func TestLoganneDeleteEvent(test *testing.T) {
 		Fingerprint: "abc",
 		Duration: 137,
 		Weighting: 9,
-		Tags: map[string]string {
-			"artist": "Altan",
-			"album": "Harvest Storm",
+		Tags: TagList{
+			Tag{PredicateID: "artist", Value: "Altan"},
+			Tag{PredicateID: "album", Value: "Harvest Storm"},
 		},
 	}
 
