@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 	"github.com/jmoiron/sqlx"
@@ -68,5 +69,156 @@ func TestUpgradeCollectionTable(test *testing.T) {
 	assertEqual(test, "Upgraded collection table slug", "trans", collections[2].Slug)
 	assertEqual(test, "Upgraded collection table name", "Tranz Tunez", collections[2].Name)
 	assertEqual(test, "Upgraded collection table icon", "🏳️‍⚧️", collections[2].Icon)
+	os.Remove(dbpath)
+}
+
+func TestMigrateTagTableDropUnique(test *testing.T) {
+	dbpath := "testmigration.sqlite"
+	os.Remove(dbpath)
+	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
+
+	// Create old-style tables with UNIQUE constraint
+	db.MustExec(`
+		CREATE TABLE "track" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"fingerprint" TEXT UNIQUE,
+			"url" TEXT UNIQUE,
+			"duration" INTEGER,
+			"weighting" FLOAT NOT NULL DEFAULT 0,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0
+		);
+		CREATE TABLE "predicate" ("id" TEXT PRIMARY KEY NOT NULL);
+		CREATE TABLE "tag" (
+			"trackid" TEXT NOT NULL,
+			"predicateid" TEXT NOT NULL,
+			"value" TEXT,
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			FOREIGN KEY (predicateid) REFERENCES predicate(id),
+			CONSTRAINT track_predicate_unique UNIQUE (trackid, predicateid)
+		);
+	`)
+
+	// Insert test data: a track with CSV values in multi-value predicates
+	db.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/track1', 'fp1', 180)`)
+	db.MustExec(`INSERT INTO predicate(id) VALUES('composer'), ('producer'), ('title'), ('language')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'composer', 'Bach,Mozart')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'title', 'Symphony No. 5')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'language', 'en, fr')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'producer', 'SingleProducer')`)
+
+	db.Close()
+
+	// Run DBInit which should trigger migration
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	// Verify UNIQUE constraint is gone
+	if datastore.hasTagUniqueConstraint() {
+		test.Error("UNIQUE constraint still exists after migration")
+	}
+
+	// Verify CSV values were split for multi-value predicates
+	var composerTags []Tag
+	datastore.DB.Select(&composerTags, "SELECT trackid, predicateid, value FROM tag WHERE predicateid = 'composer' AND trackid = 1 ORDER BY value")
+	assertEqual(test, "composer tag count", 2, len(composerTags))
+	if len(composerTags) == 2 {
+		assertEqual(test, "first composer", "Bach", composerTags[0].Value)
+		assertEqual(test, "second composer", "Mozart", composerTags[1].Value)
+	}
+
+	// Verify language was split with whitespace trimming
+	var langTags []Tag
+	datastore.DB.Select(&langTags, "SELECT trackid, predicateid, value FROM tag WHERE predicateid = 'language' AND trackid = 1 ORDER BY value")
+	assertEqual(test, "language tag count", 2, len(langTags))
+	if len(langTags) == 2 {
+		assertEqual(test, "first language", "en", langTags[0].Value)
+		assertEqual(test, "second language", "fr", langTags[1].Value)
+	}
+
+	// Verify single-value predicates were NOT split
+	var titleTags []Tag
+	datastore.DB.Select(&titleTags, "SELECT trackid, predicateid, value FROM tag WHERE predicateid = 'title' AND trackid = 1")
+	assertEqual(test, "title tag count", 1, len(titleTags))
+	if len(titleTags) == 1 {
+		assertEqual(test, "title value unchanged", "Symphony No. 5", titleTags[0].Value)
+	}
+
+	// Verify non-CSV multi-value predicates were left alone
+	var producerTags []Tag
+	datastore.DB.Select(&producerTags, "SELECT trackid, predicateid, value FROM tag WHERE predicateid = 'producer' AND trackid = 1")
+	assertEqual(test, "producer tag count", 1, len(producerTags))
+	if len(producerTags) == 1 {
+		assertEqual(test, "producer value unchanged", "SingleProducer", producerTags[0].Value)
+	}
+
+	// Verify that duplicate (trackid, predicateid) rows are now allowed
+	_, err := datastore.DB.Exec("INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'composer', 'Beethoven')")
+	if err != nil {
+		test.Errorf("Should allow duplicate (trackid, predicateid): %v", err)
+	}
+
+	os.Remove(dbpath)
+}
+
+func TestFreshDatabaseAllowsMultipleTagValues(test *testing.T) {
+	dbpath := "testfresh.sqlite"
+	os.Remove(dbpath)
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	datastore.DB.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	datastore.DB.MustExec(`INSERT INTO predicate(id) VALUES('composer')`)
+	datastore.DB.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'composer', 'Bach')`)
+	datastore.DB.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'composer', 'Mozart')`)
+
+	var count int
+	datastore.DB.Get(&count, "SELECT COUNT(*) FROM tag WHERE trackid = 1 AND predicateid = 'composer'")
+	assertEqual(test, "multiple composer tags allowed", 2, count)
+
+	os.Remove(dbpath)
+}
+
+func TestTagListMarshalJSONMultiValue(test *testing.T) {
+	tags := TagList{
+		{PredicateID: "title", Value: "My Song"},
+		{PredicateID: "composer", Value: "Bach"},
+		{PredicateID: "composer", Value: "Mozart"},
+		{PredicateID: "language", Value: "en"},
+		{PredicateID: "language", Value: "fr"},
+	}
+	data, err := json.Marshal(tags)
+	if err != nil {
+		test.Fatalf("MarshalJSON failed: %v", err)
+	}
+	var m map[string]string
+	json.Unmarshal(data, &m)
+	assertEqual(test, "title should be single value", "My Song", m["title"])
+	assertEqual(test, "composer should be comma-joined", "Bach,Mozart", m["composer"])
+	assertEqual(test, "language should be comma-joined", "en,fr", m["language"])
+}
+
+func TestUpdateTagDeletesAndInserts(test *testing.T) {
+	dbpath := "testupdatetag.sqlite"
+	os.Remove(dbpath)
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	datastore.DB.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	datastore.DB.MustExec(`INSERT INTO predicate(id) VALUES('title')`)
+	datastore.DB.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'title', 'Old Title')`)
+
+	err := datastore.updateTag(1, "title", "New Title")
+	if err != nil {
+		test.Fatalf("updateTag failed: %v", err)
+	}
+
+	value, err := datastore.getTagValue(1, "title")
+	if err != nil {
+		test.Fatalf("getTagValue failed: %v", err)
+	}
+	assertEqual(test, "tag should be updated", "New Title", value)
+
+	// Verify only one row exists (not duplicated)
+	var count int
+	datastore.DB.Get(&count, "SELECT COUNT(*) FROM tag WHERE trackid = 1 AND predicateid = 'title'")
+	assertEqual(test, "should have exactly one row", 1, count)
+
 	os.Remove(dbpath)
 }

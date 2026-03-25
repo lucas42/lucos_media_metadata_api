@@ -50,11 +50,13 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 			"predicateid" TEXT NOT NULL,
 			"value" TEXT,
 			FOREIGN KEY (trackid) REFERENCES track(id),
-			FOREIGN KEY (predicateid) REFERENCES predicate(id),
-			CONSTRAINT track_predicate_unique UNIQUE (trackid, predicateid)
+			FOREIGN KEY (predicateid) REFERENCES predicate(id)
 		);
 		`
 		database.DB.MustExec(sqlStmt)
+	}
+	if database.hasTagUniqueConstraint() {
+		database.migrateTagTableDropUnique()
 	}
 	if !database.TableExists("collection") {
 		slog.Info("Creating table `collection`")
@@ -121,4 +123,84 @@ func (store Datastore) ColExists(tablename string, colname string) (found bool) 
 		panic(err)
 	}
 	return
+}
+
+func (store Datastore) hasTagUniqueConstraint() bool {
+	var found bool
+	err := store.DB.Get(&found, "SELECT 1 FROM sqlite_master WHERE type = 'index' AND tbl_name = 'tag' AND name = 'track_predicate_unique'")
+	if err != nil && err.Error() != "sql: no rows in result set" {
+		panic(err)
+	}
+	return found
+}
+
+func (store Datastore) migrateTagTableDropUnique() {
+	slog.Info("Migrating `tag` table: dropping UNIQUE constraint and splitting multi-value CSV fields")
+
+	// Count rows before migration for validation
+	var beforeCount int
+	store.DB.Get(&beforeCount, "SELECT COUNT(*) FROM tag")
+	slog.Info("Migration audit", "tag_rows_before", beforeCount)
+
+	// Foreign keys must be off for table rebuild
+	store.DB.MustExec("PRAGMA foreign_keys = OFF;")
+	tx := store.DB.MustBegin()
+
+	tx.MustExec(`
+		CREATE TABLE "tag_new" (
+			"trackid" TEXT NOT NULL,
+			"predicateid" TEXT NOT NULL,
+			"value" TEXT,
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			FOREIGN KEY (predicateid) REFERENCES predicate(id)
+		);
+	`)
+	tx.MustExec(`INSERT INTO tag_new SELECT * FROM tag;`)
+	tx.MustExec(`DROP TABLE tag;`)
+	tx.MustExec(`ALTER TABLE tag_new RENAME TO tag;`)
+
+	// Split comma-separated values for multi-value predicates
+	for predicate, config := range predicateRegistry {
+		if !config.MultiValue {
+			continue
+		}
+		var rows []struct {
+			TrackID     string `db:"trackid"`
+			PredicateID string `db:"predicateid"`
+			Value       string `db:"value"`
+		}
+		err := tx.Select(&rows, "SELECT trackid, predicateid, value FROM tag WHERE predicateid = ?", predicate)
+		if err != nil {
+			panic(err)
+		}
+		for _, row := range rows {
+			if !strings.Contains(row.Value, ",") {
+				continue
+			}
+			// Delete the original CSV row
+			tx.MustExec("DELETE FROM tag WHERE trackid = ? AND predicateid = ? AND value = ?", row.TrackID, row.PredicateID, row.Value)
+			// Insert individual values
+			parts := strings.Split(row.Value, ",")
+			for _, part := range parts {
+				trimmed := strings.TrimSpace(part)
+				if trimmed == "" {
+					continue
+				}
+				tx.MustExec("INSERT INTO tag(trackid, predicateid, value) VALUES(?, ?, ?)", row.TrackID, row.PredicateID, trimmed)
+			}
+			slog.Info("Split CSV value", "predicate", predicate, "trackid", row.TrackID, "original", row.Value, "parts", len(parts))
+		}
+	}
+
+	err := tx.Commit()
+	if err != nil {
+		panic(err)
+	}
+	store.DB.MustExec("PRAGMA foreign_keys = ON;")
+
+	// Count rows after migration for validation
+	var afterCount int
+	store.DB.Get(&afterCount, "SELECT COUNT(*) FROM tag")
+	slog.Info("Migration audit", "tag_rows_after", afterCount)
+	slog.Info("Migration complete: tag table UNIQUE constraint removed, CSV values split")
 }
