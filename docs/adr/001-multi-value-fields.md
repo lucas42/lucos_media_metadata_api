@@ -66,9 +66,10 @@ There is no "append a single value" semantic in the tracks endpoint. If fine-gra
 
 ### 4. Multi-value predicate list lives in code, not the database
 
-The set of predicates that support multiple values is defined as a Go constant in the API codebase:
+The set of predicates that support multiple values is defined as a Go constant in the API codebase. The example below is based on the predicates currently using `splitCSV()` in `rdfgen/rdf.go`; the exact set is not yet finalised and will be agreed in #37 with owner input:
 
 ```go
+// Illustrative — the definitive set will be agreed in #37.
 var multiValuePredicates = map[string]bool{
     "composer":  true,
     "producer":  true,
