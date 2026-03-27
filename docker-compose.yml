@@ -3,7 +3,7 @@ services:
     build:
       dockerfile: api/Dockerfile
       context: . # Use root context, so rdfgen can be pulled in
-    container_name: media_metadata_api
+    container_name: lucos_media_metadata_api
     ports: 
       - $PORT:$PORT
     image: lucas42/lucos_media_metadata_api
@@ -27,7 +27,7 @@ services:
     build:
       dockerfile: exporter/Dockerfile
       context: . # Use root context, so rdfgen can be pulled in
-    container_name: media_metadata_api_exporter
+    container_name: lucos_media_metadata_api_exporter
     image: lucas42/lucos_media_metadata_api_exporter
     volumes:
       - db:/data:ro
