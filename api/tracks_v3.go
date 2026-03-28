@@ -117,6 +117,8 @@ func (store Datastore) updateTagsV3(trackid int, tags TagListV3) (err error) {
 }
 
 // updateTagsV3IfMissing updates tags only if the predicate has no existing values.
+// For multi-value predicates, all values are inserted in a single transaction
+// to avoid the DELETE+INSERT behaviour of updateTag corrupting multi-value data.
 func (store Datastore) updateTagsV3IfMissing(trackid int, tags TagListV3) (err error) {
 	byPredicate := make(map[string][]string)
 	for _, tag := range tags {
@@ -125,16 +127,43 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags TagListV3) (err e
 	for predicate, values := range byPredicate {
 		_, err = store.getTagValue(trackid, predicate)
 		if err != nil && err.Error() == "Tag Not Found" {
-			// No existing value — create the tags
 			err = nil
-			for _, val := range values {
-				if val == "" {
-					continue
+			// Filter empty values
+			nonEmpty := make([]string, 0, len(values))
+			for _, v := range values {
+				if v != "" {
+					nonEmpty = append(nonEmpty, v)
 				}
-				err = store.updateTag(trackid, predicate, val)
+			}
+			if len(nonEmpty) == 0 {
+				continue
+			}
+			// Ensure predicate exists
+			hasPredicate, err2 := store.hasPredicate(predicate)
+			if err2 != nil {
+				return err2
+			}
+			if !hasPredicate {
+				err = store.createPredicate(predicate)
 				if err != nil {
 					return
 				}
+			}
+			// Insert all values in a single transaction
+			tx, err2 := store.DB.Beginx()
+			if err2 != nil {
+				return err2
+			}
+			for _, val := range nonEmpty {
+				_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value) VALUES($1, $2, $3)", trackid, predicate, val)
+				if err != nil {
+					_ = tx.Rollback()
+					return
+				}
+			}
+			err = tx.Commit()
+			if err != nil {
+				return
 			}
 		} else if err != nil {
 			return
@@ -288,14 +317,41 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Can't bulk update fingerprint", http.StatusBadRequest)
 		return
 	}
-	// Convert to internal Track for the query-based update
+	// Strip tags from internal track — handle them via the v3 path per track
+	v3Tags := trackV3.Tags
 	internalTrack := trackV3ToInternal(trackV3)
+	internalTrack.Tags = nil
+	onlyMissing := (r.Header.Get("If-None-Match") == "*")
 	result, action, err := updateMultipleTracks(store, r, internalTrack)
-	// Convert result tracks to v3
+	if err != nil {
+		writeErrorResponse(w, err)
+		return
+	}
+	// Apply v3 tags to each matched track
+	if v3Tags != nil {
+		tracks, _, err2 := queryMultipleTracks(store, r)
+		if err2 != nil {
+			writeErrorResponse(w, err2)
+			return
+		}
+		for _, t := range tracks {
+			if onlyMissing {
+				err = store.updateTagsV3IfMissing(t.ID, v3Tags)
+			} else {
+				err = store.updateTagsV3(t.ID, v3Tags)
+			}
+			if err != nil {
+				writeErrorResponse(w, err)
+				return
+			}
+		}
+	}
+	// Re-query to get v3-formatted results
+	tracks, totalPages, err := queryMultipleTracks(store, r)
 	var resultV3 SearchResultV3
-	resultV3.TotalPages = result.TotalPages
-	resultV3.Tracks = make([]TrackV3, len(result.Tracks))
-	for i, t := range result.Tracks {
+	resultV3.TotalPages = totalPages
+	resultV3.Tracks = make([]TrackV3, len(tracks))
+	for i, t := range tracks {
 		resultV3.Tracks[i] = TrackToV3(t)
 	}
 	w.Header().Set("Track-Action", action)

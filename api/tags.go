@@ -67,6 +67,17 @@ func (tl TagList) GetValue(predicate string) string {
 	return ""
 }
 
+// GetValues returns all values for the given predicate.
+func (tl TagList) GetValues(predicate string) []string {
+	var vals []string
+	for _, tag := range tl {
+		if tag.PredicateID == predicate {
+			vals = append(vals, tag.Value)
+		}
+	}
+	return vals
+}
+
 // SetValue sets the value for a predicate. If the predicate already exists,
 // it updates the first occurrence. Otherwise it appends a new tag.
 func (tl *TagList) SetValue(predicate string, value string) {

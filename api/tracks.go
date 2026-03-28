@@ -48,14 +48,18 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 	if changeSet.Weighting != 0 && changeSet.Weighting != original.Weighting{
 		return true
 	}
+	// Compare tags per predicate, supporting multi-value predicates.
+	// Group changeSet tags by predicate, then compare against original.
+	changeByPred := make(map[string][]string)
 	for _, changeTag := range changeSet.Tags {
-
-		// If only missing tags are being updated, then ignore any
-		// predicates where the original track already has a value
-		if onlyMissing && original.Tags.GetValue(changeTag.PredicateID) != "" {
+		changeByPred[changeTag.PredicateID] = append(changeByPred[changeTag.PredicateID], changeTag.Value)
+	}
+	for pred, newVals := range changeByPred {
+		if onlyMissing && original.Tags.GetValue(pred) != "" {
 			continue
 		}
-		if original.Tags.GetValue(changeTag.PredicateID) != changeTag.Value {
+		origVals := original.Tags.GetValues(pred)
+		if !stringSlicesEqual(origVals, newVals) {
 			return true
 		}
 	}
@@ -89,6 +93,19 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 		}
 	}
 	return false
+}
+
+// stringSlicesEqual compares two string slices for equality (order-sensitive).
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 /**
