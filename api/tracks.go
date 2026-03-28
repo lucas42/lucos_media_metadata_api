@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -95,13 +96,19 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 	return false
 }
 
-// stringSlicesEqual compares two string slices for equality (order-sensitive).
+// stringSlicesEqual compares two string slices for equality (order-insensitive).
 func stringSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for i := range a {
-		if a[i] != b[i] {
+	aSorted := make([]string, len(a))
+	bSorted := make([]string, len(b))
+	copy(aSorted, a)
+	copy(bSorted, b)
+	sort.Strings(aSorted)
+	sort.Strings(bSorted)
+	for i := range aSorted {
+		if aSorted[i] != bSorted[i] {
 			return false
 		}
 	}
