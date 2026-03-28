@@ -322,7 +322,7 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 	internalTrack := trackV3ToInternal(trackV3)
 	internalTrack.Tags = nil
 	onlyMissing := (r.Header.Get("If-None-Match") == "*")
-	result, action, err := updateMultipleTracks(store, r, internalTrack)
+	_, action, err := updateMultipleTracks(store, r, internalTrack)
 	if err != nil {
 		writeErrorResponse(w, err)
 		return
