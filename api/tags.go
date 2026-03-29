@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 )
 
 type Tag struct {
@@ -17,11 +18,27 @@ type Tag struct {
 type TagList []Tag
 
 // MarshalJSON serialises TagList as map[string]string for v2 wire compatibility.
-// If multiple tags share a predicate, the last value wins.
+// Multi-value predicates (as defined in predicateRegistry) are comma-joined.
+// Single-value predicates use the last value if duplicates somehow exist.
 func (tl TagList) MarshalJSON() ([]byte, error) {
-	m := make(map[string]string, len(tl))
+	// Collect values per predicate in order
+	seen := make(map[string][]string, len(tl))
+	order := make([]string, 0, len(tl))
 	for _, tag := range tl {
-		m[tag.PredicateID] = tag.Value
+		if _, exists := seen[tag.PredicateID]; !exists {
+			order = append(order, tag.PredicateID)
+		}
+		seen[tag.PredicateID] = append(seen[tag.PredicateID], tag.Value)
+	}
+	m := make(map[string]string, len(order))
+	for _, pred := range order {
+		vals := seen[pred]
+		if IsMultiValue(pred) && len(vals) > 1 {
+			m[pred] = strings.Join(vals, ",")
+		} else {
+			// For single-value predicates, last value wins (preserving old behaviour)
+			m[pred] = vals[len(vals)-1]
+		}
 	}
 	return json.Marshal(m)
 }
@@ -67,12 +84,16 @@ func (tl *TagList) SetValue(predicate string, value string) {
  *
  */
 func (store Datastore) getTagValue(trackid int, predicate string) (value string, err error) {
-	err = store.DB.Get(&value, "SELECT value FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, predicate)
+	var values []string
+	err = store.DB.Select(&values, "SELECT value FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, predicate)
 	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			err = errors.New("Tag Not Found")
-		}
+		return
 	}
+	if len(values) == 0 {
+		err = errors.New("Tag Not Found")
+		return
+	}
+	value = strings.Join(values, ",")
 	return
 }
 
@@ -100,7 +121,24 @@ func (store Datastore) updateTag(trackid int, predicate string, value string) (e
 			return
 		}
 	}
-	_, err = store.DB.Exec("REPLACE INTO tag(trackid, predicateid, value) values($1, $2, $3)", trackid, predicate, value)
+	// Delete existing value(s) for this predicate then insert the new one.
+	// This replaces the old REPLACE INTO which relied on the now-removed UNIQUE constraint.
+	// Wrapped in a transaction so the tag is not lost if the INSERT fails.
+	tx, err := store.DB.Beginx()
+	if err != nil {
+		return
+	}
+	_, err = tx.Exec("DELETE FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, predicate)
+	if err != nil {
+		_ = tx.Rollback()
+		return
+	}
+	_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value) VALUES($1, $2, $3)", trackid, predicate, value)
+	if err != nil {
+		_ = tx.Rollback()
+		return
+	}
+	err = tx.Commit()
 	return
 }
 
