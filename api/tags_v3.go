@@ -5,38 +5,42 @@ import (
 	"fmt"
 )
 
+// TagValueV3 is the v3 wire representation of a single tag value.
+// All predicates use the same shape: {"name": "...", "uri": "..."}.
+// The "uri" field is omitted when empty.
+type TagValueV3 struct {
+	Name string `json:"name"`
+	URI  string `json:"uri,omitempty"`
+}
+
 // TagListV3 is the v3 wire representation of tags.
-// Multi-value predicates are serialised as JSON arrays.
-// Single-value predicates are serialised as JSON strings.
+// All predicates are serialised as arrays of TagValueV3 objects,
+// whether single-value or multi-value.
 type TagListV3 []Tag
 
-// MarshalJSON serialises TagListV3 with mixed types:
-// - single-value predicates → string
-// - multi-value predicates → array of strings (even with one value)
+// MarshalJSON serialises TagListV3 as a map of predicate to arrays of TagValueV3.
+// Every predicate maps to an array, even single-value predicates with one entry.
 func (tl TagListV3) MarshalJSON() ([]byte, error) {
-	seen := make(map[string][]string, len(tl))
+	seen := make(map[string][]TagValueV3, len(tl))
 	order := make([]string, 0, len(tl))
 	for _, tag := range tl {
 		if _, exists := seen[tag.PredicateID]; !exists {
 			order = append(order, tag.PredicateID)
 		}
-		seen[tag.PredicateID] = append(seen[tag.PredicateID], tag.Value)
+		seen[tag.PredicateID] = append(seen[tag.PredicateID], TagValueV3{
+			Name: tag.Value,
+			URI:  tag.URI,
+		})
 	}
-	m := make(map[string]interface{}, len(order))
+	m := make(map[string][]TagValueV3, len(order))
 	for _, pred := range order {
-		vals := seen[pred]
-		if IsMultiValue(pred) {
-			m[pred] = vals
-		} else {
-			m[pred] = vals[len(vals)-1]
-		}
+		m[pred] = seen[pred]
 	}
 	return json.Marshal(m)
 }
 
-// UnmarshalJSON deserialises the v3 mixed-type wire format into a TagListV3.
-// It validates that single-value predicates are strings and multi-value
-// predicates are arrays of strings.
+// UnmarshalJSON deserialises the v3 structured format into a TagListV3.
+// All predicates must be arrays of objects with at least a "name" field.
 func (tl *TagListV3) UnmarshalJSON(data []byte) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -44,20 +48,15 @@ func (tl *TagListV3) UnmarshalJSON(data []byte) error {
 	}
 	*tl = make(TagListV3, 0, len(raw))
 	for pred, val := range raw {
-		if IsMultiValue(pred) {
-			var arr []string
-			if err := json.Unmarshal(val, &arr); err != nil {
-				return fmt.Errorf("predicate %q is multi-value and must be a JSON array of strings", pred)
-			}
-			for _, v := range arr {
-				*tl = append(*tl, Tag{PredicateID: pred, Value: v})
-			}
-		} else {
-			var s string
-			if err := json.Unmarshal(val, &s); err != nil {
-				return fmt.Errorf("predicate %q is single-value and must be a JSON string", pred)
-			}
-			*tl = append(*tl, Tag{PredicateID: pred, Value: s})
+		var arr []TagValueV3
+		if err := json.Unmarshal(val, &arr); err != nil {
+			return fmt.Errorf("predicate %q must be an array of {\"name\": ..., \"uri\": ...} objects", pred)
+		}
+		if !IsMultiValue(pred) && len(arr) > 1 {
+			return fmt.Errorf("predicate %q is single-value and must have at most one element", pred)
+		}
+		for _, v := range arr {
+			*tl = append(*tl, Tag{PredicateID: pred, Value: v.Name, URI: v.URI})
 		}
 	}
 	return nil

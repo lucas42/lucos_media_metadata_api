@@ -11,6 +11,7 @@ type Tag struct {
 	TrackID     int
 	PredicateID string
 	Value       string
+	URI         string `db:"uri"`
 }
 
 // TagList is the internal representation of tags for a track.

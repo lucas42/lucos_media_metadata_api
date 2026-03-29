@@ -49,6 +49,7 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 			"trackid" TEXT NOT NULL,
 			"predicateid" TEXT NOT NULL,
 			"value" TEXT,
+			"uri" TEXT DEFAULT "",
 			FOREIGN KEY (trackid) REFERENCES track(id),
 			FOREIGN KEY (predicateid) REFERENCES predicate(id)
 		);
@@ -57,6 +58,10 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 	}
 	if database.hasTagUniqueConstraint() {
 		database.migrateTagTableDropUnique()
+	}
+	if !database.ColExists("tag", "uri") {
+		slog.Info("Updating table `tag` to add uri column")
+		database.DB.MustExec(`ALTER TABLE "tag" ADD COLUMN "uri" TEXT DEFAULT "";`)
 	}
 	if !database.TableExists("collection") {
 		slog.Info("Creating table `collection`")
@@ -154,11 +159,12 @@ func (store Datastore) migrateTagTableDropUnique() {
 			"trackid" TEXT NOT NULL,
 			"predicateid" TEXT NOT NULL,
 			"value" TEXT,
+			"uri" TEXT DEFAULT "",
 			FOREIGN KEY (trackid) REFERENCES track(id),
 			FOREIGN KEY (predicateid) REFERENCES predicate(id)
 		);
 	`)
-	tx.MustExec(`INSERT INTO tag_new SELECT * FROM tag;`)
+	tx.MustExec(`INSERT INTO tag_new(trackid, predicateid, value) SELECT trackid, predicateid, value FROM tag;`)
 	tx.MustExec(`DROP TABLE tag;`)
 	tx.MustExec(`ALTER TABLE tag_new RENAME TO tag;`)
 
