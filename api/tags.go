@@ -11,6 +11,7 @@ type Tag struct {
 	TrackID     int
 	PredicateID string
 	Value       string
+	URI         string `db:"uri"`
 }
 
 // TagList is the internal representation of tags for a track.
@@ -65,6 +66,17 @@ func (tl TagList) GetValue(predicate string) string {
 		}
 	}
 	return ""
+}
+
+// GetValues returns all values for the given predicate.
+func (tl TagList) GetValues(predicate string) []string {
+	var vals []string
+	for _, tag := range tl {
+		if tag.PredicateID == predicate {
+			vals = append(vals, tag.Value)
+		}
+	}
+	return vals
 }
 
 // SetValue sets the value for a predicate. If the predicate already exists,

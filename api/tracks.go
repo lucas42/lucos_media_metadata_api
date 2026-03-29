@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -48,14 +49,18 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 	if changeSet.Weighting != 0 && changeSet.Weighting != original.Weighting{
 		return true
 	}
+	// Compare tags per predicate, supporting multi-value predicates.
+	// Group changeSet tags by predicate, then compare against original.
+	changeByPred := make(map[string][]string)
 	for _, changeTag := range changeSet.Tags {
-
-		// If only missing tags are being updated, then ignore any
-		// predicates where the original track already has a value
-		if onlyMissing && original.Tags.GetValue(changeTag.PredicateID) != "" {
+		changeByPred[changeTag.PredicateID] = append(changeByPred[changeTag.PredicateID], changeTag.Value)
+	}
+	for pred, newVals := range changeByPred {
+		if onlyMissing && original.Tags.GetValue(pred) != "" {
 			continue
 		}
-		if original.Tags.GetValue(changeTag.PredicateID) != changeTag.Value {
+		origVals := original.Tags.GetValues(pred)
+		if !stringSlicesEqual(origVals, newVals) {
 			return true
 		}
 	}
@@ -89,6 +94,25 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 		}
 	}
 	return false
+}
+
+// stringSlicesEqual compares two string slices for equality (order-insensitive).
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	aSorted := make([]string, len(a))
+	bSorted := make([]string, len(b))
+	copy(aSorted, a)
+	copy(bSorted, b)
+	sort.Strings(aSorted)
+	sort.Strings(bSorted)
+	for i := range aSorted {
+		if aSorted[i] != bSorted[i] {
+			return false
+		}
+	}
+	return true
 }
 
 /**
