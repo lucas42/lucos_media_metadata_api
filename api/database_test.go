@@ -250,6 +250,10 @@ func TestUpdateTagSplitsCSVForMultiValuePredicate(test *testing.T) {
 	assertEqual(test, "first value", "en", values[0])
 	assertEqual(test, "second value", "fr", values[1])
 	assertEqual(test, "third value", "de", values[2])
+
+	os.Remove(dbpath)
+}
+
 func TestMigrateEolasDataMentionsAbout(test *testing.T) {
 	dbpath := "testmigration_eolas_mentions.sqlite"
 	os.Remove(dbpath)
@@ -409,6 +413,10 @@ func TestMigrateMultiValueCSVSplitFixesReCorruptedData(test *testing.T) {
 	var titleValue string
 	datastore2.DB.Get(&titleValue, "SELECT value FROM tag WHERE trackid = 1 AND predicateid = 'title'")
 	assertEqual(test, "title should be preserved", "Hello, World", titleValue)
+
+	os.Remove(dbpath)
+}
+
 func TestMigrateEolasDataLanguage(test *testing.T) {
 	dbpath := "testmigration_eolas_language.sqlite"
 	os.Remove(dbpath)

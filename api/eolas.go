@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/deiu/rdf2go"
@@ -34,11 +35,14 @@ func fetchEolasNames(uris []string) map[string]string {
 	}
 
 	dataURL := eolasOrigin + eolasDataPath
+	eolasHost, _ := url.Parse(eolasOrigin)
 
-	// Create a client that forwards the auth header on redirects
+	// Only reattach auth header when the redirect stays on the same host
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			req.Header.Set("Authorization", "key "+key)
+			if req.URL.Host == eolasHost.Host {
+				req.Header.Set("Authorization", "key "+key)
+			}
 			return nil
 		},
 	}
@@ -91,5 +95,5 @@ func fetchEolasNames(uris []string) map[string]string {
 
 // eolasLanguageURI builds the canonical eolas URI for a language code.
 func eolasLanguageURI(code string) string {
-	return fmt.Sprintf("%s/metadata/language/%s/", eolasOrigin, code)
+	return fmt.Sprintf("%s/metadata/language/%s/", eolasOrigin, url.PathEscape(code))
 }
