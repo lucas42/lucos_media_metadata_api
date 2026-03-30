@@ -113,6 +113,11 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 			database.updateCreateCollection(*oldCollection, newCollection, "all")
 		}
 	}
+
+	// Migrate mentions/about/language tags to use uri column and import names from eolas
+	if database.needsEolasDataMigration() {
+		database.migrateEolasData()
+	}
 	return
 }
 
@@ -250,4 +255,127 @@ func (store Datastore) migrateTagTableDropUnique() {
 	store.DB.Get(&afterCount, "SELECT COUNT(*) FROM tag")
 	slog.Info("Migration audit", "tag_rows_after", afterCount)
 	slog.Info("Migration complete: tag table UNIQUE constraint removed, CSV values split")
+}
+
+// needsEolasDataMigration checks whether the tag table contains unmigrated
+// mentions/about/language data that should be enriched from eolas.
+func (store Datastore) needsEolasDataMigration() bool {
+	// mentions/about: value looks like a URI but uri column is empty
+	var uriLikeCount int
+	store.DB.Get(&uriLikeCount, `SELECT COUNT(*) FROM tag WHERE predicateid IN ('mentions', 'about') AND value LIKE 'http%' AND (uri = '' OR uri IS NULL)`)
+	if uriLikeCount > 0 {
+		return true
+	}
+	// language: value is a short code and uri column is empty
+	var langCount int
+	store.DB.Get(&langCount, `SELECT COUNT(*) FROM tag WHERE predicateid = 'language' AND (uri = '' OR uri IS NULL)`)
+	return langCount > 0
+}
+
+// migrateEolasData migrates mentions/about/language tags to use the uri column
+// and imports human-readable names from lucos_eolas.
+func (store Datastore) migrateEolasData() {
+	slog.Info("Starting eolas data migration for mentions/about/language tags")
+
+	type tagRow struct {
+		TrackID     int    `db:"trackid"`
+		PredicateID string `db:"predicateid"`
+		Value       string `db:"value"`
+	}
+
+	// Collect mentions/about tags where value is a URI
+	var mentionsAboutTags []tagRow
+	err := store.DB.Select(&mentionsAboutTags, `SELECT trackid, predicateid, value FROM tag WHERE predicateid IN ('mentions', 'about') AND value LIKE 'http%' AND (uri = '' OR uri IS NULL)`)
+	if err != nil {
+		slog.Warn("Failed to query mentions/about tags for migration", slog.Any("error", err))
+		return
+	}
+
+	// Collect language tags
+	var languageTags []tagRow
+	err = store.DB.Select(&languageTags, `SELECT trackid, predicateid, value FROM tag WHERE predicateid = 'language' AND (uri = '' OR uri IS NULL)`)
+	if err != nil {
+		slog.Warn("Failed to query language tags for migration", slog.Any("error", err))
+		return
+	}
+
+	if len(mentionsAboutTags) == 0 && len(languageTags) == 0 {
+		slog.Info("No tags need eolas migration")
+		return
+	}
+
+	slog.Info("Tags needing migration", "mentions_about", len(mentionsAboutTags), "language", len(languageTags))
+
+	// Collect all URIs we need to look up in eolas
+	uriSet := make(map[string]bool)
+	for _, tag := range mentionsAboutTags {
+		uriSet[tag.Value] = true
+	}
+	for _, tag := range languageTags {
+		uri := eolasLanguageURI(tag.Value)
+		uriSet[uri] = true
+	}
+	uris := make([]string, 0, len(uriSet))
+	for uri := range uriSet {
+		uris = append(uris, uri)
+	}
+
+	// Fetch names from eolas
+	names := fetchEolasNames(uris)
+	if names == nil {
+		names = make(map[string]string)
+	}
+	slog.Info("Eolas name lookup complete", "requested", len(uris), "resolved", len(names))
+
+	// Migrate in a single transaction
+	tx, err := store.DB.Beginx()
+	if err != nil {
+		slog.Warn("Failed to begin migration transaction", slog.Any("error", err))
+		return
+	}
+
+	migratedCount := 0
+
+	// Migrate mentions/about: move URI from value to uri, set name as value
+	for _, tag := range mentionsAboutTags {
+		name := names[tag.Value]
+		if name == "" {
+			// If eolas didn't return a name, keep the URI as fallback name
+			name = tag.Value
+		}
+		_, err = tx.Exec(`UPDATE tag SET uri = ?, value = ? WHERE trackid = ? AND predicateid = ? AND value = ? AND (uri = '' OR uri IS NULL)`,
+			tag.Value, name, tag.TrackID, tag.PredicateID, tag.Value)
+		if err != nil {
+			slog.Warn("Failed to migrate mentions/about tag", slog.Any("error", err), "trackid", tag.TrackID, "predicate", tag.PredicateID)
+			_ = tx.Rollback()
+			return
+		}
+		migratedCount++
+	}
+
+	// Migrate language: build URI from code, set name as value
+	for _, tag := range languageTags {
+		uri := eolasLanguageURI(tag.Value)
+		name := names[uri]
+		if name == "" {
+			// If eolas didn't return a name, keep the code as the name
+			name = tag.Value
+		}
+		_, err = tx.Exec(`UPDATE tag SET uri = ?, value = ? WHERE trackid = ? AND predicateid = ? AND value = ? AND (uri = '' OR uri IS NULL)`,
+			uri, name, tag.TrackID, tag.PredicateID, tag.Value)
+		if err != nil {
+			slog.Warn("Failed to migrate language tag", slog.Any("error", err), "trackid", tag.TrackID, "predicate", tag.PredicateID)
+			_ = tx.Rollback()
+			return
+		}
+		migratedCount++
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		slog.Warn("Failed to commit eolas migration", slog.Any("error", err))
+		return
+	}
+
+	slog.Info("Eolas data migration complete", "migrated_tags", migratedCount)
 }
