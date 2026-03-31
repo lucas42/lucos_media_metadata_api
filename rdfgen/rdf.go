@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/deiu/rdf2go"
@@ -25,15 +24,6 @@ type Track struct {
 }
 
 
-
-// Helper: split CSV values and trim whitespace
-func splitCSV(s string) []string {
-	parts := strings.Split(s, ",")
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
-	}
-	return parts
-}
 
 func getSearchUrl(predicateID string, value string, mediaMetadataManagerOrigin string) rdf2go.Term {
 	return rdf2go.NewResource(fmt.Sprintf("%s/search?p.%s=%s", mediaMetadataManagerOrigin, predicateID, url.QueryEscape(value)))
@@ -66,47 +56,23 @@ func mapPredicate(predicateID string, value string, mediaMetadataManagerOrigin s
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "composer":
-		vals := splitCSV(value)
-		terms := make([]rdf2go.Term, 0, len(vals))
-		for _, v := range vals {
-			if v != "" {
-				terms = append(terms, getSearchUrl(predicateID, v, mediaMetadataManagerOrigin))
-			}
-		}
 		// Technically the music ontology says a composer is of a composition, rather than the track.
 		// But trying to model all that is a faff.  Here we misuse the composer predicate for simplicity.
-		return "http://purl.org/ontology/mo/composer", terms
+		return "http://purl.org/ontology/mo/composer",
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "producer":
-		vals := splitCSV(value)
-		terms := make([]rdf2go.Term, 0, len(vals))
-		for _, v := range vals {
-			if v != "" {
-				terms = append(terms, getSearchUrl(predicateID, v, mediaMetadataManagerOrigin))
-			}
-		}
-		return "http://purl.org/ontology/mo/producer", terms
+		return "http://purl.org/ontology/mo/producer",
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "language":
-		vals := splitCSV(value)
-		terms := make([]rdf2go.Term, 0, len(vals))
-		for _, v := range vals {
-			if v != "" {
-				// Currently the DB has a mix of iso639-1, iso639-3, iso639-6 and custom x- language codes
-				terms = append(terms, rdf2go.NewResource(fmt.Sprintf("https://eolas.l42.eu/metadata/language/%s/", v)))
-			}
-		}
-		return "http://purl.org/dc/terms/language", terms
+		// Currently the DB has a mix of iso639-1, iso639-3, iso639-6 and custom x- language codes
+		return "http://purl.org/dc/terms/language",
+			[]rdf2go.Term{rdf2go.NewResource(fmt.Sprintf("https://eolas.l42.eu/metadata/language/%s/", value))}
 
 	case "offence":
-		vals := splitCSV(value)
-		terms := make([]rdf2go.Term, 0, len(vals))
-		for _, v := range vals {
-			if v != "" {
-				terms = append(terms, getSearchUrl(predicateID, v, mediaMetadataManagerOrigin))
-			}
-		}
-		return mediaMetadataManagerOrigin + "/ontology#trigger", terms
+		return mediaMetadataManagerOrigin + "/ontology#trigger",
+			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "mbid_artist":
 		return "http://purl.org/dc/terms/creator",
@@ -162,20 +128,12 @@ func mapPredicate(predicateID string, value string, mediaMetadataManagerOrigin s
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "about":
-		vals := splitCSV(value)
-		terms := make([]rdf2go.Term, 0, len(vals))
-		for _, v := range vals {
-			terms = append(terms, rdf2go.NewResource(v))
-		}
-		return mediaMetadataManagerOrigin + "/ontology#about", terms
+		return mediaMetadataManagerOrigin + "/ontology#about",
+			[]rdf2go.Term{rdf2go.NewResource(value)}
 
 	case "mentions":
-		vals := splitCSV(value)
-		terms := make([]rdf2go.Term, 0, len(vals))
-		for _, v := range vals {
-			terms = append(terms, rdf2go.NewResource(v))
-		}
-		return mediaMetadataManagerOrigin + "/ontology#mentions", terms
+		return mediaMetadataManagerOrigin + "/ontology#mentions",
+			[]rdf2go.Term{rdf2go.NewResource(value)}
 
 
 	default:
