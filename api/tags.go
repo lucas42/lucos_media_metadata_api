@@ -112,6 +112,9 @@ func (store Datastore) getTagValue(trackid int, predicate string) (value string,
 /**
  * Creates or updates a tag
  *
+ * For multi-value predicates (as defined in predicateRegistry), comma-separated
+ * values are split and stored as separate rows. This ensures the V2 write path
+ * produces the same storage format as the DB migration and V3 write path.
  */
 func (store Datastore) updateTag(trackid int, predicate string, value string) (err error) {
 	slog.Info("Update Tag", "trackid", trackid, "predicate", predicate, "value", value)
@@ -133,7 +136,14 @@ func (store Datastore) updateTag(trackid int, predicate string, value string) (e
 			return
 		}
 	}
-	// Delete existing value(s) for this predicate then insert the new one.
+
+	// Split comma-separated values for multi-value predicates.
+	values := []string{value}
+	if IsMultiValue(predicate) && strings.Contains(value, ",") {
+		values = splitCSV(value)
+	}
+
+	// Delete existing value(s) for this predicate then insert the new one(s).
 	// This replaces the old REPLACE INTO which relied on the now-removed UNIQUE constraint.
 	// Wrapped in a transaction so the tag is not lost if the INSERT fails.
 	tx, err := store.DB.Beginx()
@@ -145,13 +155,28 @@ func (store Datastore) updateTag(trackid int, predicate string, value string) (e
 		_ = tx.Rollback()
 		return
 	}
-	_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value) VALUES($1, $2, $3)", trackid, predicate, value)
-	if err != nil {
-		_ = tx.Rollback()
-		return
+	for _, v := range values {
+		_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value) VALUES($1, $2, $3)", trackid, predicate, v)
+		if err != nil {
+			_ = tx.Rollback()
+			return
+		}
 	}
 	err = tx.Commit()
 	return
+}
+
+// splitCSV splits a comma-separated string into trimmed, non-empty parts.
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 /**

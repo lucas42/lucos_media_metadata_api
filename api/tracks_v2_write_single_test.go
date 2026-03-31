@@ -513,3 +513,23 @@ func TestAddedTagV2(test *testing.T) {
 		test.Errorf("Added tag is older than expected (%f seconds is more than 3 seconds)", secondsSinceAdded)
 	}
 }
+
+/**
+ * Checks that multi-value predicates sent via V2 as CSV are stored as separate
+ * rows and returned as comma-joined strings in the V2 response.
+ */
+func TestV2WriteMultiValuePredicateStoresSeparateRows(test *testing.T) {
+	clearData()
+	trackpath := "/v2/tracks/1"
+	inputJson := `{"fingerprint": "mv1", "url": "http://example.org/track/mv1", "duration": 200, "tags": {"title": "Multi Test", "language": "en,fr", "mentions": "alice,bob,charlie"}}`
+	// V2 response: multi-value predicates returned comma-joined
+	outputJson := `{"fingerprint": "mv1", "duration": 200, "url": "http://example.org/track/mv1", "trackid": 1, "tags": {"title": "Multi Test", "language": "en,fr", "mentions": "alice,bob,charlie"}, "collections":[], "weighting": 0}`
+	makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+	makeRequest(test, "GET", trackpath, "", 200, outputJson, true)
+
+	// Update language via PATCH — should replace all values
+	patchJson := `{"tags": {"language": "de,es"}}`
+	patchOutputJson := `{"fingerprint": "mv1", "duration": 200, "url": "http://example.org/track/mv1", "trackid": 1, "tags": {"title": "Multi Test", "language": "de,es", "mentions": "alice,bob,charlie"}, "collections":[], "weighting": 0}`
+	makeRequest(test, "PATCH", trackpath, patchJson, 200, patchOutputJson, true)
+	makeRequest(test, "GET", trackpath, "", 200, patchOutputJson, true)
+}
