@@ -222,3 +222,117 @@ func TestUpdateTagDeletesAndInserts(test *testing.T) {
 
 	os.Remove(dbpath)
 }
+
+func TestUpdateTagSplitsCSVForMultiValuePredicate(test *testing.T) {
+	dbpath := "testupdatetagmulti.sqlite"
+	os.Remove(dbpath)
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	datastore.DB.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	datastore.DB.MustExec(`INSERT INTO predicate(id) VALUES('language')`)
+
+	err := datastore.updateTag(1, "language", "en,fr,de")
+	if err != nil {
+		test.Fatalf("updateTag failed: %v", err)
+	}
+
+	// Should have 3 separate rows, not one CSV row
+	var rowCount int
+	datastore.DB.Get(&rowCount, "SELECT COUNT(*) FROM tag WHERE trackid = 1 AND predicateid = 'language'")
+	assertEqual(test, "should have 3 separate rows", 3, rowCount)
+
+	// Verify individual values
+	var values []string
+	datastore.DB.Select(&values, "SELECT value FROM tag WHERE trackid = 1 AND predicateid = 'language' ORDER BY rowid")
+	if len(values) != 3 {
+		test.Fatalf("Expected 3 values, got %d", len(values))
+	}
+	assertEqual(test, "first value", "en", values[0])
+	assertEqual(test, "second value", "fr", values[1])
+	assertEqual(test, "third value", "de", values[2])
+
+	os.Remove(dbpath)
+}
+
+func TestUpdateTagDoesNotSplitCSVForSingleValuePredicate(test *testing.T) {
+	dbpath := "testupdatetagsingle.sqlite"
+	os.Remove(dbpath)
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	datastore.DB.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	datastore.DB.MustExec(`INSERT INTO predicate(id) VALUES('title')`)
+
+	// title is not a multi-value predicate, so commas should be preserved as-is
+	err := datastore.updateTag(1, "title", "Hello, World")
+	if err != nil {
+		test.Fatalf("updateTag failed: %v", err)
+	}
+
+	var rowCount int
+	datastore.DB.Get(&rowCount, "SELECT COUNT(*) FROM tag WHERE trackid = 1 AND predicateid = 'title'")
+	assertEqual(test, "should have exactly one row", 1, rowCount)
+
+	value, err := datastore.getTagValue(1, "title")
+	if err != nil {
+		test.Fatalf("getTagValue failed: %v", err)
+	}
+	assertEqual(test, "value should include comma", "Hello, World", value)
+
+	os.Remove(dbpath)
+}
+
+func TestUpdateTagSplitsCSVTrimsWhitespace(test *testing.T) {
+	dbpath := "testupdatetagtrim.sqlite"
+	os.Remove(dbpath)
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	datastore.DB.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	datastore.DB.MustExec(`INSERT INTO predicate(id) VALUES('mentions')`)
+
+	err := datastore.updateTag(1, "mentions", " alice , bob , ")
+	if err != nil {
+		test.Fatalf("updateTag failed: %v", err)
+	}
+
+	var values []string
+	datastore.DB.Select(&values, "SELECT value FROM tag WHERE trackid = 1 AND predicateid = 'mentions' ORDER BY rowid")
+	if len(values) != 2 {
+		test.Fatalf("Expected 2 values, got %d: %v", len(values), values)
+	}
+	assertEqual(test, "first value trimmed", "alice", values[0])
+	assertEqual(test, "second value trimmed", "bob", values[1])
+
+	os.Remove(dbpath)
+}
+
+func TestMigrateMultiValueCSVSplitFixesReCorruptedData(test *testing.T) {
+	dbpath := "testmigratecsv.sqlite"
+	os.Remove(dbpath)
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	// Simulate re-corrupted data: CSV value written after original migration
+	datastore.DB.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	datastore.DB.MustExec(`INSERT INTO predicate(id) VALUES('language')`)
+	datastore.DB.MustExec(`INSERT INTO predicate(id) VALUES('title')`)
+	datastore.DB.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'language', 'en,fr')`)
+	datastore.DB.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'title', 'Hello, World')`)
+
+	// Re-run init to trigger migration
+	datastore2 := DBInit(dbpath, MockLoganne{})
+
+	// Multi-value predicate CSV should be split
+	var langValues []string
+	datastore2.DB.Select(&langValues, "SELECT value FROM tag WHERE trackid = 1 AND predicateid = 'language' ORDER BY rowid")
+	if len(langValues) != 2 {
+		test.Fatalf("Expected 2 language values, got %d: %v", len(langValues), langValues)
+	}
+	assertEqual(test, "first language", "en", langValues[0])
+	assertEqual(test, "second language", "fr", langValues[1])
+
+	// Single-value predicate should be left alone
+	var titleValue string
+	datastore2.DB.Get(&titleValue, "SELECT value FROM tag WHERE trackid = 1 AND predicateid = 'title'")
+	assertEqual(test, "title should be preserved", "Hello, World", titleValue)
+
+	os.Remove(dbpath)
+}
