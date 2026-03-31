@@ -254,6 +254,86 @@ func TestUpdateTagSplitsCSVForMultiValuePredicate(test *testing.T) {
 	os.Remove(dbpath)
 }
 
+func TestMigrateEolasDataMentionsAbout(test *testing.T) {
+	dbpath := "testmigration_eolas_mentions.sqlite"
+	os.Remove(dbpath)
+	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
+
+	// Create tables manually (without migration triggers)
+	db.MustExec(`
+		CREATE TABLE "track" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"fingerprint" TEXT UNIQUE,
+			"url" TEXT UNIQUE,
+			"duration" INTEGER,
+			"weighting" FLOAT NOT NULL DEFAULT 0,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0
+		);
+		CREATE TABLE "predicate" ("id" TEXT PRIMARY KEY NOT NULL);
+		CREATE TABLE "tag" (
+			"trackid" TEXT NOT NULL,
+			"predicateid" TEXT NOT NULL,
+			"value" TEXT,
+			"uri" TEXT DEFAULT "",
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			FOREIGN KEY (predicateid) REFERENCES predicate(id)
+		);
+		CREATE TABLE "collection" (
+			"slug" TEXT PRIMARY KEY NOT NULL,
+			"name" TEXT UNIQUE NOT NULL,
+			"icon" TEXT DEFAULT ""
+		);
+		CREATE TABLE "collection_track" (
+			"collectionslug" TEXT NOT NULL,
+			"trackid" TEXT NOT NULL,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0,
+			FOREIGN KEY (collectionslug) REFERENCES collection(slug),
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			CONSTRAINT track_collection_unique UNIQUE (collectionslug, trackid)
+		);
+	`)
+
+	// Insert test data: mentions/about with URIs as values
+	db.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	db.MustExec(`INSERT INTO predicate(id) VALUES('mentions'), ('about'), ('title')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'mentions', 'https://eolas.l42.eu/metadata/person/alice/')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'about', 'https://eolas.l42.eu/metadata/topic/music/')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'title', 'My Song')`)
+	db.Close()
+
+	// DBInit should detect and run migration (eolas won't be available in tests, so fallback names apply)
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	// Verify mentions tag was migrated: value should be the URI as fallback, uri should be set
+	var mentionsTag Tag
+	err := datastore.DB.Get(&mentionsTag, "SELECT trackid, predicateid, value, uri FROM tag WHERE predicateid = 'mentions'")
+	if err != nil {
+		test.Fatalf("Failed to query mentions tag: %v", err)
+	}
+	assertEqual(test, "mentions uri", "https://eolas.l42.eu/metadata/person/alice/", mentionsTag.URI)
+	// Without eolas, the value falls back to the URI
+	assertEqual(test, "mentions value (fallback)", "https://eolas.l42.eu/metadata/person/alice/", mentionsTag.Value)
+
+	// Verify about tag was migrated
+	var aboutTag Tag
+	err = datastore.DB.Get(&aboutTag, "SELECT trackid, predicateid, value, uri FROM tag WHERE predicateid = 'about'")
+	if err != nil {
+		test.Fatalf("Failed to query about tag: %v", err)
+	}
+	assertEqual(test, "about uri", "https://eolas.l42.eu/metadata/topic/music/", aboutTag.URI)
+
+	// Verify title tag was NOT affected
+	var titleTag Tag
+	err = datastore.DB.Get(&titleTag, "SELECT trackid, predicateid, value, uri FROM tag WHERE predicateid = 'title'")
+	if err != nil {
+		test.Fatalf("Failed to query title tag: %v", err)
+	}
+	assertEqual(test, "title value unchanged", "My Song", titleTag.Value)
+	assertEqual(test, "title uri unchanged", "", titleTag.URI)
+
+	os.Remove(dbpath)
+}
+
 func TestUpdateTagDoesNotSplitCSVForSingleValuePredicate(test *testing.T) {
 	dbpath := "testupdatetagsingle.sqlite"
 	os.Remove(dbpath)
@@ -333,6 +413,129 @@ func TestMigrateMultiValueCSVSplitFixesReCorruptedData(test *testing.T) {
 	var titleValue string
 	datastore2.DB.Get(&titleValue, "SELECT value FROM tag WHERE trackid = 1 AND predicateid = 'title'")
 	assertEqual(test, "title should be preserved", "Hello, World", titleValue)
+
+	os.Remove(dbpath)
+}
+
+func TestMigrateEolasDataLanguage(test *testing.T) {
+	dbpath := "testmigration_eolas_language.sqlite"
+	os.Remove(dbpath)
+	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
+
+	db.MustExec(`
+		CREATE TABLE "track" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"fingerprint" TEXT UNIQUE,
+			"url" TEXT UNIQUE,
+			"duration" INTEGER,
+			"weighting" FLOAT NOT NULL DEFAULT 0,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0
+		);
+		CREATE TABLE "predicate" ("id" TEXT PRIMARY KEY NOT NULL);
+		CREATE TABLE "tag" (
+			"trackid" TEXT NOT NULL,
+			"predicateid" TEXT NOT NULL,
+			"value" TEXT,
+			"uri" TEXT DEFAULT "",
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			FOREIGN KEY (predicateid) REFERENCES predicate(id)
+		);
+		CREATE TABLE "collection" (
+			"slug" TEXT PRIMARY KEY NOT NULL,
+			"name" TEXT UNIQUE NOT NULL,
+			"icon" TEXT DEFAULT ""
+		);
+		CREATE TABLE "collection_track" (
+			"collectionslug" TEXT NOT NULL,
+			"trackid" TEXT NOT NULL,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0,
+			FOREIGN KEY (collectionslug) REFERENCES collection(slug),
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			CONSTRAINT track_collection_unique UNIQUE (collectionslug, trackid)
+		);
+	`)
+
+	db.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	db.MustExec(`INSERT INTO predicate(id) VALUES('language')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'language', 'en')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'language', 'fr')`)
+	db.Close()
+
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	// Verify language tags were migrated
+	var langTags []Tag
+	datastore.DB.Select(&langTags, "SELECT trackid, predicateid, value, uri FROM tag WHERE predicateid = 'language' ORDER BY uri")
+	assertEqual(test, "language tag count", 2, len(langTags))
+
+	if len(langTags) == 2 {
+		// Without eolas, value falls back to the code
+		assertEqual(test, "en uri", "https://eolas.l42.eu/metadata/language/en/", langTags[0].URI)
+		assertEqual(test, "en value (fallback)", "en", langTags[0].Value)
+		assertEqual(test, "fr uri", "https://eolas.l42.eu/metadata/language/fr/", langTags[1].URI)
+		assertEqual(test, "fr value (fallback)", "fr", langTags[1].Value)
+	}
+
+	os.Remove(dbpath)
+}
+
+func TestMigrateEolasDataIdempotent(test *testing.T) {
+	dbpath := "testmigration_eolas_idempotent.sqlite"
+	os.Remove(dbpath)
+	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
+
+	db.MustExec(`
+		CREATE TABLE "track" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"fingerprint" TEXT UNIQUE,
+			"url" TEXT UNIQUE,
+			"duration" INTEGER,
+			"weighting" FLOAT NOT NULL DEFAULT 0,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0
+		);
+		CREATE TABLE "predicate" ("id" TEXT PRIMARY KEY NOT NULL);
+		CREATE TABLE "tag" (
+			"trackid" TEXT NOT NULL,
+			"predicateid" TEXT NOT NULL,
+			"value" TEXT,
+			"uri" TEXT DEFAULT "",
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			FOREIGN KEY (predicateid) REFERENCES predicate(id)
+		);
+		CREATE TABLE "collection" (
+			"slug" TEXT PRIMARY KEY NOT NULL,
+			"name" TEXT UNIQUE NOT NULL,
+			"icon" TEXT DEFAULT ""
+		);
+		CREATE TABLE "collection_track" (
+			"collectionslug" TEXT NOT NULL,
+			"trackid" TEXT NOT NULL,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0,
+			FOREIGN KEY (collectionslug) REFERENCES collection(slug),
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			CONSTRAINT track_collection_unique UNIQUE (collectionslug, trackid)
+		);
+	`)
+
+	// Insert already-migrated data (uri is already set)
+	db.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	db.MustExec(`INSERT INTO predicate(id) VALUES('mentions'), ('language')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value, uri) VALUES(1, 'mentions', 'Alice', 'https://eolas.l42.eu/metadata/person/alice/')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value, uri) VALUES(1, 'language', 'English', 'https://eolas.l42.eu/metadata/language/en/')`)
+	db.Close()
+
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	// Verify data was NOT changed (already migrated)
+	var mentionsTag Tag
+	datastore.DB.Get(&mentionsTag, "SELECT trackid, predicateid, value, uri FROM tag WHERE predicateid = 'mentions'")
+	assertEqual(test, "mentions value unchanged", "Alice", mentionsTag.Value)
+	assertEqual(test, "mentions uri unchanged", "https://eolas.l42.eu/metadata/person/alice/", mentionsTag.URI)
+
+	var langTag Tag
+	datastore.DB.Get(&langTag, "SELECT trackid, predicateid, value, uri FROM tag WHERE predicateid = 'language'")
+	assertEqual(test, "language value unchanged", "English", langTag.Value)
+	assertEqual(test, "language uri unchanged", "https://eolas.l42.eu/metadata/language/en/", langTag.URI)
 
 	os.Remove(dbpath)
 }

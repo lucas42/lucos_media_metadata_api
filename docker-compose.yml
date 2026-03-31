@@ -23,6 +23,7 @@ services:
       - RDF_OUTPUT_PATH=/var/lib/exports/all-media.ttl
       - MEDIA_METADATA_MANAGER_ORIGIN=https://media-metadata.l42.eu
       - PORT
+      - KEY_LUCOS_EOLAS
   exporter:
     build:
       dockerfile: exporter/Dockerfile
