@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -21,7 +22,8 @@ func TestMapPredicate(t *testing.T) {
 	}
 }
 
-// Test multi-value predicates return a single term per call
+// Test multi-value predicates: each DB row produces one term per call,
+// and multiple calls with the same predicate return distinct terms.
 func TestMapPredicateMultiValue(t *testing.T) {
 	cases := []struct {
 		predicateID string
@@ -29,24 +31,42 @@ func TestMapPredicateMultiValue(t *testing.T) {
 		expectedURI string
 	}{
 		{"composer", "Alice", "http://purl.org/ontology/mo/composer"},
+		{"composer", "Bob", "http://purl.org/ontology/mo/composer"},
 		{"producer", "Charlie", "http://purl.org/ontology/mo/producer"},
+		{"producer", "Dave", "http://purl.org/ontology/mo/producer"},
 		{"language", "en", "http://purl.org/dc/terms/language"},
 		{"offence", "violence", "http://localhost:8020/ontology#trigger"},
 		{"about", "http://example.com/topic", "http://localhost:8020/ontology#about"},
 		{"mentions", "http://example.com/entity", "http://localhost:8020/ontology#mentions"},
 	}
+	// Track terms by predicate to verify distinct values
+	termsByPredicate := make(map[string][]string)
 	for _, tc := range cases {
 		pred, terms := mapPredicate(tc.predicateID, tc.value, "http://localhost:8020")
 		if pred != tc.expectedURI {
-			t.Errorf("predicate %q: expected URI %q, got %q", tc.predicateID, tc.expectedURI, pred)
+			t.Errorf("predicate %q value %q: expected URI %q, got %q", tc.predicateID, tc.value, tc.expectedURI, pred)
 		}
 		if len(terms) != 1 {
-			t.Errorf("predicate %q: expected 1 term, got %d", tc.predicateID, len(terms))
+			t.Errorf("predicate %q value %q: expected 1 term, got %d", tc.predicateID, tc.value, len(terms))
+		}
+		if len(terms) > 0 {
+			termsByPredicate[tc.predicateID] = append(termsByPredicate[tc.predicateID], terms[0].String())
+		}
+	}
+	// Verify multi-value predicates produce distinct terms
+	for _, pred := range []string{"composer", "producer"} {
+		terms := termsByPredicate[pred]
+		if len(terms) != 2 {
+			t.Errorf("predicate %q: expected 2 distinct terms, got %d", pred, len(terms))
+		}
+		if len(terms) == 2 && terms[0] == terms[1] {
+			t.Errorf("predicate %q: both terms are identical (%q) — expected distinct values for each DB row", pred, terms[0])
 		}
 	}
 }
 
-// Test exportRDF with temporary DB using separate rows for multi-value fields
+// Test exportRDF with temporary DB using separate rows for multi-value fields.
+// Verifies that all values for multi-value predicates appear in the output.
 func TestExportRDF(t *testing.T) {
 	// create temporary DB file
 	tmpDir := t.TempDir()
@@ -89,12 +109,22 @@ func TestExportRDF(t *testing.T) {
 		t.Fatalf("ExportRDF failed: %v", err)
 	}
 
-	fi, err := os.Stat(tmpFile)
+	content, err := os.ReadFile(tmpFile)
 	if err != nil {
-		t.Fatalf("could not stat RDF output file: %v", err)
+		t.Fatalf("could not read RDF output file: %v", err)
 	}
-	if fi.Size() == 0 {
-		t.Errorf("expected non-empty RDF output file")
+	if len(content) == 0 {
+		t.Fatalf("expected non-empty RDF output file")
+	}
+
+	output := string(content)
+
+	// Verify all multi-value tags appear in the output
+	// Each value should generate a separate triple
+	for _, expected := range []string{"Alice", "Bob", "Charlie", "Dave", "My Song"} {
+		if !strings.Contains(output, expected) {
+			t.Errorf("expected RDF output to contain %q, but it was missing", expected)
+		}
 	}
 }
 
