@@ -5,22 +5,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
 )
-
-// Test splitting CSVs
-func TestSplitCSV(t *testing.T) {
-	input := "a, b ,c"
-	expected := []string{"a", "b", "c"}
-	got := splitCSV(input)
-	for i := range expected {
-		if expected[i] != got[i] {
-			t.Errorf("expected %q, got %q", expected[i], got[i])
-		}
-	}
-}
 
 // Test mapPredicate returns URIs and terms
 func TestMapPredicate(t *testing.T) {
@@ -33,39 +22,51 @@ func TestMapPredicate(t *testing.T) {
 	}
 }
 
-// Test mapPredicate CSV handling
-func TestMapPredicateCSV(t *testing.T) {
-	pred, terms := mapPredicate("composer", "Alice,Bob", "http://localhost:8020")
-	if len(terms) != 2 {
-		t.Errorf("expected 2 terms, got %d", len(terms))
+// Test multi-value predicates: each DB row produces one term per call,
+// and multiple calls with the same predicate return distinct terms.
+func TestMapPredicateMultiValue(t *testing.T) {
+	cases := []struct {
+		predicateID string
+		value       string
+		expectedURI string
+	}{
+		{"composer", "Alice", "http://purl.org/ontology/mo/composer"},
+		{"composer", "Bob", "http://purl.org/ontology/mo/composer"},
+		{"producer", "Charlie", "http://purl.org/ontology/mo/producer"},
+		{"producer", "Dave", "http://purl.org/ontology/mo/producer"},
+		{"language", "en", "http://purl.org/dc/terms/language"},
+		{"offence", "violence", "http://localhost:8020/ontology#trigger"},
+		{"about", "http://example.com/topic", "http://localhost:8020/ontology#about"},
+		{"mentions", "http://example.com/entity", "http://localhost:8020/ontology#mentions"},
 	}
-	if pred != "http://purl.org/ontology/mo/composer" {
-		t.Errorf("unexpected predicate: %s", pred)
-	}
-}
-
-// Test multiple CSV fields per track
-func TestMapPredicateMultipleCSV(t *testing.T) {
-	pred1, terms1 := mapPredicate("composer", "Alice,Bob", "http://localhost:8020")
-	pred2, terms2 := mapPredicate("producer", "Charlie, Dave ", "http://localhost:8020")
-	if len(terms1) != 2 {
-		t.Errorf("expected 2 composer terms, got %d", len(terms1))
-	}
-	if len(terms2) != 2 {
-		t.Errorf("expected 2 producer terms, got %d", len(terms2))
-	}
-	for _, term := range append(terms1, terms2...) {
-		if term.String() == "" {
-			t.Errorf("expected non-empty RDF term")
+	// Track terms by predicate to verify distinct values
+	termsByPredicate := make(map[string][]string)
+	for _, tc := range cases {
+		pred, terms := mapPredicate(tc.predicateID, tc.value, "http://localhost:8020")
+		if pred != tc.expectedURI {
+			t.Errorf("predicate %q value %q: expected URI %q, got %q", tc.predicateID, tc.value, tc.expectedURI, pred)
+		}
+		if len(terms) != 1 {
+			t.Errorf("predicate %q value %q: expected 1 term, got %d", tc.predicateID, tc.value, len(terms))
+		}
+		if len(terms) > 0 {
+			termsByPredicate[tc.predicateID] = append(termsByPredicate[tc.predicateID], terms[0].String())
 		}
 	}
-	if pred1 != "http://purl.org/ontology/mo/composer" || pred2 != "http://purl.org/ontology/mo/producer" {
-		t.Errorf("expected predicate URI to be contributor for CSV fields")
+	// Verify multi-value predicates produce distinct terms
+	for _, pred := range []string{"composer", "producer"} {
+		terms := termsByPredicate[pred]
+		if len(terms) != 2 {
+			t.Errorf("predicate %q: expected 2 distinct terms, got %d", pred, len(terms))
+		}
+		if len(terms) == 2 && terms[0] == terms[1] {
+			t.Errorf("predicate %q: both terms are identical (%q) — expected distinct values for each DB row", pred, terms[0])
+		}
 	}
 }
 
-
-// Test exportRDF with temporary DB
+// Test exportRDF with temporary DB using separate rows for multi-value fields.
+// Verifies that all values for multi-value predicates appear in the output.
 func TestExportRDF(t *testing.T) {
 	// create temporary DB file
 	tmpDir := t.TempDir()
@@ -85,7 +86,7 @@ func TestExportRDF(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Insert a track and tags
+	// Insert a track and tags — multi-value fields use separate rows
 	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 120)`)
 	if err != nil {
 		t.Fatal(err)
@@ -93,8 +94,10 @@ func TestExportRDF(t *testing.T) {
 	_, err = db.Exec(`
 	INSERT INTO tag (trackid, predicateid, value) VALUES
 	(1, 'title', 'My Song'),
-	(1, 'composer', 'Alice,Bob'),
-	(1, 'producer', 'Charlie, Dave')
+	(1, 'composer', 'Alice'),
+	(1, 'composer', 'Bob'),
+	(1, 'producer', 'Charlie'),
+	(1, 'producer', 'Dave')
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -106,12 +109,22 @@ func TestExportRDF(t *testing.T) {
 		t.Fatalf("ExportRDF failed: %v", err)
 	}
 
-	fi, err := os.Stat(tmpFile)
+	content, err := os.ReadFile(tmpFile)
 	if err != nil {
-		t.Fatalf("could not stat RDF output file: %v", err)
+		t.Fatalf("could not read RDF output file: %v", err)
 	}
-	if fi.Size() == 0 {
-		t.Errorf("expected non-empty RDF output file")
+	if len(content) == 0 {
+		t.Fatalf("expected non-empty RDF output file")
+	}
+
+	output := string(content)
+
+	// Verify all multi-value tags appear in the output
+	// Each value should generate a separate triple
+	for _, expected := range []string{"Alice", "Bob", "Charlie", "Dave", "My Song"} {
+		if !strings.Contains(output, expected) {
+			t.Errorf("expected RDF output to contain %q, but it was missing", expected)
+		}
 	}
 }
 
