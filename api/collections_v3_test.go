@@ -7,6 +7,16 @@ import (
 	"testing"
 )
 
+// setupRequest is a test helper that makes a request expecting a given status
+// code but doesn't check the body — for setup steps where we only care about success.
+func setupRequest(test *testing.T, method string, path string, requestBody string, expectedStatus int) {
+	request := basicRequest(test, method, path, requestBody)
+	resp, _ := doRawRequest(test, request)
+	if resp.StatusCode != expectedStatus {
+		test.Errorf("Setup %s %s: got status %d, expected %d", method, path, resp.StatusCode, expectedStatus)
+	}
+}
+
 func TestV3CreateCollection(test *testing.T) {
 	clearData()
 	path := "/v3/collections/basic"
@@ -27,11 +37,11 @@ func TestV3GetCollectionTracksHaveStructuredTags(test *testing.T) {
 	trackurl := "http://example.org/v3coll/1"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	v2TrackPath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
-	makeRequest(test, "PUT", v2TrackPath, `{"fingerprint": "v3colltest1", "duration": 200, "tags": {"title": "Test Song", "artist": "Test Artist", "language": "en"}}`, 200, "", false)
+	setupRequest(test, "PUT", v2TrackPath, `{"fingerprint": "v3colltest1", "duration": 200, "tags": {"title": "Test Song", "artist": "Test Artist", "language": "en"}}`, 200)
 
 	// Create a collection and add the track to it
 	collPath := "/v3/collections/testcoll"
-	makeRequest(test, "PUT", collPath, `{"name": "Test Collection", "icon": "🎵"}`, 200, "", false)
+	setupRequest(test, "PUT", collPath, `{"name": "Test Collection", "icon": "🎵"}`, 200)
 	makeRequest(test, "PUT", "/v3/collections/testcoll/1", "", 200, `{"inCollection":true}`, true)
 
 	// GET the collection via v3 and verify tag format
@@ -70,8 +80,8 @@ func TestV3GetCollectionTracksHaveStructuredTags(test *testing.T) {
 func TestV3GetAllCollections(test *testing.T) {
 	clearData()
 	// Create two collections
-	makeRequest(test, "PUT", "/v3/collections/first", `{"name": "First", "icon": "1️⃣"}`, 200, "", false)
-	makeRequest(test, "PUT", "/v3/collections/second", `{"name": "Second", "icon": "2️⃣"}`, 200, "", false)
+	setupRequest(test, "PUT", "/v3/collections/first", `{"name": "First", "icon": "1️⃣"}`, 200)
+	setupRequest(test, "PUT", "/v3/collections/second", `{"name": "Second", "icon": "2️⃣"}`, 200)
 
 	// GET all collections
 	request := basicRequest(test, "GET", "/v3/collections", "")
@@ -106,8 +116,8 @@ func TestV3CollectionTrackMembership(test *testing.T) {
 	// Create track and collection
 	trackurl := "http://example.org/v3coll/membership"
 	escapedTrackUrl := url.QueryEscape(trackurl)
-	makeRequest(test, "PUT", fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collmem", "duration": 100}`, 200, "", false)
-	makeRequest(test, "PUT", "/v3/collections/memtest", `{"name": "Membership Test", "icon": "🔗"}`, 200, "", false)
+	setupRequest(test, "PUT", fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collmem", "duration": 100}`, 200)
+	setupRequest(test, "PUT", "/v3/collections/memtest", `{"name": "Membership Test", "icon": "🔗"}`, 200)
 
 	// Track not in collection — V3 uses structured JSON error
 	makeRequest(test, "GET", "/v3/collections/memtest/1", "", 404, `{"error":"Track Not In Collection","code":"not_found"}`, true)
@@ -127,8 +137,8 @@ func TestV3CollectionTrackMembership(test *testing.T) {
 
 func TestV3DeleteCollection(test *testing.T) {
 	clearData()
-	makeRequest(test, "PUT", "/v3/collections/todelete", `{"name": "To Delete", "icon": "🗑️"}`, 200, "", false)
-	makeRequest(test, "GET", "/v3/collections/todelete", "", 200, "", false)
+	setupRequest(test, "PUT", "/v3/collections/todelete", `{"name": "To Delete", "icon": "🗑️"}`, 200)
+	setupRequest(test, "GET", "/v3/collections/todelete", "", 200)
 	makeRequest(test, "DELETE", "/v3/collections/todelete", "", 204, "", false)
 	makeRequest(test, "GET", "/v3/collections/todelete", "", 404, `{"error":"Collection Not Found","code":"not_found"}`, true)
 }
@@ -143,9 +153,9 @@ func TestV3CollectionRandomEndpoint(test *testing.T) {
 	// Create collection and add a weighted track
 	trackurl := "http://example.org/v3coll/random"
 	escapedTrackUrl := url.QueryEscape(trackurl)
-	makeRequest(test, "PUT", fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collrand", "duration": 180, "tags": {"title": "Random Track"}}`, 200, "", false)
-	makeRequest(test, "PUT", "/v2/tracks/1/weighting", "5", 200, "", false)
-	makeRequest(test, "PUT", "/v3/collections/randtest", `{"name": "Random Test", "icon": "🎲"}`, 200, "", false)
+	setupRequest(test, "PUT", fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collrand", "duration": 180, "tags": {"title": "Random Track"}}`, 200)
+	setupRequest(test, "PUT", "/v2/tracks/1/weighting", "5", 200)
+	setupRequest(test, "PUT", "/v3/collections/randtest", `{"name": "Random Test", "icon": "🎲"}`, 200)
 	makeRequest(test, "PUT", "/v3/collections/randtest/1", "", 200, `{"inCollection":true}`, true)
 
 	// GET random tracks
@@ -180,19 +190,19 @@ func TestV3CollectionRandomEndpoint(test *testing.T) {
 
 func TestV3CollectionEndpointNotFound(test *testing.T) {
 	clearData()
-	makeRequest(test, "PUT", "/v3/collections/testendpoint", `{"name": "Endpoint Test", "icon": "🔍"}`, 200, "", false)
+	setupRequest(test, "PUT", "/v3/collections/testendpoint", `{"name": "Endpoint Test", "icon": "🔍"}`, 200)
 	makeRequest(test, "GET", "/v3/collections/testendpoint/unknown", "", 404, `{"error":"Collection Endpoint Not Found","code":"not_found"}`, true)
 }
 
 func TestV3CollectionTrackNotFound(test *testing.T) {
 	clearData()
-	makeRequest(test, "PUT", "/v3/collections/tracknotfound", `{"name": "Track Not Found Test", "icon": "❓"}`, 200, "", false)
+	setupRequest(test, "PUT", "/v3/collections/tracknotfound", `{"name": "Track Not Found Test", "icon": "❓"}`, 200)
 	makeRequest(test, "GET", "/v3/collections/tracknotfound/999", "", 404, `{"error":"Track Not Found","code":"not_found"}`, true)
 }
 
 func TestV3CollectionRandomMethodNotAllowed(test *testing.T) {
 	clearData()
-	makeRequest(test, "PUT", "/v3/collections/randmethod", `{"name": "Random Method Test", "icon": "🎲"}`, 200, "", false)
+	setupRequest(test, "PUT", "/v3/collections/randmethod", `{"name": "Random Method Test", "icon": "🎲"}`, 200)
 	makeRequestWithUnallowedMethod(test, "/v3/collections/randmethod/random", "POST", []string{"GET"})
 	makeRequestWithUnallowedMethod(test, "/v3/collections/randmethod/random", "PUT", []string{"GET"})
 	makeRequestWithUnallowedMethod(test, "/v3/collections/randmethod/random", "DELETE", []string{"GET"})
