@@ -82,7 +82,11 @@ func (store Datastore) CollectionsV3Controller(w http.ResponseWriter, r *http.Re
 
 	if len(pathparts) <= 1 {
 		collections, err := store.getAllCollectionsV3()
-		writeJSONResponse(w, collections, err)
+		if err != nil {
+			writeV3Error(w, err)
+			return
+		}
+		writeJSONResponse(w, collections, nil)
 	} else {
 		slug := pathparts[1]
 		if len(pathparts) == 2 {
@@ -140,6 +144,10 @@ func (store Datastore) CollectionsV3Controller(w http.ResponseWriter, r *http.Re
 			if err != nil {
 				switch pathparts[2] {
 				case "random":
+					if r.Method != "GET" {
+						MethodNotAllowed(w, []string{"GET"})
+						return
+					}
 					result, err := store.getRandomTracksInCollectionV3(slug, 20)
 					if err != nil {
 						writeV3Error(w, err)
@@ -167,16 +175,24 @@ func (store Datastore) CollectionsV3Controller(w http.ResponseWriter, r *http.Re
 						return
 					}
 					if contains {
-						writePlainResponse(w, "Track In Collection\n", nil)
+						writeJSONResponse(w, map[string]bool{"inCollection": true}, nil)
 					} else {
-						writePlainResponseWithStatus(w, http.StatusNotFound, "Track Not In Collection\n", nil)
+						writeV3ErrorResponse(w, http.StatusNotFound, "Track Not In Collection", "not_found")
 					}
 				case "PUT":
 					err = store.addTrackToCollection(slug, trackid)
-					writePlainResponse(w, "Track In Collection\n", err)
+					if err != nil {
+						writeV3Error(w, err)
+						return
+					}
+					writeJSONResponse(w, map[string]bool{"inCollection": true}, nil)
 				case "DELETE":
 					err = store.removeTrackFromCollection(slug, trackid)
-					writePlainResponse(w, "Track Not In Collection\n", err)
+					if err != nil {
+						writeV3Error(w, err)
+						return
+					}
+					writeJSONResponse(w, map[string]bool{"inCollection": false}, nil)
 				default:
 					MethodNotAllowed(w, []string{"GET", "PUT", "DELETE"})
 				}

@@ -32,7 +32,7 @@ func TestV3GetCollectionTracksHaveStructuredTags(test *testing.T) {
 	// Create a collection and add the track to it
 	collPath := "/v3/collections/testcoll"
 	makeRequest(test, "PUT", collPath, `{"name": "Test Collection", "icon": "🎵"}`, 200, "", false)
-	makeRequest(test, "PUT", "/v3/collections/testcoll/1", "", 200, "Track In Collection\n", false)
+	makeRequest(test, "PUT", "/v3/collections/testcoll/1", "", 200, `{"inCollection":true}`, true)
 
 	// GET the collection via v3 and verify tag format
 	request := basicRequest(test, "GET", collPath, "")
@@ -109,20 +109,20 @@ func TestV3CollectionTrackMembership(test *testing.T) {
 	makeRequest(test, "PUT", fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collmem", "duration": 100}`, 200, "", false)
 	makeRequest(test, "PUT", "/v3/collections/memtest", `{"name": "Membership Test", "icon": "🔗"}`, 200, "", false)
 
-	// Track not in collection
-	makeRequest(test, "GET", "/v3/collections/memtest/1", "", 404, "Track Not In Collection\n", false)
+	// Track not in collection — V3 uses structured JSON error
+	makeRequest(test, "GET", "/v3/collections/memtest/1", "", 404, `{"error":"Track Not In Collection","code":"not_found"}`, true)
 
 	// Add track to collection
-	makeRequest(test, "PUT", "/v3/collections/memtest/1", "", 200, "Track In Collection\n", false)
+	makeRequest(test, "PUT", "/v3/collections/memtest/1", "", 200, `{"inCollection":true}`, true)
 
 	// Track in collection
-	makeRequest(test, "GET", "/v3/collections/memtest/1", "", 200, "Track In Collection\n", false)
+	makeRequest(test, "GET", "/v3/collections/memtest/1", "", 200, `{"inCollection":true}`, true)
 
 	// Remove track
-	makeRequest(test, "DELETE", "/v3/collections/memtest/1", "", 200, "Track Not In Collection\n", false)
+	makeRequest(test, "DELETE", "/v3/collections/memtest/1", "", 200, `{"inCollection":false}`, true)
 
 	// Track no longer in collection
-	makeRequest(test, "GET", "/v3/collections/memtest/1", "", 404, "Track Not In Collection\n", false)
+	makeRequest(test, "GET", "/v3/collections/memtest/1", "", 404, `{"error":"Track Not In Collection","code":"not_found"}`, true)
 }
 
 func TestV3DeleteCollection(test *testing.T) {
@@ -146,7 +146,7 @@ func TestV3CollectionRandomEndpoint(test *testing.T) {
 	makeRequest(test, "PUT", fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collrand", "duration": 180, "tags": {"title": "Random Track"}}`, 200, "", false)
 	makeRequest(test, "PUT", "/v2/tracks/1/weighting", "5", 200, "", false)
 	makeRequest(test, "PUT", "/v3/collections/randtest", `{"name": "Random Test", "icon": "🎲"}`, 200, "", false)
-	makeRequest(test, "PUT", "/v3/collections/randtest/1", "", 200, "Track In Collection\n", false)
+	makeRequest(test, "PUT", "/v3/collections/randtest/1", "", 200, `{"inCollection":true}`, true)
 
 	// GET random tracks
 	request := basicRequest(test, "GET", "/v3/collections/randtest/random", "")
@@ -188,6 +188,14 @@ func TestV3CollectionTrackNotFound(test *testing.T) {
 	clearData()
 	makeRequest(test, "PUT", "/v3/collections/tracknotfound", `{"name": "Track Not Found Test", "icon": "❓"}`, 200, "", false)
 	makeRequest(test, "GET", "/v3/collections/tracknotfound/999", "", 404, `{"error":"Track Not Found","code":"not_found"}`, true)
+}
+
+func TestV3CollectionRandomMethodNotAllowed(test *testing.T) {
+	clearData()
+	makeRequest(test, "PUT", "/v3/collections/randmethod", `{"name": "Random Method Test", "icon": "🎲"}`, 200, "", false)
+	makeRequestWithUnallowedMethod(test, "/v3/collections/randmethod/random", "POST", []string{"GET"})
+	makeRequestWithUnallowedMethod(test, "/v3/collections/randmethod/random", "PUT", []string{"GET"})
+	makeRequestWithUnallowedMethod(test, "/v3/collections/randmethod/random", "DELETE", []string{"GET"})
 }
 
 func TestV3CollectionRandomOnNonexistentCollection(test *testing.T) {
