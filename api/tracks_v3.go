@@ -303,7 +303,7 @@ func (store Datastore) TracksV3Controller(w http.ResponseWriter, r *http.Request
 		case "PUT":
 			store.putPatchSingleTrackV3(w, r, filterfield, filtervalue, trackid, trackurl, fingerprint)
 		case "GET":
-			store.getSingleTrackV3(w, filterfield, filtervalue)
+			store.getSingleTrackV3(w, r, filterfield, filtervalue)
 		case "DELETE":
 			deleteTrackHandler(store, w, trackid)
 		default:
@@ -312,7 +312,12 @@ func (store Datastore) TracksV3Controller(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (store Datastore) getSingleTrackV3(w http.ResponseWriter, filterfield string, filtervalue interface{}) {
+func (store Datastore) getSingleTrackV3(w http.ResponseWriter, r *http.Request, filterfield string, filtervalue interface{}) {
+	isRDF, mime := prefersRDF(r)
+	if isRDF {
+		writeTrackRDFByField(store, w, filterfield, filtervalue, mime)
+		return
+	}
 	track, err := store.getTrackDataByFieldV3(filterfield, filtervalue)
 	if err != nil {
 		writeV3Error(w, err)
