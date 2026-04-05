@@ -13,7 +13,7 @@ import (
 
 // Test mapPredicate returns URIs and terms
 func TestMapPredicate(t *testing.T) {
-	pred, terms := mapPredicate("title", "Song A", "http://localhost:8020")
+	pred, terms := mapPredicate("title", "Song A", nil, "http://localhost:8020")
 	if pred != "http://www.w3.org/2004/02/skos/core#prefLabel" {
 		t.Errorf("unexpected predicate URI: %s", pred)
 	}
@@ -42,7 +42,7 @@ func TestMapPredicateMultiValue(t *testing.T) {
 	// Track terms by predicate to verify distinct values
 	termsByPredicate := make(map[string][]string)
 	for _, tc := range cases {
-		pred, terms := mapPredicate(tc.predicateID, tc.value, "http://localhost:8020")
+		pred, terms := mapPredicate(tc.predicateID, tc.value, nil, "http://localhost:8020")
 		if pred != tc.expectedURI {
 			t.Errorf("predicate %q value %q: expected URI %q, got %q", tc.predicateID, tc.value, tc.expectedURI, pred)
 		}
@@ -80,7 +80,7 @@ func TestExportRDF(t *testing.T) {
 	// Create tables
 	_, err = db.Exec(`
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
-	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -125,6 +125,65 @@ func TestExportRDF(t *testing.T) {
 		if !strings.Contains(output, expected) {
 			t.Errorf("expected RDF output to contain %q, but it was missing", expected)
 		}
+	}
+}
+
+// TestExportRDFUsesTagUriForAboutMentions verifies that when a tag has a uri column value,
+// that URI is used in the RDF output instead of the display name in value.
+// After migrateEolasData, about/mentions tags store the display name in value and
+// the actual URI in uri — the RDF export must use the URI.
+func TestExportRDFUsesTagUriForAboutMentions(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 60)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate post-migration state: value = display name, uri = actual URI
+	_, err = db.Exec(`
+	INSERT INTO tag (trackid, predicateid, value, uri) VALUES
+	(1, 'about', 'Alice', 'https://eolas.l42.eu/metadata/person/alice/'),
+	(1, 'mentions', 'Some Topic', 'https://eolas.l42.eu/metadata/topic/some-topic/')
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpFile := filepath.Join(tmpDir, "output.ttl")
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	if err := ExportRDF(dbPath, tmpFile); err != nil {
+		t.Fatalf("ExportRDF failed: %v", err)
+	}
+
+	content, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("could not read RDF output file: %v", err)
+	}
+	output := string(content)
+
+	// URI from tag.uri should appear in output, not the display name
+	if !strings.Contains(output, "eolas.l42.eu/metadata/person/alice/") {
+		t.Error("expected about URI 'eolas.l42.eu/metadata/person/alice/' in output, but not found")
+	}
+	if strings.Contains(output, "<Alice>") || strings.Contains(output, "\"Alice\"") {
+		t.Error("display name 'Alice' should not appear as an IRI object — only the URI should")
+	}
+	if !strings.Contains(output, "eolas.l42.eu/metadata/topic/some-topic/") {
+		t.Error("expected mentions URI 'eolas.l42.eu/metadata/topic/some-topic/' in output, but not found")
 	}
 }
 
