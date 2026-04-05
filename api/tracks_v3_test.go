@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -391,6 +392,86 @@ func TestV3DeleteTrack(test *testing.T) {
 	resp, _ := doRawRequest(test, getReq)
 	if resp.StatusCode != 404 {
 		test.Errorf("Expected 404 after delete, got %d", resp.StatusCode)
+	}
+}
+
+func TestV3GetTrackRDFTurtle(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3rdf/turtle"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+
+	// Create track
+	inputJSON := `{"fingerprint": "v3rdf1", "duration": 180, "tags": {"title": [{"name": "RDF Test Track"}], "artist": [{"name": "Test Artist"}]}}`
+	createReq := basicRequest(test, "PUT", v3Path, inputJSON)
+	resp, _ := doRawRequest(test, createReq)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Failed to create track: %d", resp.StatusCode)
+	}
+
+	// GET with text/turtle Accept header should return RDF
+	getReq := basicRequest(test, "GET", v3Path, "")
+	getReq.Header.Set("Accept", "text/turtle")
+	resp2, _ := doRawRequest(test, getReq)
+	if resp2.StatusCode != 200 {
+		test.Errorf("Expected 200, got %d", resp2.StatusCode)
+	}
+	ct := resp2.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/turtle") {
+		test.Errorf("Expected Content-Type text/turtle, got %s", ct)
+	}
+}
+
+func TestV3GetTrackRDFJsonLD(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3rdf/jsonld"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+
+	// Create track
+	inputJSON := `{"fingerprint": "v3rdf2", "duration": 210, "tags": {"title": [{"name": "JSON-LD Track"}]}}`
+	createReq := basicRequest(test, "PUT", v3Path, inputJSON)
+	resp, _ := doRawRequest(test, createReq)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Failed to create track: %d", resp.StatusCode)
+	}
+
+	// GET with application/ld+json Accept header should return RDF
+	getReq := basicRequest(test, "GET", v3Path, "")
+	getReq.Header.Set("Accept", "application/ld+json")
+	resp2, _ := doRawRequest(test, getReq)
+	if resp2.StatusCode != 200 {
+		test.Errorf("Expected 200, got %d", resp2.StatusCode)
+	}
+	ct := resp2.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/ld+json") {
+		test.Errorf("Expected Content-Type application/ld+json, got %s", ct)
+	}
+}
+
+func TestV3GetTrackDefaultsToJSON(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3rdf/json-default"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+
+	// Create track
+	inputJSON := `{"fingerprint": "v3rdf3", "duration": 150, "tags": {"title": [{"name": "JSON Default Track"}]}}`
+	createReq := basicRequest(test, "PUT", v3Path, inputJSON)
+	resp, _ := doRawRequest(test, createReq)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Failed to create track: %d", resp.StatusCode)
+	}
+
+	// GET with no Accept header should return JSON
+	getReq := basicRequest(test, "GET", v3Path, "")
+	resp2, _ := doRawRequest(test, getReq)
+	if resp2.StatusCode != 200 {
+		test.Errorf("Expected 200, got %d", resp2.StatusCode)
+	}
+	ct := resp2.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "application/json") {
+		test.Errorf("Expected Content-Type application/json, got %s", ct)
 	}
 }
 
