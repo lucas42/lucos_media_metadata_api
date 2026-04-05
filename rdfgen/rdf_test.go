@@ -179,7 +179,7 @@ func TestExportRDFUsesTagUriForAboutMentions(t *testing.T) {
 	if !strings.Contains(output, "eolas.l42.eu/metadata/person/alice/") {
 		t.Error("expected about URI 'eolas.l42.eu/metadata/person/alice/' in output, but not found")
 	}
-	if strings.Contains(output, ">Alice<") || strings.Contains(output, "\"Alice\"") {
+	if strings.Contains(output, "<Alice>") || strings.Contains(output, "\"Alice\"") {
 		t.Error("display name 'Alice' should not appear as an IRI object — only the URI should")
 	}
 	if !strings.Contains(output, "eolas.l42.eu/metadata/topic/some-topic/") {
