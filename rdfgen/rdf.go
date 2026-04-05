@@ -6,10 +6,18 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/deiu/rdf2go"
 )
+
+// encodeIRI encodes characters that are invalid in a Turtle IRI.
+// Turtle IRIs must not contain spaces or other ASCII control characters.
+// Applies percent-encoding to spaces; leaves valid IRI characters untouched.
+func encodeIRI(iri string) string {
+	return strings.ReplaceAll(iri, " ", "%20")
+}
 
 /**
  * A struct for holding data about a given track
@@ -129,11 +137,11 @@ func mapPredicate(predicateID string, value string, mediaMetadataManagerOrigin s
 
 	case "about":
 		return mediaMetadataManagerOrigin + "/ontology#about",
-			[]rdf2go.Term{rdf2go.NewResource(value)}
+			[]rdf2go.Term{rdf2go.NewResource(encodeIRI(value))}
 
 	case "mentions":
 		return mediaMetadataManagerOrigin + "/ontology#mentions",
-			[]rdf2go.Term{rdf2go.NewResource(value)}
+			[]rdf2go.Term{rdf2go.NewResource(encodeIRI(value))}
 
 
 	default:

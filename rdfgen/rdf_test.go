@@ -128,6 +128,65 @@ func TestExportRDF(t *testing.T) {
 	}
 }
 
+// TestExportRDFEncodesSpacesInIRIs verifies that about/mentions tag values with spaces
+// are percent-encoded in Turtle IRI output (%20), not emitted as literal spaces.
+func TestExportRDFEncodesSpacesInIRIs(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 60)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`
+	INSERT INTO tag (trackid, predicateid, value) VALUES
+	(1, 'about', 'https://eolas.l42.eu/thing/Some Topic'),
+	(1, 'mentions', 'https://eolas.l42.eu/thing/Another Entity')
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpFile := filepath.Join(tmpDir, "output.ttl")
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	if err := ExportRDF(dbPath, tmpFile); err != nil {
+		t.Fatalf("ExportRDF failed: %v", err)
+	}
+
+	content, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("could not read RDF output file: %v", err)
+	}
+	output := string(content)
+
+	// Spaces must be percent-encoded in IRIs
+	if strings.Contains(output, "Some Topic") {
+		t.Error("expected 'Some Topic' to be encoded as 'Some%20Topic' in Turtle IRI, but found literal space")
+	}
+	if !strings.Contains(output, "Some%20Topic") {
+		t.Error("expected 'Some%20Topic' in Turtle output for 'about' tag, but not found")
+	}
+	if strings.Contains(output, "Another Entity") {
+		t.Error("expected 'Another Entity' to be encoded as 'Another%20Entity' in Turtle IRI, but found literal space")
+	}
+	if !strings.Contains(output, "Another%20Entity") {
+		t.Error("expected 'Another%20Entity' in Turtle output for 'mentions' tag, but not found")
+	}
+}
+
 // helper to copy DB (used in older tests if needed)
 func copyDB(src, dst string, t *testing.T) {
 	srcFile, err := os.Open(src)
