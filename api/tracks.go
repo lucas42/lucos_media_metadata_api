@@ -474,7 +474,7 @@ func writeTrackDataByField(store Datastore, w http.ResponseWriter, field string,
  */
 func writeTrackRDFByField(store Datastore, w http.ResponseWriter, field string, value interface{}, rdfType string) {
 	rows, err := store.DB.Query(`
-		SELECT t.id, t.url, t.duration, tg.predicateid, tg.value
+		SELECT t.id, t.url, t.duration, tg.predicateid, tg.value, tg.uri
 		FROM track t
 		LEFT JOIN tag tg ON tg.trackid = t.id WHERE `+field+"=$1", value)
 	defer rows.Close()

@@ -29,8 +29,10 @@ func getSearchUrl(predicateID string, value string, mediaMetadataManagerOrigin s
 	return rdf2go.NewResource(fmt.Sprintf("%s/search?p.%s=%s", mediaMetadataManagerOrigin, predicateID, url.QueryEscape(value)))
 }
 
-// Map a predicate/value pair into predicate URI + list of RDF objects
-func mapPredicate(predicateID string, value string, mediaMetadataManagerOrigin string) (string, []rdf2go.Term) {
+// Map a predicate/value/uri triplet into predicate URI + list of RDF objects.
+// uri is the value from the tag's uri column (may be nil/empty for legacy data);
+// for predicates that produce IRI objects, uri takes precedence over value when set.
+func mapPredicate(predicateID string, value string, uri *string, mediaMetadataManagerOrigin string) (string, []rdf2go.Term) {
 	switch predicateID {
 
 	case "added":
@@ -128,12 +130,20 @@ func mapPredicate(predicateID string, value string, mediaMetadataManagerOrigin s
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "about":
+		iri := value
+		if uri != nil && *uri != "" {
+			iri = *uri
+		}
 		return mediaMetadataManagerOrigin + "/ontology#about",
-			[]rdf2go.Term{rdf2go.NewResource(value)}
+			[]rdf2go.Term{rdf2go.NewResource(iri)}
 
 	case "mentions":
+		iri := value
+		if uri != nil && *uri != "" {
+			iri = *uri
+		}
 		return mediaMetadataManagerOrigin + "/ontology#mentions",
-			[]rdf2go.Term{rdf2go.NewResource(value)}
+			[]rdf2go.Term{rdf2go.NewResource(iri)}
 
 
 	default:
@@ -152,7 +162,7 @@ func ExportRDF(dbPath, outFile string) error {
 	defer db.Close()
 
 	rows, err := db.Query(`
-		SELECT t.id, t.url, t.duration, tg.predicateid, tg.value
+		SELECT t.id, t.url, t.duration, tg.predicateid, tg.value, tg.uri
 		FROM track t
 		LEFT JOIN tag tg ON tg.trackid = t.id
 		ORDER BY t.id
@@ -209,9 +219,9 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		var urlStr string
 		var trackID int
 		var duration *int
-		var predicateID, value *string
+		var predicateID, value, uri *string
 
-		if err := rows.Scan(&trackID, &urlStr, &duration, &predicateID, &value); err != nil {
+		if err := rows.Scan(&trackID, &urlStr, &duration, &predicateID, &value, &uri); err != nil {
 			return g, err
 		}
 
@@ -236,7 +246,7 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		}
 
 		if predicateID != nil && value != nil {
-			predURI, objs := mapPredicate(*predicateID, *value, mediaMetadataManagerOrigin)
+			predURI, objs := mapPredicate(*predicateID, *value, uri, mediaMetadataManagerOrigin)
 			for _, obj := range objs {
 				g.AddTriple(subject, rdf2go.NewResource(predURI), obj)
 			}
