@@ -38,6 +38,10 @@ func (server AuthentictedServer) isAuthenticated(request *http.Request) (bool) {
 		slog.Debug("Unsupported authentication scheme", "scheme", scheme)
 		return false
 	}
+	if len(authHeaderParts) < 2 {
+		slog.Debug("Missing token in Authorization header", "scheme", scheme)
+		return false
+	}
 	key := authHeaderParts[1]
 	client, found := server.allowedKeys[key]
 	if !found {
