@@ -8,13 +8,13 @@ func TestNoCredentials(test *testing.T) {
 	request := basicRequest(test, "GET", "/v3/tracks", "")
 	request.Header.Del("Authorization")
 	response := makeRawRequest(test, request, 401, "Authentication Failed\n", false)
-	checkResponseHeader(test, response, "WWW-Authenticate", "bearer, key")
+	checkResponseHeader(test, response, "WWW-Authenticate", "bearer")
 }
 func TestUnauthorizedKey(test *testing.T) {
 	request := basicRequest(test, "GET", "/v3/tracks", "")
 	request.Header.Set("Authorization", "key notavalidkey")
 	response := makeRawRequest(test, request, 401, "Authentication Failed\n", false)
-	checkResponseHeader(test, response, "WWW-Authenticate", "bearer, key")
+	checkResponseHeader(test, response, "WWW-Authenticate", "bearer")
 }
 func TestBearerSchemeAccepted(test *testing.T) {
 	request := basicRequest(test, "GET", "/v3/tracks", "")
@@ -30,25 +30,19 @@ func TestBearerUnauthorized(test *testing.T) {
 	request := basicRequest(test, "GET", "/v3/tracks", "")
 	request.Header.Set("Authorization", "bearer notavalidkey")
 	response := makeRawRequest(test, request, 401, "Authentication Failed\n", false)
-	checkResponseHeader(test, response, "WWW-Authenticate", "bearer, key")
+	checkResponseHeader(test, response, "WWW-Authenticate", "bearer")
 }
 func TestBearerSchemeNoToken(test *testing.T) {
 	request := basicRequest(test, "GET", "/v3/tracks", "")
 	request.Header.Set("Authorization", "bearer")
 	response := makeRawRequest(test, request, 401, "Authentication Failed\n", false)
-	checkResponseHeader(test, response, "WWW-Authenticate", "bearer, key")
-}
-func TestKeySchemeNoToken(test *testing.T) {
-	request := basicRequest(test, "GET", "/v3/tracks", "")
-	request.Header.Set("Authorization", "key")
-	response := makeRawRequest(test, request, 401, "Authentication Failed\n", false)
-	checkResponseHeader(test, response, "WWW-Authenticate", "bearer, key")
+	checkResponseHeader(test, response, "WWW-Authenticate", "bearer")
 }
 func TestUnsupportedScheme(test *testing.T) {
 	request := basicRequest(test, "GET", "/v3/tracks", "")
 	request.Header.Set("Authorization", "basic dXNlcjpwYXNz")
 	response := makeRawRequest(test, request, 401, "Authentication Failed\n", false)
-	checkResponseHeader(test, response, "WWW-Authenticate", "bearer, key")
+	checkResponseHeader(test, response, "WWW-Authenticate", "bearer")
 }
 
 func TestClientKeyParsing(test *testing.T) {
