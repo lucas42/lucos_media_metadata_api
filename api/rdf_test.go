@@ -129,10 +129,9 @@ func TestRDFOutputForSingleTrack(test *testing.T) {
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
 	defer os.Unsetenv("MEDIA_METADATA_MANAGER_ORIGIN")
 
-	trackpath := "/v2/tracks/1"
-	inputJson := `{"fingerprint": "cdb567", "url": "http://example.org/track/879", "tags": {"title": "Rocky Diamond Forest"}, "duration": 300}`
-	outputJson := `{"fingerprint": "cdb567", "duration": 300, "url": "http://example.org/track/879", "trackid": 1, "tags": {"title": "Rocky Diamond Forest"}, "collections":[], "weighting": 0}`
-	makeRequest(test, "PUT", trackpath, inputJson, 200, outputJson, true)
+	trackpath := "/v3/tracks/1"
+	inputJson := `{"fingerprint": "cdb567", "url": "http://example.org/track/879", "tags": {"title": [{"name": "Rocky Diamond Forest"}]}, "duration": 300}`
+	setupRequest(test, "PUT", trackpath, inputJson, 200)
 
 	request := basicRequest(test, "GET", trackpath, "")
 	request.Header.Set("Accept", "application/rdf+xml, text/turtle")

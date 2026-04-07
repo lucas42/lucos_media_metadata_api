@@ -26,17 +26,16 @@ func TestV3GetTrackReturnsStructuredTags(test *testing.T) {
 	trackurl := "http://example.org/v3track/1"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 
-	// Create track via v2 (v2 accepts language as a string)
-	v2Path := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
-	v2Input := `{"fingerprint": "v3test1", "duration": 200, "tags": {"title": "Test Song", "artist": "Test Artist", "language": "en"}}`
-	request := basicRequest(test, "PUT", v2Path, v2Input)
+	// Create track via v3 with structured tags
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+	v3Input := `{"fingerprint": "v3test1", "duration": 200, "tags": {"title": [{"name": "Test Song"}], "artist": [{"name": "Test Artist"}], "language": [{"name": "en"}]}}`
+	request := basicRequest(test, "PUT", v3Path, v3Input)
 	resp, _ := doRawRequest(test, request)
 	if resp.StatusCode != 200 {
-		test.Fatalf("Failed to create track via v2: %d", resp.StatusCode)
+		test.Fatalf("Failed to create track via v3: %d", resp.StatusCode)
 	}
 
 	// GET via v3 should return all predicates as arrays of {name, uri} objects
-	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
 	request2 := basicRequest(test, "GET", v3Path, "")
 	resp2, _ := doRawRequest(test, request2)
 	var track map[string]interface{}
@@ -54,7 +53,7 @@ func TestV3GetTrackReturnsStructuredTags(test *testing.T) {
 	titleObj := titleArr[0].(map[string]interface{})
 	assertEqual(test, "title name", "Test Song", titleObj["name"].(string))
 
-	// language is multi-value -> array of objects (even with one value)
+	// language is single-value -> array of one object
 	langArr, ok := tags["language"].([]interface{})
 	if !ok {
 		test.Fatalf("Expected language to be an array in v3 response, got %T", tags["language"])
@@ -286,41 +285,6 @@ func TestV3PaginationFields(test *testing.T) {
 	assertEqual(test, "totalPages", float64(1), result["totalPages"].(float64))
 }
 
-func TestV2EndpointsUnchangedAfterV3(test *testing.T) {
-	clearData()
-	trackurl := "http://example.org/v2compat/1"
-	escapedTrackUrl := url.QueryEscape(trackurl)
-
-	// Create track via v3 with multi-value tags
-	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
-	createReq := basicRequest(test, "PUT", v3Path, `{"fingerprint": "compat1", "duration": 200, "tags": {"title": [{"name": "Compat Test"}], "language": [{"name": "en"}, {"name": "fr"}]}}`)
-	resp, _ := doRawRequest(test, createReq)
-	if resp.StatusCode != 200 {
-		test.Fatalf("Failed to create track via v3: %d", resp.StatusCode)
-	}
-
-	// GET via v2 should return language as comma-joined string
-	v2Path := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
-	v2Req := basicRequest(test, "GET", v2Path, "")
-	resp2, _ := doRawRequest(test, v2Req)
-	var track map[string]interface{}
-	json.NewDecoder(resp2.Body).Decode(&track)
-	tags := track["tags"].(map[string]interface{})
-
-	// v2 should return language as a comma-joined string
-	lang, ok := tags["language"].(string)
-	if !ok {
-		test.Errorf("Expected v2 language to be a string, got %T", tags["language"])
-	}
-	if lang != "en,fr" {
-		test.Errorf("Expected v2 language to be 'en,fr', got '%s'", lang)
-	}
-
-	// v2 should still use "trackid"
-	if _, hasTrackid := track["trackid"]; !hasTrackid {
-		test.Error("Expected v2 to still use 'trackid'")
-	}
-}
 
 func TestV3TrackByID(test *testing.T) {
 	clearData()

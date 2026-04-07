@@ -33,11 +33,11 @@ func TestV3CreateCollection(test *testing.T) {
 
 func TestV3GetCollectionTracksHaveStructuredTags(test *testing.T) {
 	clearData()
-	// Create a track via v2
+	// Create a track via v3
 	trackurl := "http://example.org/v3coll/1"
 	escapedTrackUrl := url.QueryEscape(trackurl)
-	v2TrackPath := fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl)
-	setupRequest(test, "PUT", v2TrackPath, `{"fingerprint": "v3colltest1", "duration": 200, "tags": {"title": "Test Song", "artist": "Test Artist", "language": "en"}}`, 200)
+	trackPath := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+	setupRequest(test, "PUT", trackPath, `{"fingerprint": "v3colltest1", "duration": 200, "tags": {"title": [{"name": "Test Song"}], "artist": [{"name": "Test Artist"}], "language": [{"name": "en"}]}}`, 200)
 
 	// Create a collection and add the track to it
 	collPath := "/v3/collections/testcoll"
@@ -116,7 +116,7 @@ func TestV3CollectionTrackMembership(test *testing.T) {
 	// Create track and collection
 	trackurl := "http://example.org/v3coll/membership"
 	escapedTrackUrl := url.QueryEscape(trackurl)
-	setupRequest(test, "PUT", fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collmem", "duration": 100}`, 200)
+	setupRequest(test, "PUT", fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collmem", "duration": 100}`, 200)
 	setupRequest(test, "PUT", "/v3/collections/memtest", `{"name": "Membership Test", "icon": "🔗"}`, 200)
 
 	// Track not in collection — V3 uses structured JSON error
@@ -153,8 +153,8 @@ func TestV3CollectionRandomEndpoint(test *testing.T) {
 	// Create collection and add a weighted track
 	trackurl := "http://example.org/v3coll/random"
 	escapedTrackUrl := url.QueryEscape(trackurl)
-	setupRequest(test, "PUT", fmt.Sprintf("/v2/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collrand", "duration": 180, "tags": {"title": "Random Track"}}`, 200)
-	setupRequest(test, "PUT", "/v2/tracks/1/weighting", "5", 200)
+	setupRequest(test, "PUT", fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl), `{"fingerprint": "v3collrand", "duration": 180, "tags": {"title": [{"name": "Random Track"}]}}`, 200)
+	setupRequest(test, "PUT", "/v3/tracks/1/weighting", "5", 200)
 	setupRequest(test, "PUT", "/v3/collections/randtest", `{"name": "Random Test", "icon": "🎲"}`, 200)
 	makeRequest(test, "PUT", "/v3/collections/randtest/1", "", 200, `{"inCollection":true}`, true)
 
