@@ -30,13 +30,13 @@ func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack
 
 	// If there's an updated track, include that in the data and link to it in loganne
 	if updatedTrack.ID > 0 {
-		data["track"] = updatedTrack
+		data["track"] = TrackToV3(updatedTrack)
 		data["url"] = fmt.Sprintf("%s/tracks/%d", loganne.mediaMetadataManagerOrigin, updatedTrack.ID)
 
 	// If the was an existing track, but no updated one (ie a delete event)
 	// include the old track in the data
 	} else if existingTrack.ID > 0 {
-		data["track"] = existingTrack
+		data["track"] = TrackToV3(existingTrack)
 		data["url"] = fmt.Sprintf("%s/tracks/%d", loganne.mediaMetadataManagerOrigin, existingTrack.ID)
 	}
 	postData, _ := json.Marshal(data)
