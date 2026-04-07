@@ -470,3 +470,42 @@ func TestV3URIStoredAndReturned(test *testing.T) {
 		test.Error("Expected title to not have 'uri' field when empty")
 	}
 }
+
+func TestV3PatchEmptyArrayClearsField(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3track/clear-test"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+
+	// Create track with language and title tags
+	createReq := basicRequest(test, "PUT", v3Path, `{"fingerprint": "v3clear1", "duration": 200, "tags": {"title": [{"name": "Clear Test"}], "language": [{"name": "en"}]}}`)
+	resp, _ := doRawRequest(test, createReq)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Failed to create track: %d", resp.StatusCode)
+	}
+
+	// PATCH with empty array for language — should clear it
+	patchReq := basicRequest(test, "PATCH", v3Path, `{"tags": {"language": []}}`)
+	resp2, _ := doRawRequest(test, patchReq)
+	if resp2.StatusCode != 200 {
+		test.Fatalf("Failed to PATCH track: %d", resp2.StatusCode)
+	}
+
+	// Verify language is cleared
+	getReq := basicRequest(test, "GET", v3Path, "")
+	resp3, _ := doRawRequest(test, getReq)
+	var track map[string]interface{}
+	json.NewDecoder(resp3.Body).Decode(&track)
+	tags := track["tags"].(map[string]interface{})
+	if _, hasLang := tags["language"]; hasLang {
+		test.Error("Expected 'language' to be absent after PATCH with empty array")
+	}
+	// title should be unaffected
+	titleArr2, ok := tags["title"].([]interface{})
+	if !ok {
+		test.Fatal("Expected 'title' to still be present after PATCH")
+	}
+	if len(titleArr2) != 1 {
+		test.Errorf("Expected title to still have 1 value, got %d", len(titleArr2))
+	}
+}

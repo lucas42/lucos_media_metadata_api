@@ -7,8 +7,10 @@ import (
 
 func TestTagListV3MarshalSingleValue(t *testing.T) {
 	tl := TagListV3{
-		{PredicateID: "title", Value: "Blowin' in the Wind"},
-		{PredicateID: "artist", Value: "Bob Dylan"},
+		Tags: []Tag{
+			{PredicateID: "title", Value: "Blowin' in the Wind"},
+			{PredicateID: "artist", Value: "Bob Dylan"},
+		},
 	}
 	data, err := json.Marshal(tl)
 	assertNoError(t, "MarshalJSON failed.", err)
@@ -25,9 +27,11 @@ func TestTagListV3MarshalSingleValue(t *testing.T) {
 
 func TestTagListV3MarshalMultiValue(t *testing.T) {
 	tl := TagListV3{
-		{PredicateID: "language", Value: "English", URI: "https://eolas.l42.eu/metadata/language/en/"},
-		{PredicateID: "language", Value: "French", URI: "https://eolas.l42.eu/metadata/language/fr/"},
-		{PredicateID: "title", Value: "Blowin' in the Wind"},
+		Tags: []Tag{
+			{PredicateID: "language", Value: "English", URI: "https://eolas.l42.eu/metadata/language/en/"},
+			{PredicateID: "language", Value: "French", URI: "https://eolas.l42.eu/metadata/language/fr/"},
+			{PredicateID: "title", Value: "Blowin' in the Wind"},
+		},
 	}
 	data, err := json.Marshal(tl)
 	assertNoError(t, "MarshalJSON failed.", err)
@@ -52,7 +56,9 @@ func TestTagListV3MarshalMultiValue(t *testing.T) {
 
 func TestTagListV3MarshalMultiValueSingleElement(t *testing.T) {
 	tl := TagListV3{
-		{PredicateID: "composer", Value: "Bob Dylan"},
+		Tags: []Tag{
+			{PredicateID: "composer", Value: "Bob Dylan"},
+		},
 	}
 	data, err := json.Marshal(tl)
 	assertNoError(t, "MarshalJSON failed.", err)
@@ -68,7 +74,9 @@ func TestTagListV3MarshalMultiValueSingleElement(t *testing.T) {
 
 func TestTagListV3MarshalOmitsEmptyURI(t *testing.T) {
 	tl := TagListV3{
-		{PredicateID: "title", Value: "Test Song"},
+		Tags: []Tag{
+			{PredicateID: "title", Value: "Test Song"},
+		},
 	}
 	data, err := json.Marshal(tl)
 	assertNoError(t, "MarshalJSON failed.", err)
@@ -95,11 +103,11 @@ func TestTagListV3UnmarshalValid(t *testing.T) {
 	err := json.Unmarshal([]byte(input), &tl)
 	assertNoError(t, "UnmarshalJSON failed.", err)
 	// Should have 4 tags: title, language(en), language(fr), composer
-	if len(tl) != 4 {
-		t.Errorf("Expected 4 tags, got %d", len(tl))
+	if len(tl.Tags) != 4 {
+		t.Errorf("Expected 4 tags, got %d", len(tl.Tags))
 	}
 	// Verify URI is preserved
-	for _, tag := range tl {
+	for _, tag := range tl.Tags {
 		if tag.PredicateID == "language" && tag.Value == "English" {
 			assertEqual(t, "language English URI", "https://eolas.l42.eu/metadata/language/en/", tag.URI)
 		}
@@ -141,26 +149,67 @@ func TestTagListV3UnmarshalEmptyArray(t *testing.T) {
 	var tl TagListV3
 	err := json.Unmarshal([]byte(input), &tl)
 	assertNoError(t, "UnmarshalJSON failed for empty array.", err)
-	if len(tl) != 0 {
-		t.Errorf("Expected 0 tags for empty array, got %d", len(tl))
+	if len(tl.Tags) != 0 {
+		t.Errorf("Expected 0 tags for empty array, got %d", len(tl.Tags))
+	}
+	// The predicate should still be recorded as explicitly provided
+	if _, ok := tl.ExplicitPredicates["language"]; !ok {
+		t.Error("Expected 'language' to be in ExplicitPredicates after empty array")
+	}
+}
+
+func TestTagListV3UnmarshalTracksExplicitPredicates(t *testing.T) {
+	// Predicates with values and predicates with empty arrays should both be tracked
+	input := `{"title": [{"name": "Test"}], "language": [], "artist": [{"name": "Singer"}]}`
+	var tl TagListV3
+	err := json.Unmarshal([]byte(input), &tl)
+	assertNoError(t, "UnmarshalJSON failed.", err)
+	if len(tl.Tags) != 2 {
+		t.Errorf("Expected 2 tags (title + artist), got %d", len(tl.Tags))
+	}
+	for _, pred := range []string{"title", "language", "artist"} {
+		if _, ok := tl.ExplicitPredicates[pred]; !ok {
+			t.Errorf("Expected %q to be in ExplicitPredicates", pred)
+		}
+	}
+}
+
+func TestTagListV3ZeroValueNotPresent(t *testing.T) {
+	// A zero-value TagListV3 (e.g. "tags" absent from PATCH body) should not be present
+	var tl TagListV3
+	if tl.IsPresent() {
+		t.Error("Expected zero-value TagListV3 to not be present")
+	}
+}
+
+func TestTagListV3UnmarshaledIsPresent(t *testing.T) {
+	// A TagListV3 decoded from JSON (even empty object) should be present
+	input := `{}`
+	var tl TagListV3
+	err := json.Unmarshal([]byte(input), &tl)
+	assertNoError(t, "UnmarshalJSON failed.", err)
+	if !tl.IsPresent() {
+		t.Error("Expected TagListV3 decoded from JSON to be present")
 	}
 }
 
 func TestTagListV3RoundTrip(t *testing.T) {
 	original := TagListV3{
-		{PredicateID: "title", Value: "Test Song"},
-		{PredicateID: "artist", Value: "Test Artist"},
-		{PredicateID: "language", Value: "English", URI: "https://eolas.l42.eu/metadata/language/en/"},
-		{PredicateID: "language", Value: "German", URI: "https://eolas.l42.eu/metadata/language/de/"},
-		{PredicateID: "composer", Value: "Composer A"},
-		{PredicateID: "composer", Value: "Composer B"},
+		Tags: []Tag{
+			{PredicateID: "title", Value: "Test Song"},
+			{PredicateID: "artist", Value: "Test Artist"},
+			{PredicateID: "language", Value: "English", URI: "https://eolas.l42.eu/metadata/language/en/"},
+			{PredicateID: "language", Value: "German", URI: "https://eolas.l42.eu/metadata/language/de/"},
+			{PredicateID: "composer", Value: "Composer A"},
+			{PredicateID: "composer", Value: "Composer B"},
+		},
 	}
 	data, err := json.Marshal(original)
 	assertNoError(t, "MarshalJSON failed.", err)
 	var decoded TagListV3
 	err = json.Unmarshal(data, &decoded)
 	assertNoError(t, "UnmarshalJSON failed.", err)
-	if len(decoded) != len(original) {
-		t.Errorf("Expected %d tags after round-trip, got %d", len(original), len(decoded))
+	if len(decoded.Tags) != len(original.Tags) {
+		t.Errorf("Expected %d tags after round-trip, got %d", len(original.Tags), len(decoded.Tags))
 	}
 }

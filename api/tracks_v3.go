@@ -93,7 +93,7 @@ func (store Datastore) updateTagsV3(trackid int, tags TagListV3) (err error) {
 		URI   string
 	}
 	byPredicate := make(map[string][]tagEntry)
-	for _, tag := range tags {
+	for _, tag := range tags.Tags {
 		byPredicate[tag.PredicateID] = append(byPredicate[tag.PredicateID], tagEntry{Value: tag.Value, URI: tag.URI})
 	}
 	for predicate, entries := range byPredicate {
@@ -152,6 +152,17 @@ func (store Datastore) updateTagsV3(trackid int, tags TagListV3) (err error) {
 			return
 		}
 	}
+	// Delete predicates that were explicitly provided as empty arrays.
+	// These never appear in byPredicate (no Tag entries), so they must be
+	// handled separately.
+	for pred := range tags.ExplicitPredicates {
+		if _, alreadyProcessed := byPredicate[pred]; !alreadyProcessed {
+			err = store.deleteTag(trackid, pred)
+			if err != nil {
+				return
+			}
+		}
+	}
 	return
 }
 
@@ -163,7 +174,7 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags TagListV3) (err e
 		URI   string
 	}
 	byPredicate := make(map[string][]tagEntry)
-	for _, tag := range tags {
+	for _, tag := range tags.Tags {
 		byPredicate[tag.PredicateID] = append(byPredicate[tag.PredicateID], tagEntry{Value: tag.Value, URI: tag.URI})
 	}
 	for predicate, entries := range byPredicate {
@@ -391,7 +402,7 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	// Apply v3 tags to each matched track
-	if v3Tags != nil {
+	if v3Tags.IsPresent() {
 		tracks, _, _, _, err2 := queryMultipleTracksV3(store, r)
 		if err2 != nil {
 			writeV3Error(w, err2)
@@ -479,7 +490,7 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Overwrite tags via the v3-aware path which handles multi-value predicates and URIs.
-	if v3Tags != nil {
+	if v3Tags.IsPresent() {
 		storedTrack, err := store.getTrackDataByField(filterfield, filtervalue)
 		if err != nil {
 			writeV3Error(w, err)
