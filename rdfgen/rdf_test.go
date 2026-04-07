@@ -187,6 +187,37 @@ func TestExportRDFUsesTagUriForAboutMentions(t *testing.T) {
 	}
 }
 
+// TestMapPredicateLanguageUri verifies that the language case uses the uri field
+// when set, and falls back to a URL-encoded IRI from value when not.
+func TestMapPredicateLanguageUri(t *testing.T) {
+	// With uri set: should use uri directly
+	uri := "https://eolas.l42.eu/metadata/language/gd/"
+	pred, terms := mapPredicate("language", "Scottish Gaelic", &uri, "http://localhost:8020")
+	if pred != "http://purl.org/dc/terms/language" {
+		t.Errorf("unexpected predicate URI: %s", pred)
+	}
+	if len(terms) != 1 {
+		t.Fatalf("expected 1 term, got %d", len(terms))
+	}
+	got := terms[0].String()
+	if !strings.Contains(got, "eolas.l42.eu/metadata/language/gd/") {
+		t.Errorf("expected URI to contain 'eolas.l42.eu/metadata/language/gd/', got: %s", got)
+	}
+	if strings.Contains(got, "Scottish") {
+		t.Errorf("value should not appear in IRI when uri is set, got: %s", got)
+	}
+
+	// Without uri: value is used directly as the IRI (legacy fallback)
+	_, terms2 := mapPredicate("language", "en", nil, "http://localhost:8020")
+	if len(terms2) != 1 {
+		t.Fatalf("expected 1 term, got %d", len(terms2))
+	}
+	got2 := terms2[0].String()
+	if !strings.Contains(got2, "en") {
+		t.Errorf("expected language value in IRI, got: %s", got2)
+	}
+}
+
 // helper to copy DB (used in older tests if needed)
 func copyDB(src, dst string, t *testing.T) {
 	srcFile, err := os.Open(src)
