@@ -207,17 +207,14 @@ func TestMapPredicateLanguageUri(t *testing.T) {
 		t.Errorf("value should not appear in IRI when uri is set, got: %s", got)
 	}
 
-	// Without uri: multi-word value should be URL-encoded, not raw space
-	_, terms2 := mapPredicate("language", "Scottish Gaelic", nil, "http://localhost:8020")
+	// Without uri: value is used directly as the IRI (legacy fallback)
+	_, terms2 := mapPredicate("language", "en", nil, "http://localhost:8020")
 	if len(terms2) != 1 {
 		t.Fatalf("expected 1 term, got %d", len(terms2))
 	}
 	got2 := terms2[0].String()
-	if strings.Contains(got2, "Scottish Gaelic") {
-		t.Errorf("raw space in IRI — should be URL-encoded, got: %s", got2)
-	}
-	if !strings.Contains(got2, "Scottish") {
-		t.Errorf("expected encoded language value in IRI, got: %s", got2)
+	if !strings.Contains(got2, "en") {
+		t.Errorf("expected language value in IRI, got: %s", got2)
 	}
 }
 

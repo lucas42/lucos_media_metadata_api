@@ -68,7 +68,7 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "language":
-		iri := fmt.Sprintf("https://eolas.l42.eu/metadata/language/%s/", url.PathEscape(value))
+		iri := value
 		if uri != nil && *uri != "" {
 			iri = *uri
 		}
