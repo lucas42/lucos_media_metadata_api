@@ -68,9 +68,12 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "language":
-		// Currently the DB has a mix of iso639-1, iso639-3, iso639-6 and custom x- language codes
+		iri := fmt.Sprintf("https://eolas.l42.eu/metadata/language/%s/", url.PathEscape(value))
+		if uri != nil && *uri != "" {
+			iri = *uri
+		}
 		return "http://purl.org/dc/terms/language",
-			[]rdf2go.Term{rdf2go.NewResource(fmt.Sprintf("https://eolas.l42.eu/metadata/language/%s/", value))}
+			[]rdf2go.Term{rdf2go.NewResource(iri)}
 
 	case "offence":
 		return mediaMetadataManagerOrigin + "/ontology#trigger",
