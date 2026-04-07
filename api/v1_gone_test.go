@@ -9,7 +9,7 @@ import (
  */
 func TestV1EndpointsReturnGone(test *testing.T) {
 	clearData()
-	errorMessage := "Version 1 of the API is no longer available.  Find version 2 at /v2/tracks\n"
+	errorMessage := "Version 1 of the API is no longer available.  Find version 3 at /v3/tracks\n"
 	makeRequest(test, "GET", "/tracks", "", 410, errorMessage, false)
 	makeRequest(test, "GET", "/tracks/3", "", 410, errorMessage, false)
 	makeRequest(test, "GET", "/tracks", "", 410, errorMessage, false)

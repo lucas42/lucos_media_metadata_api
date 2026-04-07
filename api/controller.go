@@ -13,10 +13,10 @@ import (
  */
 func FrontController(store Datastore, clientKeys string) http.Handler {
 	router := http.NewServeMux()
-	router.HandleFunc("/v2/tracks", store.TracksV2Controller)
-	router.HandleFunc("/v2/tracks/", store.TracksV2Controller)
-	router.HandleFunc("/v2/collections", store.CollectionsV2Controller)
-	router.HandleFunc("/v2/collections/", store.CollectionsV2Controller)
+	router.HandleFunc("/v2/tracks", V2GoneController)
+	router.HandleFunc("/v2/tracks/", V2GoneController)
+	router.HandleFunc("/v2/collections", V2GoneController)
+	router.HandleFunc("/v2/collections/", V2GoneController)
 	router.HandleFunc("/v3/tracks", store.TracksV3Controller)
 	router.HandleFunc("/v3/tracks/", store.TracksV3Controller)
 	router.HandleFunc("/v3/collections", store.CollectionsV3Controller)
@@ -40,7 +40,7 @@ func FrontController(store Datastore, clientKeys string) http.Handler {
 func HomepageController(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		slog.Debug("Homepage controller redirect", "path", r.URL.Path)
-		http.Redirect(w, r, "/v2/tracks", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, "/v3/tracks", http.StatusTemporaryRedirect)
 	} else {
 		slog.Warn("Homepage controller - Not Found", "path", r.URL.Path)
 		http.NotFound(w, r)
