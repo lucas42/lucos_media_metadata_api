@@ -122,7 +122,7 @@ func basicRequest(t *testing.T, method string, path string, requestBody string) 
 	if err != nil {
 		t.Error(err)
 	}
-	request.Header.Add("Authorization", "key validkey")
+	request.Header.Add("Authorization", "bearer validkey")
 	return
 }
 

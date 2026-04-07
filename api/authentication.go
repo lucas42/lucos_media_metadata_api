@@ -22,7 +22,7 @@ func (server AuthentictedServer) ServeHTTP(writer http.ResponseWriter, request *
 	if server.isAuthenticated(request) {
 		server.unauthenticatedHandler.ServeHTTP(writer, request)
 	} else {
-		writer.Header().Set("WWW-Authenticate", "bearer, key")
+		writer.Header().Set("WWW-Authenticate", "bearer")
 		http.Error(writer, "Authentication Failed", http.StatusUnauthorized)
 	}
 }
@@ -34,7 +34,7 @@ func (server AuthentictedServer) isAuthenticated(request *http.Request) (bool) {
 	}
 	authHeaderParts := strings.Split(request.Header.Get("Authorization"), " ")
 	scheme := strings.ToLower(authHeaderParts[0])
-	if scheme != "key" && scheme != "bearer" {
+	if scheme != "bearer" {
 		slog.Debug("Unsupported authentication scheme", "scheme", scheme)
 		return false
 	}
