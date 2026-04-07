@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -12,17 +13,18 @@ import (
 )
 
 // TrackV3 is the v3 wire representation of a track.
-// Tags use the structured format: all predicates map to arrays of {name, uri} objects.
+// Tags use the structured format: each predicate maps to an array of {name, uri} objects.
 // Uses "id" instead of "trackid" per ADR §7.
 // Excludes debug weighting fields per ADR §7.
+// A nil Tags map means "tags not provided" (e.g. absent from a PATCH body).
 type TrackV3 struct {
-	Fingerprint string        `json:"fingerprint"`
-	Duration    int           `json:"duration"`
-	URL         string        `json:"url"`
-	ID          int           `json:"id"`
-	Tags        TagListV3     `json:"tags"`
-	Weighting   float64       `json:"weighting"`
-	Collections *[]Collection `json:"collections,omitempty"`
+	Fingerprint string                       `json:"fingerprint"`
+	Duration    int                          `json:"duration"`
+	URL         string                       `json:"url"`
+	ID          int                          `json:"id"`
+	Tags        map[string][]TagValueV3      `json:"tags"`
+	Weighting   float64                      `json:"weighting"`
+	Collections *[]Collection               `json:"collections,omitempty"`
 }
 
 // SearchResultV3 includes richer pagination per ADR §7.
@@ -64,12 +66,16 @@ func writeV3Error(w http.ResponseWriter, err error) {
 
 // TrackToV3 converts an internal Track to a TrackV3 for v3 serialisation.
 func TrackToV3(t Track) TrackV3 {
+	tags := make(map[string][]TagValueV3)
+	for _, tag := range t.Tags {
+		tags[tag.PredicateID] = append(tags[tag.PredicateID], TagValueV3{Name: tag.Value, URI: tag.URI})
+	}
 	return TrackV3{
 		Fingerprint: t.Fingerprint,
 		Duration:    t.Duration,
 		URL:         t.URL,
 		ID:          t.ID,
-		Tags:        TagListToV3(t.Tags),
+		Tags:        tags,
 		Weighting:   t.Weighting,
 		Collections: t.Collections,
 	}
@@ -83,25 +89,16 @@ func DecodeTrackV3(r io.Reader) (TrackV3, error) {
 }
 
 // updateTagsV3 updates tags for a track using the v3 multi-value semantics.
-// For each predicate, all existing values are replaced with the provided array.
-// Empty arrays delete the predicate's tags.
+// For each predicate in the map, all existing values are replaced with the
+// provided array. Empty arrays delete the predicate's tags.
 // Stores both name (value) and uri per tag row.
-func (store Datastore) updateTagsV3(trackid int, tags TagListV3) (err error) {
-	// Group tags by predicate
-	type tagEntry struct {
-		Value string
-		URI   string
-	}
-	byPredicate := make(map[string][]tagEntry)
-	for _, tag := range tags {
-		byPredicate[tag.PredicateID] = append(byPredicate[tag.PredicateID], tagEntry{Value: tag.Value, URI: tag.URI})
-	}
-	for predicate, entries := range byPredicate {
+func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (err error) {
+	for predicate, values := range tags {
 		// Filter out empty values
-		nonEmpty := make([]tagEntry, 0, len(entries))
-		for _, e := range entries {
-			if e.Value != "" {
-				nonEmpty = append(nonEmpty, e)
+		nonEmpty := make([]TagValueV3, 0, len(values))
+		for _, v := range values {
+			if v.Name != "" {
+				nonEmpty = append(nonEmpty, v)
 			}
 		}
 		if len(nonEmpty) == 0 {
@@ -110,6 +107,9 @@ func (store Datastore) updateTagsV3(trackid int, tags TagListV3) (err error) {
 				return
 			}
 			continue
+		}
+		if !IsMultiValue(predicate) && len(nonEmpty) > 1 {
+			return fmt.Errorf("multiple values for single-value predicate %q not allowed", predicate)
 		}
 		// Ensure predicate exists
 		hasPredicate, err2 := store.hasPredicate(predicate)
@@ -140,8 +140,8 @@ func (store Datastore) updateTagsV3(trackid int, tags TagListV3) (err error) {
 			_ = tx.Rollback()
 			return
 		}
-		for _, e := range nonEmpty {
-			_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value, uri) VALUES($1, $2, $3, $4)", trackid, predicate, e.Value, e.URI)
+		for _, v := range nonEmpty {
+			_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value, uri) VALUES($1, $2, $3, $4)", trackid, predicate, v.Name, v.URI)
 			if err != nil {
 				_ = tx.Rollback()
 				return
@@ -157,24 +157,16 @@ func (store Datastore) updateTagsV3(trackid int, tags TagListV3) (err error) {
 
 // updateTagsV3IfMissing updates tags only if the predicate has no existing values.
 // Stores both name (value) and uri per tag row.
-func (store Datastore) updateTagsV3IfMissing(trackid int, tags TagListV3) (err error) {
-	type tagEntry struct {
-		Value string
-		URI   string
-	}
-	byPredicate := make(map[string][]tagEntry)
-	for _, tag := range tags {
-		byPredicate[tag.PredicateID] = append(byPredicate[tag.PredicateID], tagEntry{Value: tag.Value, URI: tag.URI})
-	}
-	for predicate, entries := range byPredicate {
+func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagValueV3) (err error) {
+	for predicate, values := range tags {
 		_, err = store.getTagValue(trackid, predicate)
 		if err != nil && err.Error() == "Tag Not Found" {
 			err = nil
 			// Filter empty values
-			nonEmpty := make([]tagEntry, 0, len(entries))
-			for _, e := range entries {
-				if e.Value != "" {
-					nonEmpty = append(nonEmpty, e)
+			nonEmpty := make([]TagValueV3, 0, len(values))
+			for _, v := range values {
+				if v.Name != "" {
+					nonEmpty = append(nonEmpty, v)
 				}
 			}
 			if len(nonEmpty) == 0 {
@@ -196,8 +188,8 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags TagListV3) (err e
 			if err2 != nil {
 				return err2
 			}
-			for _, e := range nonEmpty {
-				_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value, uri) VALUES($1, $2, $3, $4)", trackid, predicate, e.Value, e.URI)
+			for _, v := range nonEmpty {
+				_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value, uri) VALUES($1, $2, $3, $4)", trackid, predicate, v.Name, v.URI)
 				if err != nil {
 					_ = tx.Rollback()
 					return
@@ -507,12 +499,18 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 
 // trackV3ToInternal converts a TrackV3 to the internal Track type.
 func trackV3ToInternal(v3 TrackV3) Track {
+	var tags TagList
+	for pred, values := range v3.Tags {
+		for _, v := range values {
+			tags = append(tags, Tag{PredicateID: pred, Value: v.Name, URI: v.URI})
+		}
+	}
 	return Track{
 		Fingerprint: v3.Fingerprint,
 		Duration:    v3.Duration,
 		URL:         v3.URL,
 		ID:          v3.ID,
-		Tags:        v3.Tags.ToTagList(),
+		Tags:        tags,
 		Weighting:   v3.Weighting,
 		Collections: v3.Collections,
 	}
