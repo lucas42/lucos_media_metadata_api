@@ -18,7 +18,7 @@ func main() {
 	}
 
 	outFile := os.Getenv("RDF_OUTPUT_PATH")
-	if dbPath == "" {
+	if outFile == "" {
 		log.Fatal("RDF_OUTPUT_PATH must be set")
 	}
 
