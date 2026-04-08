@@ -68,12 +68,11 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "language":
-		iri := value
-		if uri != nil && *uri != "" {
-			iri = *uri
+		if uri == nil || *uri == "" {
+			return "", nil // skip tags with no URI — value alone is not a valid IRI
 		}
 		return "http://purl.org/dc/terms/language",
-			[]rdf2go.Term{rdf2go.NewResource(iri)}
+			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "offence":
 		return mediaMetadataManagerOrigin + "/ontology#trigger",
@@ -133,20 +132,18 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "about":
-		iri := value
-		if uri != nil && *uri != "" {
-			iri = *uri
+		if uri == nil || *uri == "" {
+			return "", nil // skip tags with no URI — value alone is not a valid IRI
 		}
 		return mediaMetadataManagerOrigin + "/ontology#about",
-			[]rdf2go.Term{rdf2go.NewResource(iri)}
+			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "mentions":
-		iri := value
-		if uri != nil && *uri != "" {
-			iri = *uri
+		if uri == nil || *uri == "" {
+			return "", nil // skip tags with no URI — value alone is not a valid IRI
 		}
 		return mediaMetadataManagerOrigin + "/ontology#mentions",
-			[]rdf2go.Term{rdf2go.NewResource(iri)}
+			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 
 	default:
