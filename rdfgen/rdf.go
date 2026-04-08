@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/deiu/rdf2go"
@@ -24,6 +25,17 @@ type Track struct {
 }
 
 
+
+// encodeIRI returns the value as a syntactically valid IRI.
+// If the value already looks like an absolute URI (starts with http:// or https://),
+// it is returned as-is. Otherwise url.PathEscape is applied to encode any characters
+// (spaces, emoji, etc.) that are not valid unencoded in an IRI.
+func encodeIRI(value string) string {
+	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		return value
+	}
+	return url.PathEscape(value)
+}
 
 func getSearchUrl(predicateID string, value string, mediaMetadataManagerOrigin string) rdf2go.Term {
 	return rdf2go.NewResource(fmt.Sprintf("%s/search?p.%s=%s", mediaMetadataManagerOrigin, predicateID, url.QueryEscape(value)))
@@ -133,7 +145,7 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "about":
-		iri := value
+		iri := encodeIRI(value)
 		if uri != nil && *uri != "" {
 			iri = *uri
 		}
@@ -141,7 +153,7 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{rdf2go.NewResource(iri)}
 
 	case "mentions":
-		iri := value
+		iri := encodeIRI(value)
 		if uri != nil && *uri != "" {
 			iri = *uri
 		}

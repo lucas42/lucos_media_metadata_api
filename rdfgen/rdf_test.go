@@ -218,6 +218,53 @@ func TestMapPredicateLanguageUri(t *testing.T) {
 	}
 }
 
+// TestMapPredicateAboutMentionsIriEscaping verifies that about/mentions fallback
+// values with spaces or emoji are URL-encoded to produce valid IRIs.
+func TestMapPredicateAboutMentionsIriEscaping(t *testing.T) {
+	cases := []struct {
+		predicateID string
+	}{
+		{"about"},
+		{"mentions"},
+	}
+	for _, tc := range cases {
+		// Legacy label with emoji and space — must not appear unencoded in the IRI
+		_, terms := mapPredicate(tc.predicateID, "🌧️ Rain", nil, "http://localhost:8020")
+		if len(terms) != 1 {
+			t.Fatalf("%s: expected 1 term, got %d", tc.predicateID, len(terms))
+		}
+		got := terms[0].String()
+		if strings.Contains(got, " ") {
+			t.Errorf("%s: IRI contains a literal space which is invalid: %s", tc.predicateID, got)
+		}
+		// Should not contain the raw emoji unencoded followed by a space
+		if strings.Contains(got, "🌧️ ") {
+			t.Errorf("%s: IRI contains unencoded emoji+space: %s", tc.predicateID, got)
+		}
+
+		// When value is already a URI, it should be used as-is
+		_, terms2 := mapPredicate(tc.predicateID, "https://eolas.l42.eu/entity/123", nil, "http://localhost:8020")
+		if len(terms2) != 1 {
+			t.Fatalf("%s: expected 1 term, got %d", tc.predicateID, len(terms2))
+		}
+		got2 := terms2[0].String()
+		if !strings.Contains(got2, "eolas.l42.eu/entity/123") {
+			t.Errorf("%s: expected URI to be preserved as-is, got: %s", tc.predicateID, got2)
+		}
+
+		// When uri column is set, it takes precedence over value
+		uri := "https://eolas.l42.eu/entity/456"
+		_, terms3 := mapPredicate(tc.predicateID, "🌧️ Rain", &uri, "http://localhost:8020")
+		if len(terms3) != 1 {
+			t.Fatalf("%s: expected 1 term, got %d", tc.predicateID, len(terms3))
+		}
+		got3 := terms3[0].String()
+		if !strings.Contains(got3, "eolas.l42.eu/entity/456") {
+			t.Errorf("%s: expected uri column to take precedence, got: %s", tc.predicateID, got3)
+		}
+	}
+}
+
 // helper to copy DB (used in older tests if needed)
 func copyDB(src, dst string, t *testing.T) {
 	srcFile, err := os.Open(src)
