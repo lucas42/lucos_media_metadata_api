@@ -473,19 +473,30 @@ func writeTrackDataByField(store Datastore, w http.ResponseWriter, field string,
  * Writes a http response with a RDF representation of a given track
  */
 func writeTrackRDFByField(store Datastore, w http.ResponseWriter, field string, value interface{}, rdfType string) {
+	// Check existence first so we can return 404 for unknown tracks.
+	// DB.Query returns empty rows (no error) when the track doesn't exist,
+	// so we can't rely on the JOIN query alone to detect missing tracks.
+	found, err := store.trackExists(field, value)
+	if err != nil {
+		writeRDFResponse(w, nil, rdfType, err)
+		return
+	}
+	if !found {
+		writeRDFResponse(w, nil, rdfType, errors.New("Track Not Found"))
+		return
+	}
 	rows, err := store.DB.Query(`
 		SELECT t.id, t.url, t.duration, tg.predicateid, tg.value, tg.uri
 		FROM track t
 		LEFT JOIN tag tg ON tg.trackid = t.id WHERE `+field+"=$1", value)
-	defer rows.Close()
 	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			err = errors.New("Track Not Found")
-		}
+		writeRDFResponse(w, nil, rdfType, err)
 		return
 	}
+	defer rows.Close()
 	graph, err := rdfgen.TrackToRdf(rows)
 	if err != nil {
+		writeRDFResponse(w, nil, rdfType, err)
 		return
 	}
 	writeRDFResponse(w, graph, rdfType, err)

@@ -122,6 +122,23 @@ func TestPrefersRDF(t *testing.T) {
 }
 
 /**
+ * Checks that requesting RDF for a non-existent track returns 404 (not a silent empty 200)
+ */
+func TestRDFOutputForMissingTrackReturns404(test *testing.T) {
+	clearData()
+	request := basicRequest(test, "GET", "/v3/tracks/999", "")
+	request.Header.Set("Accept", "text/turtle")
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		test.Error(err)
+	}
+	if response.StatusCode != http.StatusNotFound {
+		test.Errorf("Expected 404 for missing track RDF, got %d", response.StatusCode)
+	}
+}
+
+/**
  * Retrieves a single track output in RDF
  */
 func TestRDFOutputForSingleTrack(test *testing.T) {
