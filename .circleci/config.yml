@@ -14,7 +14,7 @@ jobs:
           command: go get ./...
       - run:
           name: Unit Tests
-          command: go test ./... -coverprofile=coverage.out
+          command: go test -tags fts5 ./... -coverprofile=coverage.out
       - run:
           name: Generate Code Coverage
           command: go tool cover -html=coverage.out -o coverage.html

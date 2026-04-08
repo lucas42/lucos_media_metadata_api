@@ -366,3 +366,45 @@ func TestTrackQueryPagination(test *testing.T) {
 		}
 	}
 }
+
+/**
+ * Checks that q= search matches tag values as substrings (infix matching via FTS5 trigram).
+ * Searching for a substring that appears in the middle of a tag value must return results.
+ */
+func TestTrackQueryInfixSearch(test *testing.T) {
+	clearData()
+
+	// Track 1: title "Symphony No. 5" — "ymph" is an infix of "Symphony"
+	escapedURL1 := url.QueryEscape("http://example.org/track/symphony")
+	setupRequest(test, "PUT", fmt.Sprintf("/v3/tracks?url=%s", escapedURL1), `{"fingerprint": "fp-symphony", "duration": 300, "tags": {"title": [{"name": "Symphony No. 5"}]}}`, 200)
+
+	// Track 2: title "Jazz Standards" — should NOT match "ymph"
+	escapedURL2 := url.QueryEscape("http://example.org/track/jazz")
+	setupRequest(test, "PUT", fmt.Sprintf("/v3/tracks?url=%s", escapedURL2), `{"fingerprint": "fp-jazz", "duration": 200, "tags": {"title": [{"name": "Jazz Standards"}]}}`, 200)
+
+	// Search for "ymph" — infix of "Symphony"; FTS5 trigram must find it
+	request := basicRequest(test, "GET", "/v3/tracks?q=ymph", "")
+	resp, _ := doRawRequest(test, request)
+	var result SearchResultV3
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if len(result.Tracks) != 1 {
+		test.Errorf("Infix search q=ymph: expected 1 track, got %d", len(result.Tracks))
+	}
+	if len(result.Tracks) == 1 && result.Tracks[0].URL != "http://example.org/track/symphony" {
+		test.Errorf("Infix search q=ymph: expected symphony track, got %s", result.Tracks[0].URL)
+	}
+	if result.TotalPages != 1 {
+		test.Errorf("Infix search q=ymph: expected 1 total page, got %d", result.TotalPages)
+	}
+
+	// Also verify a search that matches neither track returns empty results
+	request2 := basicRequest(test, "GET", "/v3/tracks?q=zzz", "")
+	resp2, _ := doRawRequest(test, request2)
+	var result2 SearchResultV3
+	json.NewDecoder(resp2.Body).Decode(&result2)
+
+	if len(result2.Tracks) != 0 {
+		test.Errorf("Search q=zzz: expected 0 tracks, got %d", len(result2.Tracks))
+	}
+}

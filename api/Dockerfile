@@ -7,6 +7,6 @@ RUN go mod download
 
 COPY rdfgen/ ./rdfgen/
 COPY api .
-RUN go install
+RUN go install -tags fts5
 
 CMD ["lucos_media_metadata_api"]

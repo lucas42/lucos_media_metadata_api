@@ -14,13 +14,25 @@ type SearchResult struct {
 }
 
 /**
- * Searches for tracks with a tag value containing the given query
+ * Searches for tracks with a tag value containing the given query.
+ * Uses an FTS5 trigram index on tag values for efficient substring matching.
+ * Queries shorter than 3 characters will return no results (trigram minimum).
  *
  */
 func (store Datastore) trackSearch(query string, offset int, limit int) (tracks []Track, totalTracks int, err error) {
 	tracks = []Track{}
-	query = "%"+query+"%"
-	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM tag LEFT JOIN track ON tag.trackid = track.id WHERE value LIKE $1 UNION SELECT id, url, fingerprint, duration, weighting FROM track WHERE url LIKE $1 GROUP BY id ORDER BY id LIMIT $2, $3", query, offset, limit)
+	// Wrap in double-quotes so FTS5 treats it as a literal phrase, not a boolean query.
+	// Internal double-quotes are escaped by doubling.
+	ftsQuery := `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
+	urlQuery := "%" + query + "%"
+	err = store.DB.Select(&tracks,
+		`SELECT DISTINCT track.id, track.url, track.fingerprint, track.duration, track.weighting
+		 FROM tag_fts JOIN track ON track.id = CAST(tag_fts.trackid AS INTEGER)
+		 WHERE tag_fts MATCH $1
+		 UNION
+		 SELECT id, url, fingerprint, duration, weighting FROM track WHERE url LIKE $2
+		 ORDER BY id LIMIT $3, $4`,
+		ftsQuery, urlQuery, offset, limit)
 	if err != nil {
 		return
 	}
@@ -38,7 +50,16 @@ func (store Datastore) trackSearch(query string, offset int, limit int) (tracks 
 		}
 		track.Collections = &collections
 	}
-	err = store.DB.Get(&totalTracks, "SELECT COUNT(*) FROM (SELECT id, url, fingerprint, duration, weighting FROM tag LEFT JOIN track ON tag.trackid = track.id WHERE value LIKE $1 UNION SELECT id, url, fingerprint, duration, weighting FROM track WHERE url LIKE $1 GROUP BY id ORDER BY id)", query)
+	err = store.DB.Get(&totalTracks,
+		`SELECT COUNT(*) FROM (
+			SELECT DISTINCT track.id
+			FROM tag_fts JOIN track ON track.id = CAST(tag_fts.trackid AS INTEGER)
+			WHERE tag_fts MATCH $1
+			UNION
+			SELECT id FROM track WHERE url LIKE $2
+			ORDER BY id
+		)`,
+		ftsQuery, urlQuery)
 	return
 }
 

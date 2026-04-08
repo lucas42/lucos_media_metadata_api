@@ -118,7 +118,34 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 	if database.needsEolasDataMigration() {
 		database.migrateEolasData()
 	}
+	if !database.TableExists("tag_fts") {
+		database.initTagFTS()
+	}
 	return
+}
+
+// initTagFTS creates the FTS5 virtual table for full-text search over tag values,
+// populates it from the existing tag table, and installs triggers to keep it in sync.
+func (store Datastore) initTagFTS() {
+	slog.Info("Creating FTS5 table `tag_fts`")
+	store.DB.MustExec(`CREATE VIRTUAL TABLE tag_fts USING fts5(value, trackid UNINDEXED, tokenize="trigram")`)
+	store.DB.MustExec(`INSERT INTO tag_fts(rowid, value, trackid) SELECT rowid, value, trackid FROM tag`)
+	store.DB.MustExec(`
+		CREATE TRIGGER tag_fts_ai AFTER INSERT ON tag BEGIN
+			INSERT INTO tag_fts(rowid, value, trackid) VALUES (new.rowid, new.value, new.trackid);
+		END
+	`)
+	store.DB.MustExec(`
+		CREATE TRIGGER tag_fts_ad AFTER DELETE ON tag BEGIN
+			DELETE FROM tag_fts WHERE rowid = old.rowid;
+		END
+	`)
+	store.DB.MustExec(`
+		CREATE TRIGGER tag_fts_au AFTER UPDATE ON tag BEGIN
+			DELETE FROM tag_fts WHERE rowid = old.rowid;
+			INSERT INTO tag_fts(rowid, value, trackid) VALUES (new.rowid, new.value, new.trackid);
+		END
+	`)
 }
 
 func (store Datastore) TableExists(tablename string) (found bool) {
