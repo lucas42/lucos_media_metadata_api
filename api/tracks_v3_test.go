@@ -509,3 +509,47 @@ func TestV3PatchEmptyArrayClearsField(test *testing.T) {
 		test.Errorf("Expected title to still have 1 value, got %d", len(titleArr2))
 	}
 }
+
+func TestV3PatchMultiplePredicatesAtomic(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3track/atomic-test"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+
+	// Create track with title and language
+	createReq := basicRequest(test, "PUT", v3Path, `{"fingerprint": "v3atomic1", "duration": 300, "tags": {"title": [{"name": "Atomic Test"}], "language": [{"name": "en"}]}}`)
+	resp, _ := doRawRequest(test, createReq)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Failed to create track: %d", resp.StatusCode)
+	}
+
+	// PATCH updating both title and language in a single request
+	patchReq := basicRequest(test, "PATCH", v3Path, `{"tags": {"title": [{"name": "Updated Title"}], "language": [{"name": "ga"}]}}`)
+	resp2, _ := doRawRequest(test, patchReq)
+	if resp2.StatusCode != 200 {
+		test.Fatalf("Failed to PATCH track: %d", resp2.StatusCode)
+	}
+
+	// Verify both predicates were updated
+	getReq := basicRequest(test, "GET", v3Path, "")
+	resp3, _ := doRawRequest(test, getReq)
+	var track map[string]interface{}
+	json.NewDecoder(resp3.Body).Decode(&track)
+	tags := track["tags"].(map[string]interface{})
+
+	titleArr, ok := tags["title"].([]interface{})
+	if !ok || len(titleArr) != 1 {
+		test.Fatalf("Expected title to have 1 value, got %v", tags["title"])
+	}
+	if titleArr[0].(map[string]interface{})["name"] != "Updated Title" {
+		test.Errorf("Expected title 'Updated Title', got %v", titleArr[0])
+	}
+
+	langArr, ok := tags["language"].([]interface{})
+	if !ok || len(langArr) != 1 {
+		test.Fatalf("Expected language to have 1 value, got %v", tags["language"])
+	}
+	if langArr[0].(map[string]interface{})["name"] != "ga" {
+		test.Errorf("Expected language 'ga', got %v", langArr[0])
+	}
+}

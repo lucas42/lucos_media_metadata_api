@@ -91,78 +91,92 @@ func DecodeTrackV3(r io.Reader) (TrackV3, error) {
 // updateTagsV3 updates tags for a track using the v3 multi-value semantics.
 // For each predicate in the map, all existing values are replaced with the
 // provided array. Empty arrays delete the predicate's tags.
+// All predicate updates are applied atomically in a single transaction.
 // Stores both name (value) and uri per tag row.
 func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (err error) {
+	type predicateUpdate struct {
+		predicate string
+		values    []TagValueV3 // empty slice means delete all values
+	}
+
+	// Filter empty values and validate constraints before touching the database.
+	updates := make([]predicateUpdate, 0, len(tags))
 	for predicate, values := range tags {
-		// Filter out empty values
 		nonEmpty := make([]TagValueV3, 0, len(values))
 		for _, v := range values {
 			if v.Name != "" {
 				nonEmpty = append(nonEmpty, v)
 			}
 		}
-		if len(nonEmpty) == 0 {
-			err = store.deleteTag(trackid, predicate)
-			if err != nil {
-				return
-			}
-			continue
-		}
 		if !IsMultiValue(predicate) && len(nonEmpty) > 1 {
 			return fmt.Errorf("multiple values for single-value predicate %q not allowed", predicate)
 		}
-		// Ensure predicate exists
-		hasPredicate, err2 := store.hasPredicate(predicate)
+		updates = append(updates, predicateUpdate{predicate, nonEmpty})
+	}
+
+	// Check track exists once.
+	trackFound, err := store.trackExists("id", trackid)
+	if err != nil {
+		return
+	}
+	if !trackFound {
+		return errors.New("Unknown Track")
+	}
+
+	// Ensure predicates exist for non-delete updates. createPredicate is
+	// idempotent (REPLACE INTO) and safe outside the main transaction.
+	for _, u := range updates {
+		if len(u.values) == 0 {
+			continue // delete path — predicate already exists
+		}
+		hasPred, err2 := store.hasPredicate(u.predicate)
 		if err2 != nil {
 			return err2
 		}
-		if !hasPredicate {
-			err = store.createPredicate(predicate)
-			if err != nil {
+		if !hasPred {
+			if err = store.createPredicate(u.predicate); err != nil {
 				return
 			}
 		}
-		// Ensure track exists
-		trackFound, err2 := store.trackExists("id", trackid)
-		if err2 != nil {
-			return err2
-		}
-		if !trackFound {
-			return errors.New("Unknown Track")
-		}
-		// Replace all values for this predicate in a transaction
-		tx, err2 := store.DB.Beginx()
-		if err2 != nil {
-			return err2
-		}
-		_, err = tx.Exec("DELETE FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, predicate)
+	}
+
+	// Apply all tag writes atomically in a single transaction.
+	tx, err2 := store.DB.Beginx()
+	if err2 != nil {
+		return err2
+	}
+	for _, u := range updates {
+		_, err = tx.Exec("DELETE FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, u.predicate)
 		if err != nil {
 			_ = tx.Rollback()
 			return
 		}
-		for _, v := range nonEmpty {
-			_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value, uri) VALUES($1, $2, $3, $4)", trackid, predicate, v.Name, v.URI)
+		for _, v := range u.values {
+			_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value, uri) VALUES($1, $2, $3, $4)", trackid, u.predicate, v.Name, v.URI)
 			if err != nil {
 				_ = tx.Rollback()
 				return
 			}
 		}
-		err = tx.Commit()
-		if err != nil {
-			return
-		}
 	}
-	return
+	return tx.Commit()
 }
 
 // updateTagsV3IfMissing updates tags only if the predicate has no existing values.
+// All inserts are applied atomically in a single transaction.
 // Stores both name (value) and uri per tag row.
 func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagValueV3) (err error) {
+	type predicateInsert struct {
+		predicate string
+		values    []TagValueV3
+	}
+
+	// Determine which predicates are missing and have values to insert.
+	inserts := make([]predicateInsert, 0, len(tags))
 	for predicate, values := range tags {
 		_, err = store.getTagValue(trackid, predicate)
 		if err != nil && err.Error() == "Tag Not Found" {
 			err = nil
-			// Filter empty values
 			nonEmpty := make([]TagValueV3, 0, len(values))
 			for _, v := range values {
 				if v.Name != "" {
@@ -172,38 +186,42 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 			if len(nonEmpty) == 0 {
 				continue
 			}
-			// Ensure predicate exists
-			hasPredicate, err2 := store.hasPredicate(predicate)
+			// Ensure predicate exists. createPredicate is idempotent and safe
+			// outside the main transaction.
+			hasPred, err2 := store.hasPredicate(predicate)
 			if err2 != nil {
 				return err2
 			}
-			if !hasPredicate {
-				err = store.createPredicate(predicate)
-				if err != nil {
+			if !hasPred {
+				if err = store.createPredicate(predicate); err != nil {
 					return
 				}
 			}
-			// Insert all values in a single transaction
-			tx, err2 := store.DB.Beginx()
-			if err2 != nil {
-				return err2
-			}
-			for _, v := range nonEmpty {
-				_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value, uri) VALUES($1, $2, $3, $4)", trackid, predicate, v.Name, v.URI)
-				if err != nil {
-					_ = tx.Rollback()
-					return
-				}
-			}
-			err = tx.Commit()
-			if err != nil {
-				return
-			}
+			inserts = append(inserts, predicateInsert{predicate, nonEmpty})
 		} else if err != nil {
 			return
 		}
 	}
-	return
+
+	if len(inserts) == 0 {
+		return
+	}
+
+	// Insert all missing predicate values atomically in a single transaction.
+	tx, err2 := store.DB.Beginx()
+	if err2 != nil {
+		return err2
+	}
+	for _, ins := range inserts {
+		for _, v := range ins.values {
+			_, err = tx.Exec("INSERT INTO tag(trackid, predicateid, value, uri) VALUES($1, $2, $3, $4)", trackid, ins.predicate, v.Name, v.URI)
+			if err != nil {
+				_ = tx.Rollback()
+				return
+			}
+		}
+	}
+	return tx.Commit()
 }
 
 // getTrackDataByFieldV3 gets a track and returns it in v3 format.
