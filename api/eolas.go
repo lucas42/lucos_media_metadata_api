@@ -41,7 +41,7 @@ func fetchEolasNames(uris []string) map[string]string {
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if req.URL.Host == eolasHost.Host {
-				req.Header.Set("Authorization", "key "+key)
+				req.Header.Set("Authorization", "Bearer "+key)
 			}
 			return nil
 		},
@@ -52,7 +52,7 @@ func fetchEolasNames(uris []string) map[string]string {
 		slog.Warn("Failed to create eolas request", slog.Any("error", err))
 		return nil
 	}
-	req.Header.Set("Authorization", "key "+key)
+	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Accept", "text/turtle")
 	req.Header.Set("User-Agent", "lucos_media_metadata_api")
 
