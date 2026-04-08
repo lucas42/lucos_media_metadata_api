@@ -24,6 +24,8 @@ func TestMapPredicate(t *testing.T) {
 
 // Test multi-value predicates: each DB row produces one term per call,
 // and multiple calls with the same predicate return distinct terms.
+// Note: language/about/mentions are excluded here because they require a uri column value
+// to produce output — without one they are silently skipped (see TestMapPredicateSkipsWhenNoUri).
 func TestMapPredicateMultiValue(t *testing.T) {
 	cases := []struct {
 		predicateID string
@@ -34,10 +36,7 @@ func TestMapPredicateMultiValue(t *testing.T) {
 		{"composer", "Bob", "http://purl.org/ontology/mo/composer"},
 		{"producer", "Charlie", "http://purl.org/ontology/mo/producer"},
 		{"producer", "Dave", "http://purl.org/ontology/mo/producer"},
-		{"language", "en", "http://purl.org/dc/terms/language"},
 		{"offence", "violence", "http://localhost:8020/ontology#trigger"},
-		{"about", "http://example.com/topic", "http://localhost:8020/ontology#about"},
-		{"mentions", "http://example.com/entity", "http://localhost:8020/ontology#mentions"},
 	}
 	// Track terms by predicate to verify distinct values
 	termsByPredicate := make(map[string][]string)
@@ -188,7 +187,7 @@ func TestExportRDFUsesTagUriForAboutMentions(t *testing.T) {
 }
 
 // TestMapPredicateLanguageUri verifies that the language case uses the uri field
-// when set, and falls back to a URL-encoded IRI from value when not.
+// when set, and skips the tag when uri is absent.
 func TestMapPredicateLanguageUri(t *testing.T) {
 	// With uri set: should use uri directly
 	uri := "https://eolas.l42.eu/metadata/language/gd/"
@@ -207,14 +206,85 @@ func TestMapPredicateLanguageUri(t *testing.T) {
 		t.Errorf("value should not appear in IRI when uri is set, got: %s", got)
 	}
 
-	// Without uri: value is used directly as the IRI (legacy fallback)
-	_, terms2 := mapPredicate("language", "en", nil, "http://localhost:8020")
-	if len(terms2) != 1 {
-		t.Fatalf("expected 1 term, got %d", len(terms2))
+	// Without uri: tag is skipped (returns empty)
+	pred2, terms2 := mapPredicate("language", "en", nil, "http://localhost:8020")
+	if pred2 != "" || len(terms2) != 0 {
+		t.Errorf("expected language tag with no uri to be skipped, got pred=%q terms=%v", pred2, terms2)
 	}
-	got2 := terms2[0].String()
-	if !strings.Contains(got2, "en") {
-		t.Errorf("expected language value in IRI, got: %s", got2)
+}
+
+// TestMapPredicateSkipsWhenNoUri verifies that language/about/mentions tags without
+// a uri value are silently skipped rather than using value as a fallback IRI.
+func TestMapPredicateSkipsWhenNoUri(t *testing.T) {
+	for _, predicateID := range []string{"language", "about", "mentions"} {
+		pred, terms := mapPredicate(predicateID, "some label", nil, "http://localhost:8020")
+		if pred != "" || len(terms) != 0 {
+			t.Errorf("predicate %q with nil uri: expected skip (empty pred and terms), got pred=%q terms=%v", predicateID, pred, terms)
+		}
+		emptyURI := ""
+		pred2, terms2 := mapPredicate(predicateID, "some label", &emptyURI, "http://localhost:8020")
+		if pred2 != "" || len(terms2) != 0 {
+			t.Errorf("predicate %q with empty uri: expected skip (empty pred and terms), got pred=%q terms=%v", predicateID, pred2, terms2)
+		}
+	}
+}
+
+// TestExportRDFSkipsTagsWithNoUri verifies that about/mentions/language tags
+// with no uri are silently omitted rather than producing invalid RDF.
+func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 60)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Legacy tags with no uri — should be silently omitted
+	_, err = db.Exec(`
+	INSERT INTO tag (trackid, predicateid, value, uri) VALUES
+	(1, 'title', 'My Song', ''),
+	(1, 'about', '🌧️ Rain', ''),
+	(1, 'mentions', 'Some Label', NULL),
+	(1, 'language', 'en', '')
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpFile := filepath.Join(tmpDir, "output.ttl")
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	if err := ExportRDF(dbPath, tmpFile); err != nil {
+		t.Fatalf("ExportRDF failed: %v", err)
+	}
+
+	content, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("could not read RDF output file: %v", err)
+	}
+	output := string(content)
+
+	// The title should appear (it's a literal, not URI-dependent)
+	if !strings.Contains(output, "My Song") {
+		t.Error("expected title 'My Song' in output")
+	}
+	// The URI-dependent tag values should be absent (no triple should reference them)
+	for _, absent := range []string{"Rain", "Some Label"} {
+		if strings.Contains(output, absent) {
+			t.Errorf("expected %q to be absent from output (tag had no uri), but it was present", absent)
+		}
 	}
 }
 
