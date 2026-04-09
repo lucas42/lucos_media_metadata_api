@@ -7,6 +7,16 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+func TestDatabaseWALMode(test *testing.T) {
+	dbpath := "testwalmode.sqlite"
+	os.Remove(dbpath)
+	db := DBInit(dbpath, MockLoganne{})
+	var journalMode string
+	db.DB.Get(&journalMode, "PRAGMA journal_mode")
+	assertEqual(test, "journal mode", "wal", journalMode)
+	os.Remove(dbpath)
+}
+
 func TestDatabaseSetup(test *testing.T) {
 	dbpath := "testdb.sqlite"
 	os.Remove(dbpath)
