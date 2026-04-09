@@ -54,7 +54,7 @@ func fetchEolasNames(uris []string) map[string]string {
 	}
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Accept", "text/turtle")
-	req.Header.Set("User-Agent", "lucos_media_metadata_api")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
 
 	slog.Info("Fetching entity names from eolas", "url", dataURL, "uri_count", len(uris))
 	resp, err := client.Do(req)
