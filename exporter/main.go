@@ -40,7 +40,7 @@ func main() {
 			"status":    "error",
 			"message":   err.Error(),
 		})
-		http.Post(scheduleTracker, "application/json", bytes.NewBuffer(scheduleTrackerData))
+		postToScheduleTracker(scheduleTracker, scheduleTrackerData)
 		log.Fatalf("failed to export RDF: %v", err)
 	}
 
@@ -50,7 +50,21 @@ func main() {
 		"frequency": 60*60, // 1 hour in seconds
 		"status":    "success",
 	})
-	http.Post(scheduleTracker, "application/json", bytes.NewBuffer(scheduleTrackerData))
+	postToScheduleTracker(scheduleTracker, scheduleTrackerData)
+}
+
+// postToScheduleTracker sends a JSON payload to the schedule tracker endpoint with User-Agent set.
+func postToScheduleTracker(endpoint string, data []byte) {
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(data))
+	if err != nil {
+		log.Printf("Failed to create schedule tracker request: %v", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+	if _, err := http.DefaultClient.Do(req); err != nil {
+		log.Printf("Failed to post to schedule tracker: %v", err)
+	}
 }
 
 // copySQLiteDB creates a temp copy of the SQLite DB file and returns its path

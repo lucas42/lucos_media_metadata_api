@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 )
 
 type LoganneInterface interface {
@@ -40,8 +41,14 @@ func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack
 		data["url"] = fmt.Sprintf("%s/tracks/%d", loganne.mediaMetadataManagerOrigin, existingTrack.ID)
 	}
 	postData, _ := json.Marshal(data)
-	_, err := http.Post(loganne.endpoint, "application/json", bytes.NewBuffer(postData))
+	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
 	if err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+	if _, err := http.DefaultClient.Do(req); err != nil {
 		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
 	}
 }
@@ -66,8 +73,14 @@ func (loganne Loganne) collectionPost(eventType string, humanReadable string, up
 		data["collection"] = existingCollection
 	}
 	postData, _ := json.Marshal(data)
-	_, err := http.Post(loganne.endpoint, "application/json", bytes.NewBuffer(postData))
+	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
 	if err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+	if _, err := http.DefaultClient.Do(req); err != nil {
 		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
 	}
 }
