@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type InfoStruct struct {
@@ -35,17 +38,20 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 
 		dbCheck, trackCount := TrackCount(store)
 		weightingCheck, weightingDrift := WeightingCheck(store)
-		collectionsWeightingCheck, collectionsWeightingDrift:= CollectionsWeightingCheck(store)
+		collectionsWeightingCheck, collectionsWeightingDrift := CollectionsWeightingCheck(store)
+		uriIntegrityCheck, tagsMissingURIs := URIIntegrityCheck(store)
 
 		info.Checks = map[string]Check{
-			"db": dbCheck,
-			"weighting": weightingCheck,
+			"db":                   dbCheck,
+			"weighting":            weightingCheck,
 			"collections-weighting": collectionsWeightingCheck,
+			"uri-integrity":        uriIntegrityCheck,
 		}
 		info.Metrics = map[string]Metric{
-			"track-count": trackCount,
-			"weighting-drift": weightingDrift,
-			"collections-weighting-drift": collectionsWeightingDrift,
+			"track-count":                  trackCount,
+			"weighting-drift":              weightingDrift,
+			"collections-weighting-drift":  collectionsWeightingDrift,
+			"tags-missing-uris":            tagsMissingURIs,
 		}
 		info.CI = map[string]string{
 			"circle": "gh/lucas42/lucos_media_metadata_api",
@@ -87,6 +93,37 @@ func WeightingCheck(store Datastore) (weightingCheck Check, weightingDrift Metri
 	}
 	return weightingCheck, weightingDrift
 }
+func URIIntegrityCheck(store Datastore) (uriCheck Check, missingCount Metric) {
+	uriCheck = Check{TechDetail: "Tags with URI-dependent predicates all have a URI set"}
+	missingCount = Metric{TechDetail: "Number of tags with a URI-dependent predicate but no URI"}
+	predicates := GetRequiresURIPredicates()
+	if len(predicates) == 0 {
+		uriCheck.OK = true
+		return
+	}
+	query, args, err := sqlx.In(
+		"SELECT COUNT(*) FROM tag WHERE predicateid IN (?) AND (uri IS NULL OR uri = '')",
+		predicates,
+	)
+	if err != nil {
+		uriCheck.OK = false
+		uriCheck.Debug = err.Error()
+		return
+	}
+	query = store.DB.Rebind(query)
+	err = store.DB.Get(&missingCount.Value, query, args...)
+	if err != nil {
+		uriCheck.OK = false
+		uriCheck.Debug = err.Error()
+	} else if missingCount.Value > 0 {
+		uriCheck.OK = false
+		uriCheck.Debug = fmt.Sprintf("%d tag(s) with a URI-dependent predicate are missing a URI", missingCount.Value)
+	} else {
+		uriCheck.OK = true
+	}
+	return
+}
+
 func CollectionsWeightingCheck(store Datastore) (weightingCheck Check, driftingCollectionsCount Metric) {
 	weightingCheck = Check{TechDetail: "Whether maximum cumulative weighting for each collection matches the sum of all its weightings"}
 	driftingCollectionsCount = Metric{TechDetail: "The number of collections whose maximum cumulative weighting doesn't match the sum of all its weightings"}

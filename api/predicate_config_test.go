@@ -47,3 +47,39 @@ func TestRegistryCount(test *testing.T) {
 		test.Errorf("Expected 6 multi-value predicates, got %d", count)
 	}
 }
+
+func TestRequiresURIPredicates(test *testing.T) {
+	expectedRequiresURI := []string{"language", "about", "mentions"}
+	for _, pred := range expectedRequiresURI {
+		config := GetPredicateConfig(pred)
+		if !config.RequiresURI {
+			test.Errorf("Expected predicate %q to have RequiresURI true", pred)
+		}
+	}
+}
+
+func TestNonURIPredicatesDoNotRequireURI(test *testing.T) {
+	nonURIPredicates := []string{"composer", "producer", "offence", "title", "artist"}
+	for _, pred := range nonURIPredicates {
+		config := GetPredicateConfig(pred)
+		if config.RequiresURI {
+			test.Errorf("Expected predicate %q to have RequiresURI false", pred)
+		}
+	}
+}
+
+func TestGetRequiresURIPredicates(test *testing.T) {
+	predicates := GetRequiresURIPredicates()
+	if len(predicates) != 3 {
+		test.Errorf("Expected 3 RequiresURI predicates, got %d: %v", len(predicates), predicates)
+	}
+	predicateSet := make(map[string]bool)
+	for _, p := range predicates {
+		predicateSet[p] = true
+	}
+	for _, expected := range []string{"language", "about", "mentions"} {
+		if !predicateSet[expected] {
+			test.Errorf("Expected %q in GetRequiresURIPredicates result, got %v", expected, predicates)
+		}
+	}
+}

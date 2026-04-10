@@ -29,12 +29,14 @@ func TestInfoEndpoint(test *testing.T) {
 		"checks": {
 			"db": {"techDetail":"Does basic SELECT query from database", "ok": true},
 			"weighting": {"techDetail":"Does the maximum cumulative weighting value match the sum of all weightings", "ok":true},
-			"collections-weighting": {"techDetail":"Whether maximum cumulative weighting for each collection matches the sum of all its weightings", "ok":true}
+			"collections-weighting": {"techDetail":"Whether maximum cumulative weighting for each collection matches the sum of all its weightings", "ok":true},
+			"uri-integrity": {"techDetail":"Tags with URI-dependent predicates all have a URI set", "ok":true}
 		},
 		"metrics": {
 			"track-count": {"techDetail":"Number of tracks in database", "value": 37},
 			"weighting-drift": {"techDetail":"Difference between maximum cumulativeweighting and the sum of all weightings", "value":0},
-			"collections-weighting-drift": {"techDetail":"The number of collections whose maximum cumulative weighting doesn't match the sum of all its weightings", "value":0}
+			"collections-weighting-drift": {"techDetail":"The number of collections whose maximum cumulative weighting doesn't match the sum of all its weightings", "value":0},
+			"tags-missing-uris": {"techDetail":"Number of tags with a URI-dependent predicate but no URI", "value":0}
 		},
 		"ci":{"circle":"gh/lucas42/lucos_media_metadata_api"}
 	}`
