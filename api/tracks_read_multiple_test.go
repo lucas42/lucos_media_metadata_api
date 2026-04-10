@@ -141,36 +141,10 @@ func TestRandomTracksDealsWithDeletes(test *testing.T) {
 }
 
 /**
- * Checks simple full-text search (q=) works across tag values and URLs
+ * Checks that the q= parameter is rejected with a 400 error
  */
-func TestSimpleQuery(test *testing.T) {
-	clearData()
-
-	// Mentions blue in the title
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"artist":[{"name":"Eiffel 65"}], "title":[{"name":"I'm blue"}]}}`, 200)
-	// Artist is Blue
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"artist":[{"name":"Blue"}], "title":[{"name":"I can"}]}}`, 200)
-	// No mention of blue
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"artist":[{"name":"Coldplay"}], "title":[{"name":"Yellow"}]}}`, 200)
-	// Genre is blues
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"artist":[{"name":"Robert Johnson"}], "title":[{"name":"Sweet Home Chicago"}], "genre":[{"name":"blues"}]}}`, 200)
-	// URL contains blue
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc5", `{"url":"http://example.org/blue", "duration": 7}`, 200)
-
-	request := basicRequest(test, "GET", "/v3/tracks?q=blue", "")
-	resp, _ := doRawRequest(test, request)
-	var result SearchResultV3
-	json.NewDecoder(resp.Body).Decode(&result)
-
-	if len(result.Tracks) != 4 {
-		test.Errorf("Expected 4 tracks for q=blue, got %d", len(result.Tracks))
-	}
-	// Track 3 (Coldplay/Yellow) should NOT be returned
-	for _, track := range result.Tracks {
-		if track.ID == 3 {
-			test.Error("Track 3 (Coldplay/Yellow) should not match q=blue")
-		}
-	}
+func TestSimpleQueryReturnsError(test *testing.T) {
+	makeRequest(test, "GET", "/v3/tracks?q=blue", "", 400, `{"error":"The q parameter is no longer supported. Use p. parameters for predicate-based search.","code":"bad_request"}`, true)
 }
 
 /**
@@ -337,32 +311,17 @@ func TestTrackQueryPagination(test *testing.T) {
 
 	pages := map[string]int{"1": 20, "2": 20, "3": 5}
 	for page, expectedCount := range pages {
-		// Test q= pagination
-		path := "/v3/tracks?q=test&page=" + page
+		path := "/v3/tracks?p.title=test&page=" + page
 		request := basicRequest(test, "GET", path, "")
 		resp, _ := doRawRequest(test, request)
 		var result SearchResultV3
 		json.NewDecoder(resp.Body).Decode(&result)
 
 		if len(result.Tracks) != expectedCount {
-			test.Errorf("q=test page %s: expected %d tracks, got %d", page, expectedCount, len(result.Tracks))
+			test.Errorf("p.title=test page %s: expected %d tracks, got %d", page, expectedCount, len(result.Tracks))
 		}
 		if result.TotalPages != 3 {
-			test.Errorf("q=test page %s: expected 3 total pages, got %d", page, result.TotalPages)
-		}
-
-		// Test p.= pagination
-		path2 := "/v3/tracks?p.title=test&page=" + page
-		request2 := basicRequest(test, "GET", path2, "")
-		resp2, _ := doRawRequest(test, request2)
-		var result2 SearchResultV3
-		json.NewDecoder(resp2.Body).Decode(&result2)
-
-		if len(result2.Tracks) != expectedCount {
-			test.Errorf("p.title=test page %s: expected %d tracks, got %d", page, expectedCount, len(result2.Tracks))
-		}
-		if result2.TotalPages != 3 {
-			test.Errorf("p.title=test page %s: expected 3 total pages, got %d", page, result2.TotalPages)
+			test.Errorf("p.title=test page %s: expected 3 total pages, got %d", page, result.TotalPages)
 		}
 	}
 }

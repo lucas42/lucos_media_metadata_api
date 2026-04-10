@@ -26,12 +26,8 @@ func parsePageParam(rawpage string, standardLimit int) (offset int, limit int) {
  * Run a basic search based on request GET parameters
  */
 func queryMultipleTracks(store Datastore, r *http.Request) (tracks []Track, totalPages int, err error) {
-	var query string
 	predicates := make(map[string]string)
 	for key, value := range r.URL.Query() {
-		if key == "q" {
-			query = value[0]
-		}
 		if strings.HasPrefix(key, "p.") {
 			predicates[key[2:len(key)]] = value[0]
 		}
@@ -39,11 +35,7 @@ func queryMultipleTracks(store Datastore, r *http.Request) (tracks []Track, tota
 	standardLimit := 20
 	offset, limit := parsePageParam(r.URL.Query().Get("page"), standardLimit)
 	var totalTracks int
-	if (query != "") {
-		tracks, totalTracks, err = store.trackSearch(query, offset, limit)
-	} else {
-		tracks, totalTracks, err = store.searchByPredicates(predicates, offset, limit)
-	}
+	tracks, totalTracks, err = store.searchByPredicates(predicates, offset, limit)
 	totalPages = int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
 	return tracks, totalPages, err
 }
