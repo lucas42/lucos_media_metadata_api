@@ -337,6 +337,10 @@ func (store Datastore) getSingleTrackV3(w http.ResponseWriter, r *http.Request, 
 }
 
 func (store Datastore) getMultipleTracksV3(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("q") != "" {
+		writeV3ErrorResponse(w, http.StatusBadRequest, "The q parameter is no longer supported. Use p. parameters for predicate-based search.", "bad_request")
+		return
+	}
 	tracks, totalPages, totalTracks, page, err := queryMultipleTracksV3(store, r)
 	if err != nil {
 		writeV3Error(w, err)
@@ -373,6 +377,10 @@ func (store Datastore) writeRandomTracksV3(w http.ResponseWriter) {
 }
 
 func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("q") != "" {
+		writeV3ErrorResponse(w, http.StatusBadRequest, "The q parameter is no longer supported. Use p. parameters for predicate-based search.", "bad_request")
+		return
+	}
 	trackV3, err := DecodeTrackV3(r.Body)
 	if err != nil {
 		writeV3ErrorResponse(w, http.StatusBadRequest, err.Error(), "bad_request")
@@ -546,22 +554,14 @@ func queryMultipleTracksV3(store Datastore, r *http.Request) (tracks []Track, to
 		page = 1
 	}
 
-	var query string
 	predicates := make(map[string]string)
 	for key, value := range r.URL.Query() {
-		if key == "q" {
-			query = value[0]
-		}
 		if strings.HasPrefix(key, "p.") {
 			predicates[key[2:]] = value[0]
 		}
 	}
 	offset, limit := parsePageParam(rawPage, standardLimit)
-	if query != "" {
-		tracks, totalTracks, err = store.trackSearch(query, offset, limit)
-	} else {
-		tracks, totalTracks, err = store.searchByPredicates(predicates, offset, limit)
-	}
+	tracks, totalTracks, err = store.searchByPredicates(predicates, offset, limit)
 	totalPages = int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
 	return
 }

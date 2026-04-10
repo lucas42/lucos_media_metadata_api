@@ -116,29 +116,10 @@ func TestPatchTracksByMultiplePredicates(test *testing.T) {
 }
 
 /**
- * Checks that bulk update works with a full-text search query
+ * Checks that bulk PATCH with q= parameter is rejected with a 400 error
  */
-func TestPatchTracksByQuery(test *testing.T) {
-	clearData()
-
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"title":[{"name":"Yellow Submarine"}]}}`, 200)
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"title":[{"name":"Want to visit a Yellow Submarine"}]}}`, 200)
-	// No mention of submarine
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"title":[{"name":"Coldplay"}]}}`, 200)
-
-	request := basicRequest(test, "PATCH", "/v3/tracks?q=Submarine", `{"tags":{"genre":[{"name":"Nautical"}]}}`)
-	resp, _ := doRawRequest(test, request)
-
-	var result SearchResultV3
-	json.NewDecoder(resp.Body).Decode(&result)
-	if len(result.Tracks) != 2 {
-		test.Errorf("Expected 2 tracks updated via q=Submarine, got %d", len(result.Tracks))
-	}
-
-	// Track 3 should be unchanged (no genre)
-	if getTagValue(test, "abc3", "genre") != "" {
-		test.Error("Track 3 should not have genre after q=Submarine patch")
-	}
+func TestPatchTracksByQueryReturnsError(test *testing.T) {
+	makeRequest(test, "PATCH", "/v3/tracks?q=Submarine", `{"tags":{"genre":[{"name":"Nautical"}]}}`, 400, `{"error":"The q parameter is no longer supported. Use p. parameters for predicate-based search.","code":"bad_request"}`, true)
 }
 
 /**
@@ -152,9 +133,9 @@ func TestCantPutInBulk(test *testing.T) {
  * Checks that bulk update rejects attempts to change unique identifier fields
  */
 func TestCantBulkUpdateIdentifiers(test *testing.T) {
-	makeRequest(test, "PATCH", "/v3/tracks?q=Yellow", `{"url": "http://example.org/track7"}`, 400, `{"error":"Can't bulk update url","code":"bad_request"}`, true)
-	makeRequest(test, "PATCH", "/v3/tracks?q=Blue", `{"id": 7}`, 400, `{"error":"Can't bulk update id","code":"bad_request"}`, true)
-	makeRequest(test, "PATCH", "/v3/tracks?q=Green", `{"fingerprint": "abc7"}`, 400, `{"error":"Can't bulk update fingerprint","code":"bad_request"}`, true)
+	makeRequest(test, "PATCH", "/v3/tracks?p.title=Yellow", `{"url": "http://example.org/track7"}`, 400, `{"error":"Can't bulk update url","code":"bad_request"}`, true)
+	makeRequest(test, "PATCH", "/v3/tracks?p.title=Blue", `{"id": 7}`, 400, `{"error":"Can't bulk update id","code":"bad_request"}`, true)
+	makeRequest(test, "PATCH", "/v3/tracks?p.title=Green", `{"fingerprint": "abc7"}`, 400, `{"error":"Can't bulk update fingerprint","code":"bad_request"}`, true)
 }
 
 /**
@@ -200,7 +181,7 @@ func TestBulkUpdatePagination(test *testing.T) {
 	}
 
 	restartServer()
-	request := basicRequest(test, "PATCH", "/v3/tracks?q=Yellow%20Submarine&page=2", `{"tags":{"genre":[{"name":"Maritime Songs"}]}}`)
+	request := basicRequest(test, "PATCH", "/v3/tracks?p.title=Yellow%20Submarine&page=2", `{"tags":{"genre":[{"name":"Maritime Songs"}]}}`)
 	resp, _ := doRawRequest(test, request)
 
 	var result SearchResultV3
@@ -250,7 +231,7 @@ func TestBulkUpdateNoPagination(test *testing.T) {
 	}
 
 	restartServer()
-	request := basicRequest(test, "PATCH", "/v3/tracks?q=Yellow%20Submarine&page=all", `{"tags":{"genre":[{"name":"Maritime Songs"}]}}`)
+	request := basicRequest(test, "PATCH", "/v3/tracks?p.title=Yellow%20Submarine&page=all", `{"tags":{"genre":[{"name":"Maritime Songs"}]}}`)
 	resp, _ := doRawRequest(test, request)
 
 	var result SearchResultV3

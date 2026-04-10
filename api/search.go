@@ -14,35 +14,6 @@ type SearchResult struct {
 }
 
 /**
- * Searches for tracks with a tag value containing the given query
- *
- */
-func (store Datastore) trackSearch(query string, offset int, limit int) (tracks []Track, totalTracks int, err error) {
-	tracks = []Track{}
-	query = "%"+query+"%"
-	err = store.DB.Select(&tracks, "SELECT id, url, fingerprint, duration, weighting FROM tag LEFT JOIN track ON tag.trackid = track.id WHERE value LIKE $1 UNION SELECT id, url, fingerprint, duration, weighting FROM track WHERE url LIKE $1 GROUP BY id ORDER BY id LIMIT $2, $3", query, offset, limit)
-	if err != nil {
-		return
-	}
-
-	// Loop through all the tracks and add tags for each one
-	for i := range tracks {
-		track := &tracks[i]
-		track.Tags, err = store.getAllTagsForTrack(track.ID)
-		if err != nil {
-			return
-		}
-		collections, err := store.getCollectionsByTrack(track.ID)
-		if err != nil {
-			return tracks, totalTracks, err
-		}
-		track.Collections = &collections
-	}
-	err = store.DB.Get(&totalTracks, "SELECT COUNT(*) FROM (SELECT id, url, fingerprint, duration, weighting FROM tag LEFT JOIN track ON tag.trackid = track.id WHERE value LIKE $1 UNION SELECT id, url, fingerprint, duration, weighting FROM track WHERE url LIKE $1 GROUP BY id ORDER BY id)", query)
-	return
-}
-
-/**
  * Searches for tracks based on a map of predicates and their values
  *
  */
