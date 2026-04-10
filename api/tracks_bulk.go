@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+
 func parsePageParam(rawpage string, standardLimit int) (offset int, limit int) {
 	if rawpage == "all" {
 		return 0, -1
@@ -79,9 +80,3 @@ func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Tra
 	}
 	return
 }
-func updateMultipleTracksAndRespond(store Datastore, w http.ResponseWriter, r *http.Request, updatesForTracks Track) {
-	result, action, err := updateMultipleTracks(store, r, updatesForTracks)
-	w.Header().Set("Track-Action", action)
-	writeJSONResponse(w, result, err)
-}
-

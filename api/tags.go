@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
@@ -15,47 +14,8 @@ type Tag struct {
 }
 
 // TagList is the internal representation of tags for a track.
-// It supports multiple values per predicate, unlike map[string]string.
+// It supports multiple values per predicate.
 type TagList []Tag
-
-// MarshalJSON serialises TagList as map[string]string for v2 wire compatibility.
-// Multi-value predicates (as defined in predicateRegistry) are comma-joined.
-// Single-value predicates use the last value if duplicates somehow exist.
-func (tl TagList) MarshalJSON() ([]byte, error) {
-	// Collect values per predicate in order
-	seen := make(map[string][]string, len(tl))
-	order := make([]string, 0, len(tl))
-	for _, tag := range tl {
-		if _, exists := seen[tag.PredicateID]; !exists {
-			order = append(order, tag.PredicateID)
-		}
-		seen[tag.PredicateID] = append(seen[tag.PredicateID], tag.Value)
-	}
-	m := make(map[string]string, len(order))
-	for _, pred := range order {
-		vals := seen[pred]
-		if IsMultiValue(pred) && len(vals) > 1 {
-			m[pred] = strings.Join(vals, ",")
-		} else {
-			// For single-value predicates, last value wins (preserving old behaviour)
-			m[pred] = vals[len(vals)-1]
-		}
-	}
-	return json.Marshal(m)
-}
-
-// UnmarshalJSON deserialises a map[string]string into a TagList.
-func (tl *TagList) UnmarshalJSON(data []byte) error {
-	m := make(map[string]string)
-	if err := json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-	*tl = make(TagList, 0, len(m))
-	for k, v := range m {
-		*tl = append(*tl, Tag{PredicateID: k, Value: v})
-	}
-	return nil
-}
 
 // GetValue returns the value for the first tag matching the given predicate,
 // or an empty string if not found.
@@ -91,6 +51,14 @@ func (tl *TagList) SetValue(predicate string, value string) {
 	*tl = append(*tl, Tag{PredicateID: predicate, Value: value})
 }
 
+// TagValueV3 is the v3 wire representation of a single tag value.
+// All predicates use the same shape: {"name": "...", "uri": "..."}.
+// The "uri" field is omitted when empty.
+type TagValueV3 struct {
+	Name string `json:"name"`
+	URI  string `json:"uri,omitempty"`
+}
+
 /**
  * Get the value for a given tag
  *
@@ -113,8 +81,7 @@ func (store Datastore) getTagValue(trackid int, predicate string) (value string,
  * Creates or updates a tag
  *
  * For multi-value predicates (as defined in predicateRegistry), comma-separated
- * values are split and stored as separate rows. This ensures the V2 write path
- * produces the same storage format as the DB migration and V3 write path.
+ * values are split and stored as separate rows.
  */
 func (store Datastore) updateTag(trackid int, predicate string, value string) (err error) {
 	slog.Info("Update Tag", "trackid", trackid, "predicate", predicate, "value", value)
@@ -144,7 +111,6 @@ func (store Datastore) updateTag(trackid int, predicate string, value string) (e
 	}
 
 	// Delete existing value(s) for this predicate then insert the new one(s).
-	// This replaces the old REPLACE INTO which relied on the now-removed UNIQUE constraint.
 	// Wrapped in a transaction so the tag is not lost if the INSERT fails.
 	tx, err := store.DB.Beginx()
 	if err != nil {
@@ -191,12 +157,11 @@ func (store Datastore) updateTagIfMissing(trackid int, predicate string, value s
 	return
 }
 
-
 /**
  * Creates or updates a set of tags
  *
  */
- func (store Datastore) updateTags(trackid int, tags TagList) (err error) {
+func (store Datastore) updateTags(trackid int, tags TagList) (err error) {
 	for _, tag := range tags {
 		if tag.Value != "" {
 			err = store.updateTag(trackid, tag.PredicateID, tag.Value)
@@ -214,7 +179,7 @@ func (store Datastore) updateTagIfMissing(trackid int, predicate string, value s
  * Creates only the given tags which the given track doesn't already have
  *
  */
- func (store Datastore) updateTagsIfMissing(trackid int, tags TagList) (err error) {
+func (store Datastore) updateTagsIfMissing(trackid int, tags TagList) (err error) {
 	for _, tag := range tags {
 		if tag.Value != "" {
 			err = store.updateTagIfMissing(trackid, tag.PredicateID, tag.Value)
