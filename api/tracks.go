@@ -2,9 +2,7 @@ package main
 
 import (
 	"github.com/jmoiron/sqlx"
-	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"math/rand"
 	"net/http"
@@ -462,14 +460,6 @@ func (store Datastore) deleteTrack(trackid int) (err error) {
 }
 
 /**
- * Writes a http response with a JSON representation of a given track
- */
-func writeTrackDataByField(store Datastore, w http.ResponseWriter, field string, value interface{}) {
-	track, err := store.getTrackDataByField(field, value)
-	writeJSONResponse(w, track, err)
-}
-
-/**
  * Writes a http response with a RDF representation of a given track
  */
 func writeTrackRDFByField(store Datastore, w http.ResponseWriter, field string, value interface{}, rdfType string) {
@@ -512,15 +502,6 @@ func writeWeighting(store Datastore, w http.ResponseWriter, trackid int) {
 }
 
 /**
- * Write a http response with a JSON representation of a random 20 tracks
- */
-func writeRandomTracks(store Datastore, w http.ResponseWriter) {
-	tracks, err := store.getRandomTracks(20)
-	writeJSONResponse(w, tracks, err)
-}
-
-
-/**
  * Deletes a given track and writes a response with no content
  */
 func deleteTrackHandler(store Datastore, w http.ResponseWriter, trackid int) {
@@ -529,11 +510,3 @@ func deleteTrackHandler(store Datastore, w http.ResponseWriter, trackid int) {
 	writeContentlessResponse(w, err)
 }
 
-/**
- * Decodes a JSON representation of a track
- */
-func DecodeTrack(r io.Reader) (Track, error) {
-	track := new(Track)
-	err := json.NewDecoder(r).Decode(track)
-	return *track, err
-}

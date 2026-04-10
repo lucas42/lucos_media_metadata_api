@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"testing"
 	"github.com/jmoiron/sqlx"
@@ -184,25 +183,6 @@ func TestFreshDatabaseAllowsMultipleTagValues(test *testing.T) {
 	assertEqual(test, "multiple composer tags allowed", 2, count)
 
 	os.Remove(dbpath)
-}
-
-func TestTagListMarshalJSONMultiValue(test *testing.T) {
-	tags := TagList{
-		{PredicateID: "title", Value: "My Song"},
-		{PredicateID: "composer", Value: "Bach"},
-		{PredicateID: "composer", Value: "Mozart"},
-		{PredicateID: "language", Value: "en"},
-		{PredicateID: "language", Value: "fr"},
-	}
-	data, err := json.Marshal(tags)
-	if err != nil {
-		test.Fatalf("MarshalJSON failed: %v", err)
-	}
-	var m map[string]string
-	json.Unmarshal(data, &m)
-	assertEqual(test, "title should be single value", "My Song", m["title"])
-	assertEqual(test, "composer should be comma-joined", "Bach,Mozart", m["composer"])
-	assertEqual(test, "language should be comma-joined", "en,fr", m["language"])
 }
 
 func TestUpdateTagDeletesAndInserts(test *testing.T) {
