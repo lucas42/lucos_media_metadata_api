@@ -9,6 +9,12 @@ type PredicateConfig struct {
 	// for the same (trackid, predicateid) pair, and the v3 API
 	// serialises/deserialises the values as a JSON array.
 	MultiValue bool
+
+	// RequiresURI indicates this predicate produces an IRI object in
+	// RDF output. Tags with this predicate must have a non-empty uri
+	// field to be valid; tags without a URI are skipped by the RDF
+	// exporter and rejected by write validation.
+	RequiresURI bool
 }
 
 // predicateRegistry defines per-predicate configuration.
@@ -16,10 +22,10 @@ type PredicateConfig struct {
 var predicateRegistry = map[string]PredicateConfig{
 	"composer": {MultiValue: true},
 	"producer": {MultiValue: true},
-	"language": {MultiValue: true},
+	"language": {MultiValue: true, RequiresURI: true},
 	"offence":  {MultiValue: true},
-	"about":    {MultiValue: true},
-	"mentions": {MultiValue: true},
+	"about":    {MultiValue: true, RequiresURI: true},
+	"mentions": {MultiValue: true, RequiresURI: true},
 }
 
 // GetPredicateConfig returns the configuration for a predicate.
@@ -35,4 +41,16 @@ func GetPredicateConfig(predicateID string) PredicateConfig {
 // IsMultiValue is a convenience for the most common check.
 func IsMultiValue(predicateID string) bool {
 	return GetPredicateConfig(predicateID).MultiValue
+}
+
+// GetRequiresURIPredicates returns the list of predicate IDs that require a URI.
+// Used by the RDF exporter, write validation, and audit checks.
+func GetRequiresURIPredicates() []string {
+	var predicates []string
+	for id, config := range predicateRegistry {
+		if config.RequiresURI {
+			predicates = append(predicates, id)
+		}
+	}
+	return predicates
 }
