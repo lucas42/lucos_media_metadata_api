@@ -37,7 +37,7 @@ func TestV3GetCollectionTracksHaveStructuredTags(test *testing.T) {
 	trackurl := "http://example.org/v3coll/1"
 	escapedTrackUrl := url.QueryEscape(trackurl)
 	trackPath := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
-	setupRequest(test, "PUT", trackPath, `{"fingerprint": "v3colltest1", "duration": 200, "tags": {"title": [{"name": "Test Song"}], "artist": [{"name": "Test Artist"}], "language": [{"name": "en"}]}}`, 200)
+	setupRequest(test, "PUT", trackPath, `{"fingerprint": "v3colltest1", "duration": 200, "tags": {"title": [{"name": "Test Song"}], "artist": [{"name": "Test Artist"}], "language": [{"name": "English", "uri": "https://eolas.l42.eu/metadata/language/en/"}]}}`, 200)
 
 	// Create a collection and add the track to it
 	collPath := "/v3/collections/testcoll"
