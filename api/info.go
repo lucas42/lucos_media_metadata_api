@@ -11,6 +11,7 @@ import (
 
 type InfoStruct struct {
 	System  string            `json:"system"`
+	Title   string            `json:"title"`
 	Checks  map[string]Check  `json:"checks"`
 	Metrics map[string]Metric `json:"metrics"`
 	CI      map[string]string `json:"ci"`
@@ -34,7 +35,7 @@ type Metric struct {
 func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		slog.Debug("Info controller")
-		info := InfoStruct{System: "lucos_media_metadata_api"}
+		info := InfoStruct{System: "lucos_media_metadata_api", Title: "Media Metadata API"}
 
 		dbCheck, trackCount := TrackCount(store)
 		weightingCheck, weightingDrift := WeightingCheck(store)

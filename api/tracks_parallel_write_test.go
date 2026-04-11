@@ -41,6 +41,7 @@ func TestParallelWrites(test *testing.T) {
 
 	expectedInfoOutput := `{
 		"system": "lucos_media_metadata_api",
+		"title": "Media Metadata API",
 		"checks": {
 			"db": {"techDetail":"Does basic SELECT query from database", "ok": true},
 			"weighting": {"techDetail":"Does the maximum cumulative weighting value match the sum of all weightings", "ok":true},
