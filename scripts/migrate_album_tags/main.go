@@ -4,9 +4,14 @@
 // Run this script as part of the coordinated Phase B/C rollout window:
 //
 //   1. Ask users to pause edits to album tags.
-//   2. Run this script against the production database:
-//        go run ./scripts/migrate_album_tags/ -db /var/lib/media-metadata/media.sqlite -origin https://media-metadata.l42.eu
-//      (use the MEDIA_METADATA_MANAGER_ORIGIN value, e.g. https://media-metadata.l42.eu)
+//   2. Run the migration via Docker (the binary is included in the API image):
+//        docker run --rm \
+//          -v lucos_media_metadata_api_db:/var/lib/media-metadata/ \
+//          lucas42/lucos_media_metadata_api \
+//          migrate_album_tags \
+//          -db /var/lib/media-metadata/media.sqlite \
+//          -origin https://media-metadata.l42.eu
+//      (use the MEDIA_METADATA_MANAGER_ORIGIN value for -origin)
 //   3. Deploy the updated API (reads return {name, uri}, writes require uri) and
 //      the updated UI together.
 //   4. Resume edits.
