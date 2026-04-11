@@ -58,6 +58,8 @@ func writeV3Error(w http.ResponseWriter, err error) {
 		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "duplicate")
 	} else if strings.HasSuffix(msg, "not allowed") {
 		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "bad_request")
+	} else if strings.Contains(msg, "requires a URI") {
+		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "requires_uri")
 	} else {
 		writeV3ErrorResponse(w, http.StatusInternalServerError, msg, "internal_error")
 		slog.Error("Internal Server Error", slog.Any("error", err))
@@ -110,6 +112,14 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 		}
 		if !IsMultiValue(predicate) && len(nonEmpty) > 1 {
 			return fmt.Errorf("multiple values for single-value predicate %q not allowed", predicate)
+		}
+		config := GetPredicateConfig(predicate)
+		if config.RequiresURI {
+			for _, v := range nonEmpty {
+				if v.URI == "" {
+					return fmt.Errorf("predicate %q requires a URI", predicate)
+				}
+			}
 		}
 		updates = append(updates, predicateUpdate{predicate, nonEmpty})
 	}
@@ -185,6 +195,14 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 			}
 			if len(nonEmpty) == 0 {
 				continue
+			}
+			config := GetPredicateConfig(predicate)
+			if config.RequiresURI {
+				for _, v := range nonEmpty {
+					if v.URI == "" {
+						return fmt.Errorf("predicate %q requires a URI", predicate)
+					}
+				}
 			}
 			// Ensure predicate exists. createPredicate is idempotent and safe
 			// outside the main transaction.

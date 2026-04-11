@@ -28,7 +28,7 @@ func TestV3GetTrackReturnsStructuredTags(test *testing.T) {
 
 	// Create track via v3 with structured tags
 	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
-	v3Input := `{"fingerprint": "v3test1", "duration": 200, "tags": {"title": [{"name": "Test Song"}], "artist": [{"name": "Test Artist"}], "language": [{"name": "en"}]}}`
+	v3Input := `{"fingerprint": "v3test1", "duration": 200, "tags": {"title": [{"name": "Test Song"}], "artist": [{"name": "Test Artist"}], "language": [{"name": "English", "uri": "https://eolas.l42.eu/metadata/language/en/"}]}}`
 	request := basicRequest(test, "PUT", v3Path, v3Input)
 	resp, _ := doRawRequest(test, request)
 	if resp.StatusCode != 200 {
@@ -62,7 +62,7 @@ func TestV3GetTrackReturnsStructuredTags(test *testing.T) {
 		test.Errorf("Expected 1 language value, got %d", len(langArr))
 	}
 	langObj := langArr[0].(map[string]interface{})
-	assertEqual(test, "language name", "en", langObj["name"].(string))
+	assertEqual(test, "language name", "English", langObj["name"].(string))
 }
 
 func TestV3UsesIdNotTrackid(test *testing.T) {
@@ -161,14 +161,14 @@ func TestV3PatchTrackUpdatesTags(test *testing.T) {
 	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
 
 	// Create track
-	createReq := basicRequest(test, "PUT", v3Path, `{"fingerprint": "v3test3", "duration": 200, "tags": {"title": [{"name": "Original"}], "language": [{"name": "en"}]}}`)
+	createReq := basicRequest(test, "PUT", v3Path, `{"fingerprint": "v3test3", "duration": 200, "tags": {"title": [{"name": "Original"}], "language": [{"name": "English", "uri": "https://eolas.l42.eu/metadata/language/en/"}]}}`)
 	resp, _ := doRawRequest(test, createReq)
 	if resp.StatusCode != 200 {
 		test.Fatalf("Failed to create track: %d", resp.StatusCode)
 	}
 
 	// PATCH to update language
-	patchReq := basicRequest(test, "PATCH", v3Path, `{"tags": {"language": [{"name": "en"}, {"name": "de"}, {"name": "fr"}]}}`)
+	patchReq := basicRequest(test, "PATCH", v3Path, `{"tags": {"language": [{"name": "English", "uri": "https://eolas.l42.eu/metadata/language/en/"}, {"name": "German", "uri": "https://eolas.l42.eu/metadata/language/de/"}, {"name": "French", "uri": "https://eolas.l42.eu/metadata/language/fr/"}]}}`)
 	resp2, _ := doRawRequest(test, patchReq)
 	if resp2.StatusCode != 200 {
 		test.Fatalf("Failed to PATCH track: %d", resp2.StatusCode)
@@ -218,9 +218,9 @@ func TestV3RejectsMultipleValuesForSingleValuePredicate(test *testing.T) {
 func TestV3GetMultipleTracks(test *testing.T) {
 	clearData()
 	// Create two tracks via v3
-	req1 := basicRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/v3multi/1"), `{"fingerprint": "v3m1", "duration": 100, "tags": {"title": [{"name": "Track A"}], "language": [{"name": "en"}]}}`)
+	req1 := basicRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/v3multi/1"), `{"fingerprint": "v3m1", "duration": 100, "tags": {"title": [{"name": "Track A"}], "language": [{"name": "English", "uri": "https://eolas.l42.eu/metadata/language/en/"}]}}`)
 	doRawRequest(test, req1)
-	req2 := basicRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/v3multi/2"), `{"fingerprint": "v3m2", "duration": 200, "tags": {"title": [{"name": "Track B"}], "language": [{"name": "fr"}, {"name": "de"}]}}`)
+	req2 := basicRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/v3multi/2"), `{"fingerprint": "v3m2", "duration": 200, "tags": {"title": [{"name": "Track B"}], "language": [{"name": "French", "uri": "https://eolas.l42.eu/metadata/language/fr/"}, {"name": "German", "uri": "https://eolas.l42.eu/metadata/language/de/"}]}}`)
 	doRawRequest(test, req2)
 
 	// GET list
@@ -478,7 +478,7 @@ func TestV3PatchEmptyArrayClearsField(test *testing.T) {
 	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
 
 	// Create track with language and title tags
-	createReq := basicRequest(test, "PUT", v3Path, `{"fingerprint": "v3clear1", "duration": 200, "tags": {"title": [{"name": "Clear Test"}], "language": [{"name": "en"}]}}`)
+	createReq := basicRequest(test, "PUT", v3Path, `{"fingerprint": "v3clear1", "duration": 200, "tags": {"title": [{"name": "Clear Test"}], "language": [{"name": "English", "uri": "https://eolas.l42.eu/metadata/language/en/"}]}}`)
 	resp, _ := doRawRequest(test, createReq)
 	if resp.StatusCode != 200 {
 		test.Fatalf("Failed to create track: %d", resp.StatusCode)
@@ -517,14 +517,14 @@ func TestV3PatchMultiplePredicatesAtomic(test *testing.T) {
 	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
 
 	// Create track with title and language
-	createReq := basicRequest(test, "PUT", v3Path, `{"fingerprint": "v3atomic1", "duration": 300, "tags": {"title": [{"name": "Atomic Test"}], "language": [{"name": "en"}]}}`)
+	createReq := basicRequest(test, "PUT", v3Path, `{"fingerprint": "v3atomic1", "duration": 300, "tags": {"title": [{"name": "Atomic Test"}], "language": [{"name": "English", "uri": "https://eolas.l42.eu/metadata/language/en/"}]}}`)
 	resp, _ := doRawRequest(test, createReq)
 	if resp.StatusCode != 200 {
 		test.Fatalf("Failed to create track: %d", resp.StatusCode)
 	}
 
 	// PATCH updating both title and language in a single request
-	patchReq := basicRequest(test, "PATCH", v3Path, `{"tags": {"title": [{"name": "Updated Title"}], "language": [{"name": "ga"}]}}`)
+	patchReq := basicRequest(test, "PATCH", v3Path, `{"tags": {"title": [{"name": "Updated Title"}], "language": [{"name": "Irish", "uri": "https://eolas.l42.eu/metadata/language/ga/"}]}}`)
 	resp2, _ := doRawRequest(test, patchReq)
 	if resp2.StatusCode != 200 {
 		test.Fatalf("Failed to PATCH track: %d", resp2.StatusCode)
@@ -549,7 +549,7 @@ func TestV3PatchMultiplePredicatesAtomic(test *testing.T) {
 	if !ok || len(langArr) != 1 {
 		test.Fatalf("Expected language to have 1 value, got %v", tags["language"])
 	}
-	if langArr[0].(map[string]interface{})["name"] != "ga" {
-		test.Errorf("Expected language 'ga', got %v", langArr[0])
+	if langArr[0].(map[string]interface{})["name"] != "Irish" {
+		test.Errorf("Expected language 'Irish', got %v", langArr[0])
 	}
 }
