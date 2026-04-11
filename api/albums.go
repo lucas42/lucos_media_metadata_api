@@ -153,7 +153,62 @@ func (store Datastore) createAlbum(name string) (album AlbumV3, err error) {
 		Name: name,
 		URI:  store.albumURI(int(id64)),
 	}
+	store.Loganne.albumPost("albumCreated", "Album \""+name+"\" created", album, true)
 	return
+}
+
+// updateAlbum renames an existing album.
+// Returns "Album Not Found" if the id doesn't exist.
+func (store Datastore) updateAlbum(id int, name string) (album AlbumV3, err error) {
+	slog.Info("Update Album", "id", id, "name", name)
+	result, err := store.DB.Exec("UPDATE album SET name = $1 WHERE id = $2", name, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			err = errors.New("album_duplicate_name")
+		}
+		return
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return
+	}
+	if rows == 0 {
+		err = errors.New("Album Not Found")
+		return
+	}
+	album = AlbumV3{
+		ID:   id,
+		Name: name,
+		URI:  store.albumURI(id),
+	}
+	store.Loganne.albumPost("albumUpdated", "Album \""+name+"\" updated", album, true)
+	return
+}
+
+// deleteAlbum removes an album by id.
+// Returns an error if any tracks reference it.
+func (store Datastore) deleteAlbum(id int) error {
+	slog.Info("Delete Album", "id", id)
+	// First check the album exists.
+	album, err := store.getAlbumByID(id)
+	if err != nil {
+		return err
+	}
+	// Check no tag rows reference this album URI.
+	var count int
+	err = store.DB.Get(&count, "SELECT COUNT(*) FROM tag WHERE predicateid = 'album' AND uri = $1", album.URI)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("album_in_use")
+	}
+	_, err = store.DB.Exec("DELETE FROM album WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+	store.Loganne.albumPost("albumDeleted", "Album \""+album.Name+"\" deleted", album, false)
+	return nil
 }
 
 // resolveAlbumNameFromURI extracts the album id from a URI and returns the
@@ -233,8 +288,42 @@ func (store Datastore) AlbumsV3Controller(w http.ResponseWriter, r *http.Request
 				return
 			}
 			writeJSONResponse(w, album, nil)
+		case "PUT":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				writeV3Error(w, err)
+				return
+			}
+			var input struct {
+				Name string `json:"name"`
+			}
+			if err = json.Unmarshal(body, &input); err != nil || input.Name == "" {
+				writeV3ErrorResponse(w, http.StatusBadRequest, "Request body must include a non-empty \"name\" field", "bad_request")
+				return
+			}
+			album, err := store.updateAlbum(id, input.Name)
+			if err != nil {
+				if err.Error() == "album_duplicate_name" {
+					writeV3ErrorResponse(w, http.StatusConflict, "An album with that name already exists", "duplicate_name")
+					return
+				}
+				writeV3Error(w, err)
+				return
+			}
+			writeJSONResponse(w, album, nil)
+		case "DELETE":
+			err := store.deleteAlbum(id)
+			if err != nil {
+				if err.Error() == "album_in_use" {
+					writeV3ErrorResponse(w, http.StatusConflict, "Album is referenced by one or more tracks", "in_use")
+					return
+				}
+				writeV3Error(w, err)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
 		default:
-			MethodNotAllowed(w, []string{"GET"})
+			MethodNotAllowed(w, []string{"GET", "PUT", "DELETE"})
 		}
 	} else {
 		writeV3ErrorResponse(w, http.StatusNotFound, "Album Endpoint Not Found", "not_found")

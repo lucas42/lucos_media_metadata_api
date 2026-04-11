@@ -12,6 +12,7 @@ import (
 type LoganneInterface interface {
     post(string, string, Track, Track)
     collectionPost(string, string, Collection, Collection)
+    albumPost(string, string, AlbumV3, bool)
 }
 
 type Loganne struct {
@@ -39,6 +40,31 @@ func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack
 	} else if existingTrack.ID > 0 {
 		data["track"] = TrackToV3(existingTrack)
 		data["url"] = fmt.Sprintf("%s/tracks/%d", loganne.mediaMetadataManagerOrigin, existingTrack.ID)
+	}
+	postData, _ := json.Marshal(data)
+	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
+	if err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+	if _, err := http.DefaultClient.Do(req); err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+	}
+}
+
+func (loganne Loganne) albumPost(eventType string, humanReadable string, album AlbumV3, withURL bool) {
+	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "album", album)
+
+	data := map[string]interface{}{
+		"source":        loganne.source,
+		"type":          eventType,
+		"humanReadable": humanReadable,
+		"album":         album,
+	}
+	if withURL && album.URI != "" {
+		data["url"] = album.URI
 	}
 	postData, _ := json.Marshal(data)
 	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))

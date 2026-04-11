@@ -123,8 +123,8 @@ func TestAlbumMethodNotAllowed(test *testing.T) {
 	makeRequestWithUnallowedMethod(test, "/v3/albums", "PATCH", []string{"GET", "POST"})
 
 	setupRequest(test, "POST", "/v3/albums", `{"name":"Test Album"}`, 201)
-	makeRequestWithUnallowedMethod(test, "/v3/albums/1", "DELETE", []string{"GET"})
-	makeRequestWithUnallowedMethod(test, "/v3/albums/1", "PUT", []string{"GET"})
+	makeRequestWithUnallowedMethod(test, "/v3/albums/1", "POST", []string{"GET", "PUT", "DELETE"})
+	makeRequestWithUnallowedMethod(test, "/v3/albums/1", "PATCH", []string{"GET", "PUT", "DELETE"})
 }
 
 // TestTrackAlbumTagWrite checks that writing an album tag via URI stores the
@@ -214,4 +214,88 @@ func TestAlbumPersistsAcrossRestart(test *testing.T) {
 	setupRequest(test, "POST", "/v3/albums", `{"name":"Persistent Album"}`, 201)
 	restartServer()
 	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Persistent Album","uri":"/albums/1"}`, true)
+}
+
+// TestAlbumCreateLoganneEvent checks that creating an album fires an albumCreated Loganne event.
+func TestAlbumCreateLoganneEvent(test *testing.T) {
+	clearData()
+	makeRequest(test, "POST", "/v3/albums", `{"name":"Revolver"}`, 201, `{"id":1,"name":"Revolver","uri":"/albums/1"}`, true)
+	assertEqual(test, "loganne event type", "albumCreated", lastLoganneType)
+	assertEqual(test, "loganne album name", "Revolver", lastLoganneAlbum.Name)
+	assertEqual(test, "loganne album uri", "/albums/1", lastLoganneAlbum.URI)
+	if !lastLoganneAlbumWithURL {
+		test.Errorf("Expected albumCreated to include URL, but withURL was false")
+	}
+	assertEqual(test, "loganne request count", 1, loganneRequestCount)
+}
+
+// TestAlbumUpdate checks PUT /v3/albums/{id} renames the album.
+func TestAlbumUpdate(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	makeRequest(test, "PUT", "/v3/albums/1", `{"name":"Let It Be"}`, 200, `{"id":1,"name":"Let It Be","uri":"/albums/1"}`, true)
+	// Verify the rename persisted.
+	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Let It Be","uri":"/albums/1"}`, true)
+}
+
+// TestAlbumUpdateLoganneEvent checks that updating an album fires an albumUpdated Loganne event.
+func TestAlbumUpdateLoganneEvent(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	makeRequest(test, "PUT", "/v3/albums/1", `{"name":"Let It Be"}`, 200, `{"id":1,"name":"Let It Be","uri":"/albums/1"}`, true)
+	assertEqual(test, "loganne event type", "albumUpdated", lastLoganneType)
+	assertEqual(test, "loganne album name", "Let It Be", lastLoganneAlbum.Name)
+	if !lastLoganneAlbumWithURL {
+		test.Errorf("Expected albumUpdated to include URL, but withURL was false")
+	}
+}
+
+// TestAlbumUpdateNotFound checks PUT /v3/albums/{nonexistent} returns 404.
+func TestAlbumUpdateNotFound(test *testing.T) {
+	clearData()
+	makeRequest(test, "PUT", "/v3/albums/999", `{"name":"Let It Be"}`, 404, `{"error":"Album Not Found","code":"not_found"}`, true)
+}
+
+// TestAlbumUpdateDuplicateName checks PUT /v3/albums/{id} returns 409 on name collision.
+func TestAlbumUpdateDuplicateName(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Revolver"}`, 201)
+	makeRequest(test, "PUT", "/v3/albums/1", `{"name":"Revolver"}`, 409, `{"error":"An album with that name already exists","code":"duplicate_name"}`, true)
+}
+
+// TestAlbumDelete checks DELETE /v3/albums/{id} removes the album.
+func TestAlbumDelete(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	makeRequest(test, "DELETE", "/v3/albums/1", "", 204, "", false)
+	makeRequest(test, "GET", "/v3/albums/1", "", 404, `{"error":"Album Not Found","code":"not_found"}`, true)
+}
+
+// TestAlbumDeleteLoganneEvent checks that deleting an album fires an albumDeleted Loganne event without URL.
+func TestAlbumDeleteLoganneEvent(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Revolver"}`, 201)
+	makeRequest(test, "DELETE", "/v3/albums/1", "", 204, "", false)
+	assertEqual(test, "loganne event type", "albumDeleted", lastLoganneType)
+	assertEqual(test, "loganne album name", "Revolver", lastLoganneAlbum.Name)
+	if lastLoganneAlbumWithURL {
+		test.Errorf("Expected albumDeleted to NOT include URL, but withURL was true")
+	}
+}
+
+// TestAlbumDeleteNotFound checks DELETE /v3/albums/{nonexistent} returns 404.
+func TestAlbumDeleteNotFound(test *testing.T) {
+	clearData()
+	makeRequest(test, "DELETE", "/v3/albums/999", "", 404, `{"error":"Album Not Found","code":"not_found"}`, true)
+}
+
+// TestAlbumDeleteInUse checks DELETE /v3/albums/{id} returns 409 when tracks reference the album.
+func TestAlbumDeleteInUse(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	// Create a track that references the album.
+	setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/del-in-use/1"),
+		`{"fingerprint":"deltest1","duration":200,"tags":{"album":[{"uri":"/albums/1"}]}}`, 200)
+	makeRequest(test, "DELETE", "/v3/albums/1", "", 409, `{"error":"Album is referenced by one or more tracks","code":"in_use"}`, true)
 }
