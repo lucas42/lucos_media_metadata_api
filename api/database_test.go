@@ -375,38 +375,6 @@ func TestUpdateTagSplitsCSVTrimsWhitespace(test *testing.T) {
 	os.Remove(dbpath)
 }
 
-func TestMigrateMultiValueCSVSplitFixesReCorruptedData(test *testing.T) {
-	dbpath := "testmigratecsv.sqlite"
-	os.Remove(dbpath)
-	datastore := DBInit(dbpath, MockLoganne{})
-
-	// Simulate re-corrupted data: CSV value written after original migration
-	datastore.DB.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
-	datastore.DB.MustExec(`INSERT INTO predicate(id) VALUES('language')`)
-	datastore.DB.MustExec(`INSERT INTO predicate(id) VALUES('title')`)
-	datastore.DB.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'language', 'en,fr')`)
-	datastore.DB.MustExec(`INSERT INTO tag(trackid, predicateid, value) VALUES(1, 'title', 'Hello, World')`)
-
-	// Re-run init to trigger migration
-	datastore2 := DBInit(dbpath, MockLoganne{})
-
-	// Multi-value predicate CSV should be split
-	var langValues []string
-	datastore2.DB.Select(&langValues, "SELECT value FROM tag WHERE trackid = 1 AND predicateid = 'language' ORDER BY rowid")
-	if len(langValues) != 2 {
-		test.Fatalf("Expected 2 language values, got %d: %v", len(langValues), langValues)
-	}
-	assertEqual(test, "first language", "en", langValues[0])
-	assertEqual(test, "second language", "fr", langValues[1])
-
-	// Single-value predicate should be left alone
-	var titleValue string
-	datastore2.DB.Get(&titleValue, "SELECT value FROM tag WHERE trackid = 1 AND predicateid = 'title'")
-	assertEqual(test, "title should be preserved", "Hello, World", titleValue)
-
-	os.Remove(dbpath)
-}
-
 func TestMigrateEolasDataLanguage(test *testing.T) {
 	dbpath := "testmigration_eolas_language.sqlite"
 	os.Remove(dbpath)

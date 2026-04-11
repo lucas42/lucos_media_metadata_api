@@ -89,7 +89,6 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		`
 		database.DB.MustExec(sqlStmt)
 	}
-	database.migrateMultiValueCSVSplit()
 	if !database.ColExists("collection", "icon") {
 		slog.Info("Updating table `collection` to add icon field")
 		sqlStmt := `
@@ -135,43 +134,6 @@ func (store Datastore) ColExists(tablename string, colname string) (found bool) 
 		panic(err)
 	}
 	return
-}
-
-// migrateMultiValueCSVSplit finds any multi-value predicate tags that still
-// contain comma-separated values (written after the original migration) and
-// splits them into separate rows. This is idempotent — if no CSV values
-// exist, it does nothing.
-func (store Datastore) migrateMultiValueCSVSplit() {
-	for predicate, config := range predicateRegistry {
-		if !config.MultiValue {
-			continue
-		}
-		var rows []struct {
-			TrackID     string `db:"trackid"`
-			PredicateID string `db:"predicateid"`
-			Value       string `db:"value"`
-		}
-		err := store.DB.Select(&rows, "SELECT trackid, predicateid, value FROM tag WHERE predicateid = ? AND value LIKE '%,%'", predicate)
-		if err != nil {
-			panic(err)
-		}
-		for _, row := range rows {
-			parts := splitCSV(row.Value)
-			if len(parts) <= 1 {
-				// Single value that just happened to contain a comma with no split — skip
-				continue
-			}
-			slog.Info("Splitting CSV value in multi-value predicate",
-				"predicate", predicate, "trackid", row.TrackID,
-				"original", row.Value, "parts", len(parts))
-			store.DB.MustExec("DELETE FROM tag WHERE trackid = ? AND predicateid = ? AND value = ?",
-				row.TrackID, row.PredicateID, row.Value)
-			for _, part := range parts {
-				store.DB.MustExec("INSERT INTO tag(trackid, predicateid, value) VALUES(?, ?, ?)",
-					row.TrackID, row.PredicateID, part)
-			}
-		}
-	}
 }
 
 func (store Datastore) hasTagUniqueConstraint() bool {
