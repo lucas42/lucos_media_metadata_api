@@ -8,8 +8,16 @@ updates:
     open-pull-requests-limit: 10
     allow:
       - dependency-type: all
+  - package-ecosystem: docker
+    directory: /exporter
+    schedule:
+      interval: daily
+      time: '07:00'
+    open-pull-requests-limit: 10
+    allow:
+      - dependency-type: all
   - package-ecosystem: gomod
-    directory: /api
+    directory: /
     schedule:
       interval: daily
       time: '07:00'
