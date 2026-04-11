@@ -16,7 +16,7 @@ ENV CGO_ENABLED=1
 RUN go build -o /rdf-exporter ./main.go
 
 # Stage 2: Minimal runtime image
-FROM alpine:3.20
+FROM alpine:3.23
 
 # Install ca-certificates + busybox cron
 RUN apk add --no-cache ca-certificates bash busybox-extras procps
