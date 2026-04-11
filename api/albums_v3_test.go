@@ -77,6 +77,44 @@ func TestAlbumList(test *testing.T) {
 	assertEqual(test, "third album name", "Revolver", list.Albums[2].Name)
 }
 
+// TestAlbumSearch checks that GET /v3/albums?q=... filters by name substring.
+func TestAlbumSearch(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Let It Be"}`, 201)
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Theatre"}`, 201)
+
+	// q=Abbey should match "Abbey Road" and "Abbey Theatre", not "Let It Be"
+	request := basicRequest(test, "GET", "/v3/albums?q=Abbey", "")
+	resp, _ := doRawRequest(test, request)
+	var result AlbumListV3
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result.TotalItems != 2 {
+		test.Errorf("Expected 2 albums for q=Abbey, got %d", result.TotalItems)
+	}
+	if len(result.Albums) != 2 {
+		test.Errorf("Expected 2 albums in list for q=Abbey, got %d", len(result.Albums))
+	}
+
+	// q=road (case-insensitive) should match only "Abbey Road"
+	request2 := basicRequest(test, "GET", "/v3/albums?q=road", "")
+	resp2, _ := doRawRequest(test, request2)
+	var result2 AlbumListV3
+	json.NewDecoder(resp2.Body).Decode(&result2)
+	if result2.TotalItems != 1 {
+		test.Errorf("Expected 1 album for q=road, got %d", result2.TotalItems)
+	}
+
+	// No q = all 3 albums
+	request3 := basicRequest(test, "GET", "/v3/albums", "")
+	resp3, _ := doRawRequest(test, request3)
+	var result3 AlbumListV3
+	json.NewDecoder(resp3.Body).Decode(&result3)
+	if result3.TotalItems != 3 {
+		test.Errorf("Expected 3 albums with no q, got %d", result3.TotalItems)
+	}
+}
+
 // TestAlbumMethodNotAllowed checks that unsupported methods return 405.
 func TestAlbumMethodNotAllowed(test *testing.T) {
 	clearData()

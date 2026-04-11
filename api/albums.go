@@ -56,8 +56,9 @@ func ParseAlbumIDFromURI(uri string) (int, error) {
 	return id, nil
 }
 
-// getAllAlbums returns a paginated list of albums.
-func (store Datastore) getAllAlbums(rawpage string) (list AlbumListV3, err error) {
+// getAllAlbums returns a paginated list of albums, optionally filtered by a
+// case-insensitive substring match on name via the q parameter.
+func (store Datastore) getAllAlbums(rawpage, q string) (list AlbumListV3, err error) {
 	const standardLimit = 20
 
 	offset, limit := parsePageParam(rawpage, standardLimit)
@@ -67,18 +68,27 @@ func (store Datastore) getAllAlbums(rawpage string) (list AlbumListV3, err error
 		page = 1
 	}
 
-	var total int
-	err = store.DB.Get(&total, "SELECT COUNT(*) FROM album")
-	if err != nil {
-		return
-	}
-
 	type albumRow struct {
 		ID   int    `db:"id"`
 		Name string `db:"name"`
 	}
+
+	var total int
 	var rows []albumRow
-	err = store.DB.Select(&rows, "SELECT id, name FROM album ORDER BY name LIMIT $1 OFFSET $2", limit, offset)
+	if q != "" {
+		like := "%" + q + "%"
+		err = store.DB.Get(&total, "SELECT COUNT(*) FROM album WHERE name LIKE $1", like)
+		if err != nil {
+			return
+		}
+		err = store.DB.Select(&rows, "SELECT id, name FROM album WHERE name LIKE $1 ORDER BY name LIMIT $2 OFFSET $3", like, limit, offset)
+	} else {
+		err = store.DB.Get(&total, "SELECT COUNT(*) FROM album")
+		if err != nil {
+			return
+		}
+		err = store.DB.Select(&rows, "SELECT id, name FROM album ORDER BY name LIMIT $1 OFFSET $2", limit, offset)
+	}
 	if err != nil {
 		return
 	}
@@ -173,7 +183,7 @@ func (store Datastore) AlbumsV3Controller(w http.ResponseWriter, r *http.Request
 		// /v3/albums
 		switch r.Method {
 		case "GET":
-			list, err := store.getAllAlbums(r.URL.Query().Get("page"))
+			list, err := store.getAllAlbums(r.URL.Query().Get("page"), r.URL.Query().Get("q"))
 			if err != nil {
 				writeV3Error(w, err)
 				return
