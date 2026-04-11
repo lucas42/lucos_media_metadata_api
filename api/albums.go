@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"lucos_media_metadata_api/rdfgen"
 )
 
 // AlbumV3 is the v3 wire representation of an album.
@@ -227,6 +229,24 @@ func (store Datastore) resolveAlbumNameFromURI(uri string) (name string, err err
 	return
 }
 
+// writeAlbumRDFByID writes an RDF representation of a single album.
+func writeAlbumRDFByID(store Datastore, w http.ResponseWriter, id int, rdfType string) {
+	// Check existence first so we can return 404 for unknown albums.
+	_, err := store.getAlbumByID(id)
+	if err != nil {
+		writeRDFResponse(w, nil, rdfType, err)
+		return
+	}
+	rows, err := store.DB.Query("SELECT id, name FROM album WHERE id = $1", id)
+	if err != nil {
+		writeRDFResponse(w, nil, rdfType, err)
+		return
+	}
+	defer rows.Close()
+	graph, err := rdfgen.AlbumToRdf(rows)
+	writeRDFResponse(w, graph, rdfType, err)
+}
+
 // AlbumsV3Controller handles all requests to /v3/albums endpoints.
 func (store Datastore) AlbumsV3Controller(w http.ResponseWriter, r *http.Request) {
 	normalisedpath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v3/albums"), "/")
@@ -282,6 +302,11 @@ func (store Datastore) AlbumsV3Controller(w http.ResponseWriter, r *http.Request
 		}
 		switch r.Method {
 		case "GET":
+			isRDF, mime := prefersRDF(r)
+			if isRDF {
+				writeAlbumRDFByID(store, w, id, mime)
+				return
+			}
 			album, err := store.getAlbumByID(id)
 			if err != nil {
 				writeV3Error(w, err)
