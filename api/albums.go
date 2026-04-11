@@ -15,7 +15,7 @@ import (
 type AlbumV3 struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
-	URL  string `json:"url"`
+	URI  string `json:"uri"`
 }
 
 // AlbumListV3 wraps a paginated list of albums.
@@ -26,13 +26,15 @@ type AlbumListV3 struct {
 	TotalItems int       `json:"totalItems"`
 }
 
-// albumURL builds the canonical URL for an album given the store's AppOrigin.
-func (store Datastore) albumURL(id int) string {
-	return store.AppOrigin + "/v3/albums/" + strconv.Itoa(id)
+// albumURI builds the canonical URI for an album using the manager origin.
+// The URI uses the manager's path (/albums/{id}) rather than the API's v3 routing
+// so that content negotiation can serve an HTML page via the manager.
+func (store Datastore) albumURI(id int) string {
+	return store.ManagerOrigin + "/albums/" + strconv.Itoa(id)
 }
 
 // ParseAlbumIDFromURI extracts the numeric album ID from a URI whose path ends
-// with /v3/albums/{id}. Returns an error if the path doesn't match or the id
+// with /albums/{id}. Returns an error if the path doesn't match or the id
 // is not a positive integer.
 func ParseAlbumIDFromURI(uri string) (int, error) {
 	// Strip any trailing slash, then take the last path segment.
@@ -49,7 +51,7 @@ func ParseAlbumIDFromURI(uri string) (int, error) {
 	// Also verify the preceding segment is "albums".
 	before := trimmed[:idx]
 	if !strings.HasSuffix(before, "/albums") {
-		return 0, errors.New("album URI path does not match /v3/albums/{id}")
+		return 0, errors.New("album URI path does not match /albums/{id}")
 	}
 	return id, nil
 }
@@ -86,7 +88,7 @@ func (store Datastore) getAllAlbums(rawpage string) (list AlbumListV3, err error
 		albums[i] = AlbumV3{
 			ID:   row.ID,
 			Name: row.Name,
-			URL:  store.albumURL(row.ID),
+			URI:  store.albumURI(row.ID),
 		}
 	}
 
@@ -116,7 +118,7 @@ func (store Datastore) getAlbumByID(id int) (album AlbumV3, err error) {
 	album = AlbumV3{
 		ID:   row.ID,
 		Name: row.Name,
-		URL:  store.albumURL(row.ID),
+		URI:  store.albumURI(row.ID),
 	}
 	return
 }
@@ -139,7 +141,7 @@ func (store Datastore) createAlbum(name string) (album AlbumV3, err error) {
 	album = AlbumV3{
 		ID:   int(id64),
 		Name: name,
-		URL:  store.albumURL(int(id64)),
+		URI:  store.albumURI(int(id64)),
 	}
 	return
 }

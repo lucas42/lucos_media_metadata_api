@@ -15,13 +15,13 @@ func TestAlbumsGetEmpty(test *testing.T) {
 // TestAlbumCreate checks POST /v3/albums creates an album and returns 201.
 func TestAlbumCreate(test *testing.T) {
 	clearData()
-	makeRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201, `{"id":1,"name":"Abbey Road","url":"/v3/albums/1"}`, true)
+	makeRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
 }
 
 // TestAlbumCreateDuplicateName checks POST /v3/albums returns 409 on duplicate name.
 func TestAlbumCreateDuplicateName(test *testing.T) {
 	clearData()
-	makeRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201, `{"id":1,"name":"Abbey Road","url":"/v3/albums/1"}`, true)
+	makeRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
 	makeRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 409, `{"error":"An album with that name already exists","code":"duplicate_name"}`, true)
 }
 
@@ -36,7 +36,7 @@ func TestAlbumCreateNoName(test *testing.T) {
 func TestAlbumGetByID(test *testing.T) {
 	clearData()
 	setupRequest(test, "POST", "/v3/albums", `{"name":"Let It Be"}`, 201)
-	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Let It Be","url":"/v3/albums/1"}`, true)
+	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Let It Be","uri":"/albums/1"}`, true)
 }
 
 // TestAlbumGetByIDNotFound checks GET /v3/albums/{nonexistent} returns 404.
@@ -100,7 +100,7 @@ func TestTrackAlbumTagWrite(test *testing.T) {
 	trackURL := "http://example.org/albums-test/track1"
 	escapedURL := url.QueryEscape(trackURL)
 	trackPath := "/v3/tracks?url=" + escapedURL
-	setupRequest(test, "PUT", trackPath, `{"fingerprint":"albumtest1","duration":183,"tags":{"title":[{"name":"Come Together"}],"album":[{"uri":"/v3/albums/1"}]}}`, 200)
+	setupRequest(test, "PUT", trackPath, `{"fingerprint":"albumtest1","duration":183,"tags":{"title":[{"name":"Come Together"}],"album":[{"uri":"/albums/1"}]}}`, 200)
 
 	// GET the track and verify the album tag has both name and uri.
 	request := basicRequest(test, "GET", trackPath, "")
@@ -118,7 +118,7 @@ func TestTrackAlbumTagWrite(test *testing.T) {
 	}
 	albumObj := albumArr[0].(map[string]interface{})
 	assertEqual(test, "album name", "Abbey Road", albumObj["name"].(string))
-	assertEqual(test, "album uri", "/v3/albums/1", albumObj["uri"].(string))
+	assertEqual(test, "album uri", "/albums/1", albumObj["uri"].(string))
 }
 
 // TestTrackAlbumTagWriteBareNameRejected checks that writing an album tag with
@@ -149,7 +149,7 @@ func TestTrackAlbumTagWriteUnknownURIRejected(test *testing.T) {
 	escapedURL := url.QueryEscape(trackURL)
 	trackPath := "/v3/tracks?url=" + escapedURL
 
-	req := basicRequest(test, "PUT", trackPath, `{"fingerprint":"albumtest3","duration":100,"tags":{"album":[{"uri":"/v3/albums/999"}]}}`)
+	req := basicRequest(test, "PUT", trackPath, `{"fingerprint":"albumtest3","duration":100,"tags":{"album":[{"uri":"/albums/999"}]}}`)
 	resp, _ := doRawRequest(test, req)
 	// The error wraps "Album Not Found", which writeV3Error maps to 404.
 	if resp.StatusCode != 404 {
@@ -175,5 +175,5 @@ func TestAlbumPersistsAcrossRestart(test *testing.T) {
 	clearData()
 	setupRequest(test, "POST", "/v3/albums", `{"name":"Persistent Album"}`, 201)
 	restartServer()
-	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Persistent Album","url":"/v3/albums/1"}`, true)
+	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Persistent Album","uri":"/albums/1"}`, true)
 }

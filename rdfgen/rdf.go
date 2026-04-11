@@ -50,8 +50,11 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "album":
+		if uri == nil || *uri == "" {
+			return "", nil // skip tags with no URI — legacy freetext values are not valid IRIs
+		}
 		return "http://purl.org/dc/terms/isPartOf",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
+			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "genre":
 		return "http://purl.org/ontology/mo/genre",

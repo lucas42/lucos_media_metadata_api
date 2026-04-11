@@ -6,6 +6,7 @@
 //   1. Ask users to pause edits to album tags.
 //   2. Run this script against the production database:
 //        go run ./scripts/migrate_album_tags/ -db /var/lib/media-metadata/media.sqlite -origin https://media-metadata.l42.eu
+//      (use the MEDIA_METADATA_MANAGER_ORIGIN value, e.g. https://media-metadata.l42.eu)
 //   3. Deploy the updated API (reads return {name, uri}, writes require uri) and
 //      the updated UI together.
 //   4. Resume edits.
@@ -35,7 +36,7 @@ import (
 
 func main() {
 	dbPath := flag.String("db", "", "Path to the SQLite database file (required)")
-	origin := flag.String("origin", "", "APP_ORIGIN base URL, e.g. https://media-metadata.l42.eu (required)")
+	origin := flag.String("origin", "", "MEDIA_METADATA_MANAGER_ORIGIN base URL, e.g. https://media-metadata.l42.eu (required)")
 	dryRun := flag.Bool("dry-run", false, "Print what would be done without making any changes")
 	flag.Parse()
 
@@ -106,7 +107,7 @@ func main() {
 			log.Fatalf("get album id for %q: %v", name, err)
 		}
 
-		albumURL := fmt.Sprintf("%s/v3/albums/%d", appOrigin, albumID)
+		albumURL := fmt.Sprintf("%s/albums/%d", appOrigin, albumID)
 
 		// Rewrite all tag rows for this freetext value.
 		res, err := tx.Exec(`

@@ -13,7 +13,7 @@ import (
 type Datastore struct {
 	DB *sqlx.DB
 	Loganne LoganneInterface
-	AppOrigin string
+	ManagerOrigin string
 }
 
 func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
