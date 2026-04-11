@@ -26,6 +26,7 @@ var predicateRegistry = map[string]PredicateConfig{
 	"offence":  {MultiValue: true},
 	"about":    {MultiValue: true, RequiresURI: true},
 	"mentions": {MultiValue: true, RequiresURI: true},
+	"album":    {RequiresURI: true},
 }
 
 // GetPredicateConfig returns the configuration for a predicate.

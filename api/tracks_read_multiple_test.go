@@ -181,14 +181,19 @@ func TestPredicateQuery(test *testing.T) {
 func TestMultiPredicateQuery(test *testing.T) {
 	clearData()
 
+	// Create album entities first (album tags now require a URI).
+	// In tests, AppOrigin is "" so album URLs are /v3/albums/{id}.
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Now 42"}`, 201)
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Now 41"}`, 201)
+
 	// Album Now 42, Artist The Corrs
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"album":[{"name":"Now 42"}],"artist":[{"name":"The Corrs"}],"title":[{"name":"What Can I Do"}]}}`, 200)
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc1", `{"url":"http://example.org/track1", "duration": 7,"tags":{"album":[{"uri":"/v3/albums/1"}],"artist":[{"name":"The Corrs"}],"title":[{"name":"What Can I Do"}]}}`, 200)
 	// Album Now 42, Artist Beautiful South
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"album":[{"name":"Now 42"}],"artist":[{"name":"The Beautiful South"}],"title":[{"name":"How Long"}]}}`, 200)
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc2", `{"url":"http://example.org/track2", "duration": 7,"tags":{"album":[{"uri":"/v3/albums/1"}],"artist":[{"name":"The Beautiful South"}],"title":[{"name":"How Long"}]}}`, 200)
 	// Album Now 42, Artist Divine Comedy
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"album":[{"name":"Now 42"}],"artist":[{"name":"The Divine Comedy"}],"title":[{"name":"National Express"}]}}`, 200)
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc3", `{"url":"http://example.org/track3", "duration": 7,"tags":{"album":[{"uri":"/v3/albums/1"}],"artist":[{"name":"The Divine Comedy"}],"title":[{"name":"National Express"}]}}`, 200)
 	// Album Now 41, Artist Beautiful South
-	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"album":[{"name":"Now 41"}],"artist":[{"name":"The Beautiful South"}],"title":[{"name":"Perfect 10"}]}}`, 200)
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=abc4", `{"url":"http://example.org/track4", "duration": 7,"tags":{"album":[{"uri":"/v3/albums/2"}],"artist":[{"name":"The Beautiful South"}],"title":[{"name":"Perfect 10"}]}}`, 200)
 
 	request := basicRequest(test, "GET", "/v3/tracks?p.artist=The%20Beautiful%20South&p.album=Now%2042", "")
 	resp, _ := doRawRequest(test, request)

@@ -24,6 +24,7 @@ services:
       - MEDIA_METADATA_MANAGER_ORIGIN=https://media-metadata.l42.eu
       - PORT
       - KEY_LUCOS_EOLAS
+      - APP_ORIGIN
   exporter:
     build:
       dockerfile: exporter/Dockerfile

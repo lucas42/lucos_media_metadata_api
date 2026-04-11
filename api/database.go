@@ -13,11 +13,12 @@ import (
 type Datastore struct {
 	DB *sqlx.DB
 	Loganne LoganneInterface
+	AppOrigin string
 }
 
 func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
-	database = Datastore{db, loganne}
+	database = Datastore{DB: db, Loganne: loganne}
 	database.DB.MustExec("PRAGMA journal_mode=WAL;")
 	database.DB.MustExec("PRAGMA foreign_keys = ON;")
 	if !database.TableExists("track") {
@@ -112,6 +113,17 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 			}
 			database.updateCreateCollection(*oldCollection, newCollection, "all")
 		}
+	}
+
+	if !database.TableExists("album") {
+		slog.Info("Creating table `album`")
+		sqlStmt := `
+		CREATE TABLE "album" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"name" TEXT NOT NULL UNIQUE
+		);
+		`
+		database.DB.MustExec(sqlStmt)
 	}
 
 	// Migrate mentions/about/language tags to use uri column and import names from eolas
