@@ -53,7 +53,7 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 		if uri == nil || *uri == "" {
 			return "", nil // skip tags with no URI — legacy freetext values are not valid IRIs
 		}
-		return "http://purl.org/dc/terms/isPartOf",
+		return mediaMetadataManagerOrigin + "/ontology#onAlbum",
 			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "genre":
@@ -175,6 +175,12 @@ func ExportRDF(dbPath, outFile string) error {
 	}
 	defer rows.Close()
 
+	albumRows, err := db.Query(`SELECT id, name FROM album ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	defer albumRows.Close()
+
 	ontologyGraph, err := OntologyToRdf()
 	if err != nil {
 		return err
@@ -183,6 +189,11 @@ func ExportRDF(dbPath, outFile string) error {
 	if err != nil {
 		return err
 	}
+	albumGraph, err := AlbumToRdf(albumRows)
+	if err != nil {
+		return err
+	}
+	g.Merge(albumGraph)
 	g.Merge(ontologyGraph)
 
 	f, err := os.Create(outFile)
@@ -258,6 +269,31 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 
 	return g, nil
 }
+// AlbumToRdf converts rows from the album table into an RDF graph.
+// Each row must have columns: id (int), name (string).
+// Emits rdf:type mo:Record and skos:prefLabel for each album.
+func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
+	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
+	g := rdf2go.NewGraph("")
+
+	for rows.Next() {
+		var id int
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return g, err
+		}
+		subject := rdf2go.NewResource(fmt.Sprintf("%s/albums/%d", mediaMetadataManagerOrigin, id))
+		g.AddTriple(subject,
+			rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+			rdf2go.NewResource("http://purl.org/ontology/mo/Record"))
+		g.AddTriple(subject,
+			rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+			rdf2go.NewLiteral(name))
+	}
+
+	return g, nil
+}
+
 func OntologyToRdf() (*rdf2go.Graph, error) {
 	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	if mediaMetadataManagerOrigin == "" {
@@ -354,6 +390,36 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#subPropertyOf"),
 		rdf2go.NewResource(mediaMetadataManagerOrigin + "/ontology#mentions"),
 	)
+
+	// mo:Record class metadata — albums use this type
+	moRecord := rdf2go.NewResource("http://purl.org/ontology/mo/Record")
+	g.AddTriple(moRecord,
+		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		rdf2go.NewResource("http://www.w3.org/2002/07/owl#Class"))
+	g.AddTriple(moRecord,
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Album", "en"))
+	g.AddTriple(moRecord,
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"))
+
+	// onAlbum property: track→album, declared as owl:inverseOf mo:track
+	onAlbum := rdf2go.NewResource(ontologyURI + "#onAlbum")
+	g.AddTriple(onAlbum,
+		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		owlObjectProperty)
+	g.AddTriple(onAlbum,
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("On Album", "en"))
+	g.AddTriple(onAlbum,
+		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#domain"),
+		moTrack)
+	g.AddTriple(onAlbum,
+		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#range"),
+		moRecord)
+	g.AddTriple(onAlbum,
+		rdf2go.NewResource("http://www.w3.org/2002/07/owl#inverseOf"),
+		rdf2go.NewResource("http://purl.org/ontology/mo/track"))
 
 	return g, nil
 }

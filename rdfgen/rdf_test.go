@@ -80,6 +80,7 @@ func TestExportRDF(t *testing.T) {
 	_, err = db.Exec(`
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -143,6 +144,7 @@ func TestExportRDFUsesTagUriForAboutMentions(t *testing.T) {
 	_, err = db.Exec(`
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -243,6 +245,7 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 	_, err = db.Exec(`
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -285,6 +288,155 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 		if strings.Contains(output, absent) {
 			t.Errorf("expected %q to be absent from output (tag had no uri), but it was present", absent)
 		}
+	}
+}
+
+// TestMapPredicateAlbumUsesOnAlbum verifies that album tags now map to onAlbum, not dc:isPartOf.
+func TestMapPredicateAlbumUsesOnAlbum(t *testing.T) {
+	uri := "http://localhost:8020/albums/1"
+	pred, terms := mapPredicate("album", "Abbey Road", &uri, "http://localhost:8020")
+	if pred != "http://localhost:8020/ontology#onAlbum" {
+		t.Errorf("expected onAlbum predicate URI, got %q", pred)
+	}
+	if len(terms) != 1 {
+		t.Fatalf("expected 1 term, got %d", len(terms))
+	}
+	if !strings.Contains(terms[0].String(), "albums/1") {
+		t.Errorf("expected album URI in term, got %q", terms[0].String())
+	}
+}
+
+// TestAlbumToRdf verifies that AlbumToRdf emits mo:Record type and skos:prefLabel.
+func TestAlbumToRdf(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO album (id, name) VALUES (1, 'Abbey Road'), (2, 'Let It Be')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+
+	rows, err := db.Query("SELECT id, name FROM album ORDER BY id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	g, err := AlbumToRdf(rows)
+	if err != nil {
+		t.Fatalf("AlbumToRdf failed: %v", err)
+	}
+
+	var buf strings.Builder
+	if err := g.Serialize(&buf, "text/turtle"); err != nil {
+		t.Fatalf("serialize failed: %v", err)
+	}
+	output := buf.String()
+
+	if !strings.Contains(output, "albums/1") {
+		t.Error("expected album 1 URI in output")
+	}
+	if !strings.Contains(output, "albums/2") {
+		t.Error("expected album 2 URI in output")
+	}
+	if !strings.Contains(output, "mo/Record") {
+		t.Errorf("expected mo:Record type in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Abbey Road") {
+		t.Error("expected album name 'Abbey Road' in output")
+	}
+	if !strings.Contains(output, "Let It Be") {
+		t.Error("expected album name 'Let It Be' in output")
+	}
+}
+
+// TestExportRDFIncludesAlbums verifies that ExportRDF emits album triples alongside tracks.
+func TestExportRDFIncludesAlbums(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 120)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO album (id, name) VALUES (1, 'Abbey Road')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpFile := filepath.Join(tmpDir, "output.ttl")
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	if err := ExportRDF(dbPath, tmpFile); err != nil {
+		t.Fatalf("ExportRDF failed: %v", err)
+	}
+
+	content, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("could not read RDF output file: %v", err)
+	}
+	output := string(content)
+
+	if !strings.Contains(output, "Abbey Road") {
+		t.Error("expected album name 'Abbey Road' in export output")
+	}
+	if !strings.Contains(output, "albums/1") {
+		t.Error("expected album URI in export output")
+	}
+	if !strings.Contains(output, "mo/Record") {
+		t.Error("expected mo:Record type in export output")
+	}
+}
+
+// TestOntologyToRdfIncludesMoRecordAndOnAlbum verifies OntologyToRdf emits mo:Record metadata and onAlbum property.
+func TestOntologyToRdfIncludesMoRecordAndOnAlbum(t *testing.T) {
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+
+	g, err := OntologyToRdf()
+	if err != nil {
+		t.Fatalf("OntologyToRdf failed: %v", err)
+	}
+
+	var buf strings.Builder
+	if err := g.Serialize(&buf, "text/turtle"); err != nil {
+		t.Fatalf("serialize failed: %v", err)
+	}
+	output := buf.String()
+
+	if !strings.Contains(output, "mo/Record") {
+		t.Error("expected mo:Record in ontology output")
+	}
+	if !strings.Contains(output, "Album") {
+		t.Errorf("expected 'Album' prefLabel in ontology output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "onAlbum") {
+		t.Error("expected onAlbum property in ontology output")
+	}
+	if !strings.Contains(output, "mo/track") {
+		t.Error("expected mo:track inverseOf reference in ontology output")
 	}
 }
 

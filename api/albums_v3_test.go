@@ -2,7 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -298,4 +302,54 @@ func TestAlbumDeleteInUse(test *testing.T) {
 	setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/del-in-use/1"),
 		`{"fingerprint":"deltest1","duration":200,"tags":{"album":[{"uri":"/albums/1"}]}}`, 200)
 	makeRequest(test, "DELETE", "/v3/albums/1", "", 409, `{"error":"Album is referenced by one or more tracks","code":"in_use"}`, true)
+}
+
+// TestAlbumRDFNotFound checks that requesting RDF for a non-existent album returns 404.
+func TestAlbumRDFNotFound(test *testing.T) {
+	clearData()
+	request := basicRequest(test, "GET", "/v3/albums/999", "")
+	request.Header.Set("Accept", "text/turtle")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		test.Error(err)
+	}
+	if response.StatusCode != 404 {
+		test.Errorf("Expected 404 for missing album RDF, got %d", response.StatusCode)
+	}
+}
+
+// TestAlbumRDFByID checks that GET /v3/albums/{id} with Accept: text/turtle returns RDF.
+func TestAlbumRDFByID(test *testing.T) {
+	clearData()
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	defer os.Unsetenv("MEDIA_METADATA_MANAGER_ORIGIN")
+
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+
+	request := basicRequest(test, "GET", "/v3/albums/1", "")
+	request.Header.Set("Accept", "text/turtle")
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		test.Error(err)
+	}
+	responseData, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		test.Error(err)
+	}
+	body := string(responseData)
+
+	if response.StatusCode != 200 {
+		test.Errorf("Expected 200 for album RDF, got %d: %s", response.StatusCode, body)
+		return
+	}
+	if !strings.Contains(body, "albums/1") {
+		test.Errorf("Expected album URI in RDF response, got: %s", body)
+	}
+	if !strings.Contains(body, "mo/Record") {
+		test.Errorf("Expected mo:Record type in RDF response, got: %s", body)
+	}
+	if !strings.Contains(body, "Abbey Road") {
+		test.Errorf("Expected album name in RDF response, got: %s", body)
+	}
 }
