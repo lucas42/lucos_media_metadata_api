@@ -26,6 +26,7 @@ func main() {
 		mediaMetadataManagerOrigin: os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN"),
 	}
 	store := DBInit("/var/lib/media-metadata/media.sqlite", loganne)
+	store.ManagerOrigin = os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	var port string
 	if len(os.Getenv("PORT")) > 0 {
 		port = os.Getenv("PORT")

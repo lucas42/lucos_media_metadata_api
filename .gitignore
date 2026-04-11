@@ -24,6 +24,9 @@ _testmain.go
 *.prof
 
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
+api/api
 c.out
 
 media.sqlite~*

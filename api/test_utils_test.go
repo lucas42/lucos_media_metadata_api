@@ -21,6 +21,8 @@ var lastLoganneTrack Track
 var lastLoganneExistingTrack Track
 var lastLoganneUpdatedCollection Collection
 var lastLoganneExistingCollection Collection
+var lastLoganneAlbum AlbumV3
+var lastLoganneAlbumWithURL bool
 var loganneRequestCount int
 
 type MockLoganne struct {}
@@ -31,6 +33,7 @@ func (mock MockLoganne) post(eventType string, humanReadable string, track Track
 	lastLoganneExistingTrack = existingTrack
 	lastLoganneUpdatedCollection = Collection{}
 	lastLoganneExistingCollection = Collection{}
+	lastLoganneAlbum = AlbumV3{}
 	loganneRequestCount++
 }
 func (mock MockLoganne) collectionPost(eventType string, humanReadable string, updatedCollection Collection, existingCollection Collection) {
@@ -40,6 +43,18 @@ func (mock MockLoganne) collectionPost(eventType string, humanReadable string, u
 	lastLoganneExistingTrack = Track{}
 	lastLoganneUpdatedCollection = updatedCollection
 	lastLoganneExistingCollection = existingCollection
+	lastLoganneAlbum = AlbumV3{}
+	loganneRequestCount++
+}
+func (mock MockLoganne) albumPost(eventType string, humanReadable string, album AlbumV3, withURL bool) {
+	lastLoganneType = eventType
+	lastLoganneMessage = humanReadable
+	lastLoganneTrack = Track{}
+	lastLoganneExistingTrack = Track{}
+	lastLoganneUpdatedCollection = Collection{}
+	lastLoganneExistingCollection = Collection{}
+	lastLoganneAlbum = album
+	lastLoganneAlbumWithURL = withURL
 	loganneRequestCount++
 }
 
@@ -70,6 +85,8 @@ func restartServer() {
 	lastLoganneExistingTrack = Track{}
 	lastLoganneUpdatedCollection = Collection{}
 	lastLoganneExistingCollection = Collection{}
+	lastLoganneAlbum = AlbumV3{}
+	lastLoganneAlbumWithURL = false
 	loganneRequestCount = 0
 	store := DBInit("testrouting.sqlite", MockLoganne{})
 	server = httptest.NewServer(FrontController(store, "test_app1:staging=validkey;test_app2:staging=2ndvalidkey"))

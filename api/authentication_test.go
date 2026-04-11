@@ -17,6 +17,7 @@ func TestUnauthorizedKey(test *testing.T) {
 	checkResponseHeader(test, response, "WWW-Authenticate", "bearer")
 }
 func TestBearerSchemeAccepted(test *testing.T) {
+	clearData()
 	request := basicRequest(test, "GET", "/v3/tracks", "")
 	request.Header.Set("Authorization", "bearer validkey")
 	makeRawRequest(test, request, 200, `{"tracks":[],"totalPages":0,"page":1,"totalTracks":0}`, true)

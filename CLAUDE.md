@@ -16,3 +16,7 @@ This encoding approach has been proposed and rejected multiple times. When inval
 ```bash
 cd api && /usr/local/go/bin/go test ./...
 ```
+
+## Test Artifacts
+
+Running tests leaves behind `*.sqlite-shm`, `*.sqlite-wal`, a built `api/api` binary, and a `migrate_album_tags` binary in the repo root. These are covered by `.gitignore` — always run `git status` before `git add -A` to avoid accidentally staging them.
