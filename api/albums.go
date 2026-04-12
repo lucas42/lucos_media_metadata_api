@@ -178,10 +178,21 @@ func (store Datastore) updateAlbum(id int, name string) (album AlbumV3, err erro
 		err = errors.New("Album Not Found")
 		return
 	}
+
+	// Cascade the name change to all tag rows referencing this album.
+	albumURI := store.albumURI(id)
+	_, err = store.DB.Exec(
+		"UPDATE tag SET value = $1 WHERE predicateid = 'album' AND uri = $2",
+		name, albumURI,
+	)
+	if err != nil {
+		return
+	}
+
 	album = AlbumV3{
 		ID:   id,
 		Name: name,
-		URI:  store.albumURI(id),
+		URI:  albumURI,
 	}
 	store.Loganne.albumPost("albumUpdated", "Album \""+name+"\" updated", album, true)
 	return

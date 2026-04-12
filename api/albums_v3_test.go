@@ -242,6 +242,49 @@ func TestAlbumUpdate(test *testing.T) {
 	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Let It Be","uri":"/albums/1"}`, true)
 }
 
+// TestAlbumUpdateCascadesToTags checks that renaming an album cascades the name
+// change to all tag rows that reference the album.
+func TestAlbumUpdateCascadesToTags(test *testing.T) {
+	clearData()
+	// Create an album and tag a track to it.
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	trackURL := "http://example.org/cascade-test/track1"
+	escapedURL := url.QueryEscape(trackURL)
+	trackPath := "/v3/tracks?url=" + escapedURL
+	setupRequest(test, "PUT", trackPath, `{"fingerprint":"cascadetest1","duration":183,"tags":{"album":[{"uri":"/albums/1"}]}}`, 200)
+
+	// Verify the initial tag has the album name "Abbey Road".
+	request := basicRequest(test, "GET", trackPath, "")
+	resp, _ := doRawRequest(test, request)
+	var track map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&track)
+	tags := track["tags"].(map[string]interface{})
+	albumArr := tags["album"].([]interface{})
+	albumObj := albumArr[0].(map[string]interface{})
+	if albumObj["name"].(string) != "Abbey Road" {
+		test.Fatalf("Expected initial album name 'Abbey Road', got %q", albumObj["name"].(string))
+	}
+
+	// Now rename the album.
+	setupRequest(test, "PUT", "/v3/albums/1", `{"name":"Let It Be"}`, 200)
+
+	// Verify the tag's value was cascaded to the new name.
+	request2 := basicRequest(test, "GET", trackPath, "")
+	resp2, _ := doRawRequest(test, request2)
+	var track2 map[string]interface{}
+	json.NewDecoder(resp2.Body).Decode(&track2)
+	tags2 := track2["tags"].(map[string]interface{})
+	albumArr2 := tags2["album"].([]interface{})
+	albumObj2 := albumArr2[0].(map[string]interface{})
+	if albumObj2["name"].(string) != "Let It Be" {
+		test.Fatalf("Expected cascaded album name 'Let It Be', got %q", albumObj2["name"].(string))
+	}
+	// URI should remain unchanged.
+	if albumObj2["uri"].(string) != "/albums/1" {
+		test.Fatalf("Expected album uri '/albums/1', got %q", albumObj2["uri"].(string))
+	}
+}
+
 // TestAlbumUpdateLoganneEvent checks that updating an album fires an albumUpdated Loganne event.
 func TestAlbumUpdateLoganneEvent(test *testing.T) {
 	clearData()
