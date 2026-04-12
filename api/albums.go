@@ -163,8 +163,16 @@ func (store Datastore) createAlbum(name string) (album AlbumV3, err error) {
 // Returns "Album Not Found" if the id doesn't exist.
 func (store Datastore) updateAlbum(id int, name string) (album AlbumV3, err error) {
 	slog.Info("Update Album", "id", id, "name", name)
-	result, err := store.DB.Exec("UPDATE album SET name = $1 WHERE id = $2", name, id)
+
+	// Wrap both operations in a transaction to ensure atomicity.
+	tx, err := store.DB.Beginx()
 	if err != nil {
+		return
+	}
+
+	result, err := tx.Exec("UPDATE album SET name = $1 WHERE id = $2", name, id)
+	if err != nil {
+		_ = tx.Rollback()
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			err = errors.New("album_duplicate_name")
 		}
@@ -172,16 +180,36 @@ func (store Datastore) updateAlbum(id int, name string) (album AlbumV3, err erro
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
+		_ = tx.Rollback()
 		return
 	}
 	if rows == 0 {
+		_ = tx.Rollback()
 		err = errors.New("Album Not Found")
 		return
 	}
+
+	// Cascade the name change to all tag rows referencing this album.
+	albumURI := store.albumURI(id)
+	_, err = tx.Exec(
+		"UPDATE tag SET value = $1 WHERE predicateid = 'album' AND uri = $2",
+		name, albumURI,
+	)
+	if err != nil {
+		_ = tx.Rollback()
+		return
+	}
+
+	// Commit both operations atomically.
+	err = tx.Commit()
+	if err != nil {
+		return
+	}
+
 	album = AlbumV3{
 		ID:   id,
 		Name: name,
-		URI:  store.albumURI(id),
+		URI:  albumURI,
 	}
 	store.Loganne.albumPost("albumUpdated", "Album \""+name+"\" updated", album, true)
 	return
