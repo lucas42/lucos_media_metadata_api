@@ -2,10 +2,8 @@ package main
 
 import (
 	"errors"
-	"math"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 
@@ -24,28 +22,10 @@ func parsePageParam(rawpage string, standardLimit int) (offset int, limit int) {
 }
 
 /**
- * Run a basic search based on request GET parameters
- */
-func queryMultipleTracks(store Datastore, r *http.Request) (tracks []Track, totalPages int, err error) {
-	predicates := make(map[string]string)
-	for key, value := range r.URL.Query() {
-		if strings.HasPrefix(key, "p.") {
-			predicates[key[2:len(key)]] = value[0]
-		}
-	}
-	standardLimit := 20
-	offset, limit := parsePageParam(r.URL.Query().Get("page"), standardLimit)
-	var totalTracks int
-	tracks, totalTracks, err = store.searchByPredicates(predicates, map[string]string{}, offset, limit)
-	totalPages = int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
-	return tracks, totalPages, err
-}
-
-/**
  * Updates a set of tracks based on get parameters
  */
 func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Track) (result SearchResult, action string, err error) {
-	tracks, totalPages, err := queryMultipleTracks(store, r)
+	tracks, totalPages, _, _, err := queryMultipleTracksV3(store, r)
 	result.TotalPages = totalPages
 	if err != nil {
 		return
