@@ -36,7 +36,7 @@ func queryMultipleTracks(store Datastore, r *http.Request) (tracks []Track, tota
 	standardLimit := 20
 	offset, limit := parsePageParam(r.URL.Query().Get("page"), standardLimit)
 	var totalTracks int
-	tracks, totalTracks, err = store.searchByPredicates(predicates, offset, limit)
+	tracks, totalTracks, err = store.searchByPredicates(predicates, map[string]string{}, offset, limit)
 	totalPages = int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
 	return tracks, totalPages, err
 }
