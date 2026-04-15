@@ -241,6 +241,78 @@ func (store Datastore) deleteAlbum(id int) error {
 	return nil
 }
 
+// mergeAlbums merges one or more source albums into the target album.
+// In a single transaction it repoints all tag rows referencing source album
+// URIs to the target album URI, then deletes the source album records.
+// An albumMerged Loganne event is emitted for each source deleted.
+// Returns the updated target album on success.
+func (store Datastore) mergeAlbums(targetID int, sourceIDs []int) (album AlbumV3, err error) {
+	slog.Info("Merge Albums", "targetID", targetID, "sourceIDs", sourceIDs)
+
+	// Validate: target must not be listed as a source.
+	for _, id := range sourceIDs {
+		if id == targetID {
+			err = errors.New("merge_target_in_sources")
+			return
+		}
+	}
+
+	// Verify target exists.
+	target, err := store.getAlbumByID(targetID)
+	if err != nil {
+		return
+	}
+
+	// Verify all source albums exist upfront.
+	sources := make([]AlbumV3, len(sourceIDs))
+	for i, id := range sourceIDs {
+		var src AlbumV3
+		src, err = store.getAlbumByID(id)
+		if err != nil {
+			return
+		}
+		sources[i] = src
+	}
+
+	targetURI := store.albumURI(targetID)
+
+	tx, err := store.DB.Beginx()
+	if err != nil {
+		return
+	}
+
+	for _, src := range sources {
+		// Repoint all tag rows that reference this source album URI.
+		_, err = tx.Exec(
+			"UPDATE tag SET uri = $1, value = $2 WHERE predicateid = 'album' AND uri = $3",
+			targetURI, target.Name, src.URI,
+		)
+		if err != nil {
+			_ = tx.Rollback()
+			return
+		}
+		// Delete the source album record.
+		_, err = tx.Exec("DELETE FROM album WHERE id = $1", src.ID)
+		if err != nil {
+			_ = tx.Rollback()
+			return
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return
+	}
+
+	// Emit albumMerged event for each deleted source album.
+	for _, src := range sources {
+		store.Loganne.albumMergedPost("albumMerged", "Album \""+src.Name+"\" merged into \""+target.Name+"\"", src, target)
+	}
+
+	album = target
+	return
+}
+
 // resolveAlbumNameFromURI extracts the album id from a URI and returns the
 // album's name. Used on write to populate the tag value when an album tag
 // is written with a URI only.
@@ -321,6 +393,35 @@ func (store Datastore) AlbumsV3Controller(w http.ResponseWriter, r *http.Request
 		default:
 			MethodNotAllowed(w, []string{"GET", "POST"})
 		}
+	} else if len(pathparts) == 2 && pathparts[1] == "merge" {
+		// /v3/albums/merge
+		if r.Method != "POST" {
+			MethodNotAllowed(w, []string{"POST"})
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeV3Error(w, err)
+			return
+		}
+		var input struct {
+			TargetID  int   `json:"targetId"`
+			SourceIDs []int `json:"sourceIds"`
+		}
+		if err = json.Unmarshal(body, &input); err != nil || input.TargetID <= 0 || len(input.SourceIDs) == 0 {
+			writeV3ErrorResponse(w, http.StatusBadRequest, "Request body must include a positive \"targetId\" and a non-empty \"sourceIds\" array", "bad_request")
+			return
+		}
+		album, err := store.mergeAlbums(input.TargetID, input.SourceIDs)
+		if err != nil {
+			if err.Error() == "merge_target_in_sources" {
+				writeV3ErrorResponse(w, http.StatusBadRequest, "Target album cannot also be listed as a source", "bad_request")
+				return
+			}
+			writeV3Error(w, err)
+			return
+		}
+		writeJSONResponse(w, album, nil)
 	} else if len(pathparts) == 2 {
 		// /v3/albums/{id}
 		id, err := strconv.Atoi(pathparts[1])

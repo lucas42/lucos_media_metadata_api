@@ -13,6 +13,7 @@ type LoganneInterface interface {
     post(string, string, Track, Track)
     collectionPost(string, string, Collection, Collection)
     albumPost(string, string, AlbumV3, bool)
+    albumMergedPost(string, string, AlbumV3, AlbumV3)
 }
 
 type Loganne struct {
@@ -65,6 +66,34 @@ func (loganne Loganne) albumPost(eventType string, humanReadable string, album A
 	}
 	if withURL && album.URI != "" {
 		data["url"] = album.URI
+	}
+	postData, _ := json.Marshal(data)
+	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
+	if err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+	if _, err := http.DefaultClient.Do(req); err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+	}
+}
+
+// albumMergedPost emits an albumMerged Loganne event, matching the entityMerged
+// shape: url and targetUri point to the surviving target album; sourceUri identifies
+// the album that was merged away. The album field carries the source album data.
+func (loganne Loganne) albumMergedPost(eventType string, humanReadable string, sourceAlbum AlbumV3, targetAlbum AlbumV3) {
+	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "sourceAlbum", sourceAlbum, "targetAlbum", targetAlbum)
+
+	data := map[string]interface{}{
+		"source":        loganne.source,
+		"type":          eventType,
+		"humanReadable": humanReadable,
+		"album":         sourceAlbum,
+		"url":           targetAlbum.URI,
+		"sourceUri":     sourceAlbum.URI,
+		"targetUri":     targetAlbum.URI,
 	}
 	postData, _ := json.Marshal(data)
 	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))

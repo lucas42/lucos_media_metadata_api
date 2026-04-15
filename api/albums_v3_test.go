@@ -396,3 +396,130 @@ func TestAlbumRDFByID(test *testing.T) {
 		test.Errorf("Expected album name in RDF response, got: %s", body)
 	}
 }
+
+// TestAlbumMerge checks POST /v3/albums/merge merges a source into target.
+func TestAlbumMerge(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)  // id=1
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Let It Be"}`, 201)   // id=2
+
+	makeRequest(test, "POST", "/v3/albums/merge", `{"targetId":1,"sourceIds":[2]}`, 200, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
+
+	// Source album should be gone.
+	makeRequest(test, "GET", "/v3/albums/2", "", 404, `{"error":"Album Not Found","code":"not_found"}`, true)
+	// Target album should still exist.
+	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
+	// Only one album should remain in total.
+	request := basicRequest(test, "GET", "/v3/albums", "")
+	resp, _ := doRawRequest(test, request)
+	var list AlbumListV3
+	json.NewDecoder(resp.Body).Decode(&list)
+	if list.TotalItems != 1 {
+		test.Errorf("Expected 1 album after merge, got %d", list.TotalItems)
+	}
+}
+
+// TestAlbumMergeMultipleSources checks merging multiple source albums into a target.
+func TestAlbumMergeMultipleSources(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)  // id=1
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Let It Be"}`, 201)   // id=2
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Revolver"}`, 201)    // id=3
+
+	makeRequest(test, "POST", "/v3/albums/merge", `{"targetId":1,"sourceIds":[2,3]}`, 200, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
+
+	// Both sources should be gone.
+	makeRequest(test, "GET", "/v3/albums/2", "", 404, `{"error":"Album Not Found","code":"not_found"}`, true)
+	makeRequest(test, "GET", "/v3/albums/3", "", 404, `{"error":"Album Not Found","code":"not_found"}`, true)
+	// Target should remain.
+	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
+}
+
+// TestAlbumMergeRepoints checks that track tags referencing source albums are repointed to the target.
+func TestAlbumMergeRepoints(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201) // id=1 (target)
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Let It Be"}`, 201)  // id=2 (source)
+
+	// Tag a track to the source album.
+	trackPath := "/v3/tracks?url=" + url.QueryEscape("http://example.org/merge-test/track1")
+	setupRequest(test, "PUT", trackPath, `{"fingerprint":"mergetest1","duration":200,"tags":{"album":[{"uri":"/albums/2"}]}}`, 200)
+
+	// Merge source (id=2) into target (id=1).
+	setupRequest(test, "POST", "/v3/albums/merge", `{"targetId":1,"sourceIds":[2]}`, 200)
+
+	// The track's album tag should now reference the target album.
+	request := basicRequest(test, "GET", trackPath, "")
+	resp, _ := doRawRequest(test, request)
+	var track map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&track)
+	tags := track["tags"].(map[string]interface{})
+	albumArr := tags["album"].([]interface{})
+	albumObj := albumArr[0].(map[string]interface{})
+	assertEqual(test, "album uri after merge", "/albums/1", albumObj["uri"].(string))
+	assertEqual(test, "album name after merge", "Abbey Road", albumObj["name"].(string))
+}
+
+// TestAlbumMergeLoganneEvent checks that merging emits an albumMerged Loganne event per source.
+func TestAlbumMergeLoganneEvent(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201) // id=1 target
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Let It Be"}`, 201)  // id=2 source
+	loganneRequestCount = 0
+
+	makeRequest(test, "POST", "/v3/albums/merge", `{"targetId":1,"sourceIds":[2]}`, 200, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
+
+	assertEqual(test, "loganne event type", "albumMerged", lastLoganneType)
+	assertEqual(test, "loganne source album name", "Let It Be", lastLoganneAlbum.Name)
+	assertEqual(test, "loganne source album uri", "/albums/2", lastLoganneAlbum.URI)
+	assertEqual(test, "loganne target album name", "Abbey Road", lastLoganneTargetAlbum.Name)
+	assertEqual(test, "loganne target album uri", "/albums/1", lastLoganneTargetAlbum.URI)
+	assertEqual(test, "loganne request count", 1, loganneRequestCount)
+}
+
+// TestAlbumMergeMissingTargetID checks that POST /v3/albums/merge without targetId returns 400.
+func TestAlbumMergeMissingTargetID(test *testing.T) {
+	clearData()
+	makeRequest(test, "POST", "/v3/albums/merge", `{"sourceIds":[1]}`, 400, `{"error":"Request body must include a positive \"targetId\" and a non-empty \"sourceIds\" array","code":"bad_request"}`, true)
+}
+
+// TestAlbumMergeMissingSourceIDs checks that POST /v3/albums/merge without sourceIds returns 400.
+func TestAlbumMergeMissingSourceIDs(test *testing.T) {
+	clearData()
+	makeRequest(test, "POST", "/v3/albums/merge", `{"targetId":1}`, 400, `{"error":"Request body must include a positive \"targetId\" and a non-empty \"sourceIds\" array","code":"bad_request"}`, true)
+}
+
+// TestAlbumMergeEmptySourceIDs checks that POST /v3/albums/merge with empty sourceIds returns 400.
+func TestAlbumMergeEmptySourceIDs(test *testing.T) {
+	clearData()
+	makeRequest(test, "POST", "/v3/albums/merge", `{"targetId":1,"sourceIds":[]}`, 400, `{"error":"Request body must include a positive \"targetId\" and a non-empty \"sourceIds\" array","code":"bad_request"}`, true)
+}
+
+// TestAlbumMergeTargetInSources checks that POST /v3/albums/merge returns 400 when target is also a source.
+func TestAlbumMergeTargetInSources(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	makeRequest(test, "POST", "/v3/albums/merge", `{"targetId":1,"sourceIds":[1]}`, 400, `{"error":"Target album cannot also be listed as a source","code":"bad_request"}`, true)
+}
+
+// TestAlbumMergeUnknownTarget checks that POST /v3/albums/merge with an unknown target ID returns 404.
+func TestAlbumMergeUnknownTarget(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Let It Be"}`, 201)
+	makeRequest(test, "POST", "/v3/albums/merge", `{"targetId":999,"sourceIds":[1]}`, 404, `{"error":"Album Not Found","code":"not_found"}`, true)
+}
+
+// TestAlbumMergeUnknownSource checks that POST /v3/albums/merge with an unknown source ID returns 404.
+func TestAlbumMergeUnknownSource(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	makeRequest(test, "POST", "/v3/albums/merge", `{"targetId":1,"sourceIds":[999]}`, 404, `{"error":"Album Not Found","code":"not_found"}`, true)
+}
+
+// TestAlbumMergeMethodNotAllowed checks that non-POST methods on /v3/albums/merge return 405.
+func TestAlbumMergeMethodNotAllowed(test *testing.T) {
+	clearData()
+	makeRequestWithUnallowedMethod(test, "/v3/albums/merge", "GET", []string{"POST"})
+	makeRequestWithUnallowedMethod(test, "/v3/albums/merge", "PUT", []string{"POST"})
+	makeRequestWithUnallowedMethod(test, "/v3/albums/merge", "DELETE", []string{"POST"})
+}
