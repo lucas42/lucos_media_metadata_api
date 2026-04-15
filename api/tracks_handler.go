@@ -60,6 +60,8 @@ func writeV3Error(w http.ResponseWriter, err error) {
 		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "bad_request")
 	} else if strings.Contains(msg, "requires a URI") {
 		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "requires_uri")
+	} else if strings.Contains(msg, "does not support URI-based filtering") {
+		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "bad_request")
 	} else {
 		writeV3ErrorResponse(w, http.StatusInternalServerError, msg, "internal_error")
 		slog.Error("Internal Server Error", slog.Any("error", err))
@@ -591,7 +593,7 @@ func trackV3ToInternal(v3 TrackV3) Track {
 	}
 }
 
-// queryMultipleTracksV3 wraps queryMultipleTracks with richer pagination data.
+// queryMultipleTracksV3 parses predicate filters from request query parameters and returns matching tracks with pagination data.
 func queryMultipleTracksV3(store Datastore, r *http.Request) (tracks []Track, totalPages int, totalTracks int, page int, err error) {
 	standardLimit := 20
 	rawPage := r.URL.Query().Get("page")
@@ -604,13 +606,24 @@ func queryMultipleTracksV3(store Datastore, r *http.Request) (tracks []Track, to
 	}
 
 	predicates := make(map[string]string)
+	uriPredicates := make(map[string]string)
 	for key, value := range r.URL.Query() {
 		if strings.HasPrefix(key, "p.") {
-			predicates[key[2:]] = value[0]
+			predicateName := key[2:]
+			if strings.HasSuffix(predicateName, ".uri") {
+				predicateName = predicateName[:len(predicateName)-4]
+				if !GetPredicateConfig(predicateName).RequiresURI {
+					err = fmt.Errorf("predicate %q does not support URI-based filtering", predicateName)
+					return
+				}
+				uriPredicates[predicateName] = value[0]
+			} else {
+				predicates[predicateName] = value[0]
+			}
 		}
 	}
 	offset, limit := parsePageParam(rawPage, standardLimit)
-	tracks, totalTracks, err = store.searchByPredicates(predicates, offset, limit)
+	tracks, totalTracks, err = store.searchByPredicates(predicates, uriPredicates, offset, limit)
 	totalPages = int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
 	return
 }

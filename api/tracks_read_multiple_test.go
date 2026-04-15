@@ -330,3 +330,115 @@ func TestTrackQueryPagination(test *testing.T) {
 		}
 	}
 }
+
+/**
+ * Checks that p.{predicate}.uri=... filters on tag.uri rather than tag.value
+ */
+func TestURIPredicateQuery(test *testing.T) {
+	clearData()
+
+	// Create two albums
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Let It Be"}`, 201)
+
+	// Track on Abbey Road
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=uri1", `{"url":"http://example.org/track1", "duration": 7, "tags":{"album":[{"uri":"/albums/1"}], "title":[{"name":"Come Together"}]}}`, 200)
+	// Track on Let It Be
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=uri2", `{"url":"http://example.org/track2", "duration": 7, "tags":{"album":[{"uri":"/albums/2"}], "title":[{"name":"Get Back"}]}}`, 200)
+	// Track with no album
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=uri3", `{"url":"http://example.org/track3", "duration": 7, "tags":{"title":[{"name":"Something Else"}]}}`, 200)
+
+	// Search by album URI — should return only the Abbey Road track
+	request := basicRequest(test, "GET", "/v3/tracks?p.album.uri=%2Falbums%2F1", "")
+	resp, _ := doRawRequest(test, request)
+	var result SearchResultV3
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if len(result.Tracks) != 1 {
+		test.Errorf("Expected 1 track for p.album.uri=/albums/1, got %d", len(result.Tracks))
+	}
+	if len(result.Tracks) > 0 && result.Tracks[0].ID != 1 {
+		test.Errorf("Expected track 1, got track %d", result.Tracks[0].ID)
+	}
+}
+
+/**
+ * Checks that p.{predicate}.uri=... returns multilingual tracks (subset matching, same as value-based filter)
+ */
+func TestURIPredicateQuerySubsetMatch(test *testing.T) {
+	clearData()
+
+	frenchURI := "https://eolas.l42.eu/metadata/language/french/"
+	englishURI := "https://eolas.l42.eu/metadata/language/english/"
+
+	// French-only track
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=ml1", fmt.Sprintf(`{"url":"http://example.org/track1", "duration": 7, "tags":{"language":[{"uri":%q}], "title":[{"name":"Une Chanson"}]}}`, frenchURI), 200)
+	// Bilingual French+English track
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=ml2", fmt.Sprintf(`{"url":"http://example.org/track2", "duration": 7, "tags":{"language":[{"uri":%q},{"uri":%q}], "title":[{"name":"A Bilingual Song"}]}}`, frenchURI, englishURI), 200)
+	// English-only track
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=ml3", fmt.Sprintf(`{"url":"http://example.org/track3", "duration": 7, "tags":{"language":[{"uri":%q}], "title":[{"name":"An English Song"}]}}`, englishURI), 200)
+
+	// Search for French tracks — should return both the French-only and bilingual tracks
+	request := basicRequest(test, "GET", "/v3/tracks?p.language.uri="+url.QueryEscape(frenchURI), "")
+	resp, _ := doRawRequest(test, request)
+	var result SearchResultV3
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if len(result.Tracks) != 2 {
+		test.Errorf("Expected 2 French tracks (including multilingual), got %d", len(result.Tracks))
+	}
+	for _, track := range result.Tracks {
+		if track.ID == 3 {
+			test.Errorf("English-only track should not appear in French URI search")
+		}
+	}
+}
+
+/**
+ * Checks that p.{predicate}.uri=... combined with a value filter narrows results correctly
+ */
+func TestCombinedValueAndURIPredicateQuery(test *testing.T) {
+	clearData()
+
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Let It Be"}`, 201)
+
+	// Abbey Road, Beatles
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=cv1", `{"url":"http://example.org/track1", "duration": 7, "tags":{"album":[{"uri":"/albums/1"}], "artist":[{"name":"The Beatles"}]}}`, 200)
+	// Let It Be, Beatles
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=cv2", `{"url":"http://example.org/track2", "duration": 7, "tags":{"album":[{"uri":"/albums/2"}], "artist":[{"name":"The Beatles"}]}}`, 200)
+	// Abbey Road, other artist
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=cv3", `{"url":"http://example.org/track3", "duration": 7, "tags":{"album":[{"uri":"/albums/1"}], "artist":[{"name":"Someone Else"}]}}`, 200)
+
+	// URI filter for Abbey Road + value filter for Beatles — should return only track 1
+	request := basicRequest(test, "GET", "/v3/tracks?p.album.uri=%2Falbums%2F1&p.artist=The+Beatles", "")
+	resp, _ := doRawRequest(test, request)
+	var result SearchResultV3
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	if len(result.Tracks) != 1 {
+		test.Errorf("Expected 1 track for Abbey Road URI + Beatles artist, got %d", len(result.Tracks))
+	}
+	if len(result.Tracks) > 0 && result.Tracks[0].ID != 1 {
+		test.Errorf("Expected track 1, got track %d", result.Tracks[0].ID)
+	}
+}
+
+/**
+ * Checks that p.{predicate}.uri=... returns 400 for predicates that don't use URIs
+ */
+func TestURIPredicateQueryNonURIPredicate(test *testing.T) {
+	clearData()
+
+	request := basicRequest(test, "GET", "/v3/tracks?p.title.uri=http://example.org/something", "")
+	resp, _ := doRawRequest(test, request)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		test.Errorf("Expected 400 for p.title.uri (title doesn't use URIs), got %d", resp.StatusCode)
+	}
+	var errResp V3Error
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp.Code != "bad_request" {
+		test.Errorf("Expected error code 'bad_request', got %q", errResp.Code)
+	}
+}

@@ -14,10 +14,10 @@ type SearchResult struct {
 }
 
 /**
- * Searches for tracks based on a map of predicates and their values
+ * Searches for tracks based on a map of predicates and their values, and/or a map of predicates and their URIs.
  *
  */
-func (store Datastore) searchByPredicates(predicates map[string]string, offset int, limit int) (tracks []Track, totalTracks int, err error) {
+func (store Datastore) searchByPredicates(predicates map[string]string, uriPredicates map[string]string, offset int, limit int) (tracks []Track, totalTracks int, err error) {
 	tracks = []Track{}
 	dbQuery := "SELECT id, url, fingerprint, duration, weighting FROM track"
 	var values []interface{}
@@ -35,6 +35,12 @@ func (store Datastore) searchByPredicates(predicates map[string]string, offset i
 			dbQuery += " INNER JOIN tag AS "+table+" ON "+table+".trackid = track.id AND "+table+".predicateid = ? AND "+table+".value = ?"
 			values = append(values, key, value)
 		}
+	}
+	for key, uri := range uriPredicates {
+		tagCount++
+		table := "tag"+strconv.Itoa(tagCount)
+		dbQuery += " INNER JOIN tag AS "+table+" ON "+table+".trackid = track.id AND "+table+".predicateid = ? AND "+table+".uri = ?"
+		values = append(values, key, uri)
 	}
 	if len(whereClauses) > 0 {
 		dbQuery += " WHERE " + strings.Join(whereClauses, " AND ")
