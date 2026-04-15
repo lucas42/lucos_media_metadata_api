@@ -470,10 +470,10 @@ func TestAlbumMergeLoganneEvent(test *testing.T) {
 	makeRequest(test, "POST", "/v3/albums/merge", `{"targetId":1,"sourceIds":[2]}`, 200, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
 
 	assertEqual(test, "loganne event type", "albumMerged", lastLoganneType)
-	assertEqual(test, "loganne album name (source)", "Let It Be", lastLoganneAlbum.Name)
-	if lastLoganneAlbumWithURL {
-		test.Errorf("Expected albumMerged to NOT include URL for deleted source, but withURL was true")
-	}
+	assertEqual(test, "loganne source album name", "Let It Be", lastLoganneAlbum.Name)
+	assertEqual(test, "loganne source album uri", "/albums/2", lastLoganneAlbum.URI)
+	assertEqual(test, "loganne target album name", "Abbey Road", lastLoganneTargetAlbum.Name)
+	assertEqual(test, "loganne target album uri", "/albums/1", lastLoganneTargetAlbum.URI)
 	assertEqual(test, "loganne request count", 1, loganneRequestCount)
 }
 

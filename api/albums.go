@@ -274,12 +274,6 @@ func (store Datastore) mergeAlbums(targetID int, sourceIDs []int) (album AlbumV3
 		sources[i] = src
 	}
 
-	// Pre-flight: warn about album tags that have no URI and would not be repointed.
-	var noURICount int
-	if qErr := store.DB.Get(&noURICount, `SELECT COUNT(*) FROM tag WHERE predicateid = 'album' AND (uri = '' OR uri IS NULL)`); qErr == nil && noURICount > 0 {
-		slog.Warn("Album tags with missing URI found; these will not be repointed by the merge", "count", noURICount)
-	}
-
 	targetURI := store.albumURI(targetID)
 
 	tx, err := store.DB.Beginx()
@@ -312,7 +306,7 @@ func (store Datastore) mergeAlbums(targetID int, sourceIDs []int) (album AlbumV3
 
 	// Emit albumMerged event for each deleted source album.
 	for _, src := range sources {
-		store.Loganne.albumPost("albumMerged", "Album \""+src.Name+"\" merged into \""+target.Name+"\"", src, false)
+		store.Loganne.albumMergedPost("albumMerged", "Album \""+src.Name+"\" merged into \""+target.Name+"\"", src, target)
 	}
 
 	album = target
