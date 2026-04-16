@@ -1,4 +1,6 @@
 FROM golang:1.26
+ARG VERSION
+ENV VERSION=$VERSION
 
 WORKDIR /go/src/lucos_media_metadata_api
 
