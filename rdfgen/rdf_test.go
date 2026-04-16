@@ -359,6 +359,16 @@ func TestAlbumToRdf(t *testing.T) {
 	if !strings.Contains(output, "Let It Be") {
 		t.Error("expected album name 'Let It Be' in output")
 	}
+	// Type-level metadata for mo:Record must be inline so the document is self-contained
+	if !strings.Contains(output, "Album") {
+		t.Errorf("expected mo:Record prefLabel 'Album' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "hasCategory") {
+		t.Errorf("expected eolas:hasCategory triple for mo:Record in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Musical") {
+		t.Errorf("expected eolas:Musical in output, got:\n%s", output)
+	}
 }
 
 // TestExportRDFIncludesAlbums verifies that ExportRDF emits album triples alongside tracks.

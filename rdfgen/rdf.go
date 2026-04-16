@@ -271,10 +271,30 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 }
 // AlbumToRdf converts rows from the album table into an RDF graph.
 // Each row must have columns: id (int), name (string).
-// Emits rdf:type mo:Record and skos:prefLabel for each album.
+// Emits rdf:type mo:Record and skos:prefLabel for each album,
+// plus type-level metadata for mo:Record itself so the document is self-contained.
 func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	g := rdf2go.NewGraph("")
+	moRecord := rdf2go.NewResource("http://purl.org/ontology/mo/Record")
+	g.AddTriple(moRecord,
+		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		rdf2go.NewResource("http://www.w3.org/2002/07/owl#Class"),
+	)
+	g.AddTriple(moRecord,
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Album", "en"),
+	)
+	g.AddTriple(
+		moRecord,
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"),
+	)
+	g.AddTriple(
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"),
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Musical", "en"),
+	)
 
 	for rows.Next() {
 		var id int
