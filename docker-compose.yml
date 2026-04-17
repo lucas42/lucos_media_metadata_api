@@ -6,7 +6,7 @@ services:
     container_name: lucos_media_metadata_api
     ports: 
       - $PORT:$PORT
-    image: lucas42/lucos_media_metadata_api
+    image: lucas42/lucos_media_metadata_api:${VERSION:-latest}
     volumes:
       - "db:/var/lib/media-metadata/"
       - "exports:/var/lib/exports/"
@@ -29,7 +29,7 @@ services:
       dockerfile: exporter/Dockerfile
       context: . # Use root context, so rdfgen can be pulled in
     container_name: lucos_media_metadata_api_exporter
-    image: lucas42/lucos_media_metadata_api_exporter
+    image: lucas42/lucos_media_metadata_api_exporter:${VERSION:-latest}
     volumes:
       - db:/data:ro
       - exports:/exports
