@@ -15,6 +15,14 @@ type PredicateConfig struct {
 	// field to be valid; tags without a URI are skipped by the RDF
 	// exporter and rejected by write validation.
 	RequiresURI bool
+
+	// ResolvableByName indicates that when a tag value is submitted with a
+	// name but no URI, the API should resolve the name to an existing entity
+	// (or create one) rather than rejecting it as missing a URI. Resolution
+	// happens before RequiresURI validation, so the resolved URI satisfies
+	// that constraint. In the IfMissing write path, resolution only fires for
+	// tags that will actually be written.
+	ResolvableByName bool
 }
 
 // predicateRegistry defines per-predicate configuration.
@@ -26,7 +34,7 @@ var predicateRegistry = map[string]PredicateConfig{
 	"offence":  {MultiValue: true},
 	"about":    {MultiValue: true, RequiresURI: true},
 	"mentions": {MultiValue: true, RequiresURI: true},
-	"album":    {RequiresURI: true},
+	"album":    {RequiresURI: true, ResolvableByName: true},
 }
 
 // GetPredicateConfig returns the configuration for a predicate.

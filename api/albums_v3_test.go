@@ -163,9 +163,9 @@ func TestTrackAlbumTagWrite(test *testing.T) {
 	assertEqual(test, "album uri", "/albums/1", albumObj["uri"].(string))
 }
 
-// TestTrackAlbumTagWriteBareNameRejected checks that writing an album tag with
-// only a name (no URI) is rejected with requires_uri error.
-func TestTrackAlbumTagWriteBareNameRejected(test *testing.T) {
+// TestTrackAlbumTagWriteByNameCreatesAlbum checks that writing an album tag with
+// only a name (no URI) creates the album and stores the tag correctly.
+func TestTrackAlbumTagWriteByNameCreatesAlbum(test *testing.T) {
 	clearData()
 	trackURL := "http://example.org/albums-test/bare-name"
 	escapedURL := url.QueryEscape(trackURL)
@@ -173,14 +173,110 @@ func TestTrackAlbumTagWriteBareNameRejected(test *testing.T) {
 
 	req := basicRequest(test, "PUT", trackPath, `{"fingerprint":"albumtest2","duration":100,"tags":{"album":[{"name":"Abbey Road"}]}}`)
 	resp, _ := doRawRequest(test, req)
-	if resp.StatusCode != 400 {
-		test.Errorf("Expected 400 for album tag without URI, got %d", resp.StatusCode)
+	if resp.StatusCode != 200 {
+		test.Errorf("Expected 200 for album tag with bare name, got %d", resp.StatusCode)
 	}
-	var errResp V3Error
-	json.NewDecoder(resp.Body).Decode(&errResp)
-	if errResp.Code != "requires_uri" {
-		test.Errorf("Expected error code 'requires_uri', got %q", errResp.Code)
+
+	// The album should have been created.
+	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
+
+	// The track should have the album tag with both name and URI.
+	getReq := basicRequest(test, "GET", trackPath, "")
+	getResp, _ := doRawRequest(test, getReq)
+	var track map[string]interface{}
+	json.NewDecoder(getResp.Body).Decode(&track)
+	tags := track["tags"].(map[string]interface{})
+	albumArr, ok := tags["album"].([]interface{})
+	if !ok || len(albumArr) != 1 {
+		test.Fatalf("Expected 1 album tag in response")
 	}
+	albumObj := albumArr[0].(map[string]interface{})
+	assertEqual(test, "album name", "Abbey Road", albumObj["name"].(string))
+	if albumObj["uri"] == nil || albumObj["uri"].(string) == "" {
+		test.Error("Expected album URI to be populated after bare-name write")
+	}
+}
+
+// TestTrackAlbumTagWriteByNameResolvesExisting checks that writing an album tag
+// with only a name resolves to an existing album rather than creating a duplicate.
+func TestTrackAlbumTagWriteByNameResolvesExisting(test *testing.T) {
+	clearData()
+	// Create the album first.
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+
+	trackURL := "http://example.org/albums-test/bare-name-existing"
+	escapedURL := url.QueryEscape(trackURL)
+	trackPath := "/v3/tracks?url=" + escapedURL
+
+	req := basicRequest(test, "PUT", trackPath, `{"fingerprint":"albumtest2b","duration":100,"tags":{"album":[{"name":"Abbey Road"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Errorf("Expected 200 for album tag with bare name matching existing album, got %d", resp.StatusCode)
+	}
+
+	// Only one album should exist (no duplicate created).
+	listReq := basicRequest(test, "GET", "/v3/albums", "")
+	listResp, _ := doRawRequest(test, listReq)
+	var list AlbumListV3
+	json.NewDecoder(listResp.Body).Decode(&list)
+	if list.TotalItems != 1 {
+		test.Errorf("Expected 1 album (no duplicate created), got %d", list.TotalItems)
+	}
+
+	// The track's album tag should reference album id=1.
+	getReq := basicRequest(test, "GET", trackPath, "")
+	getResp, _ := doRawRequest(test, getReq)
+	var track map[string]interface{}
+	json.NewDecoder(getResp.Body).Decode(&track)
+	tags := track["tags"].(map[string]interface{})
+	albumArr := tags["album"].([]interface{})
+	albumObj := albumArr[0].(map[string]interface{})
+	assertEqual(test, "album uri", "/albums/1", albumObj["uri"].(string))
+}
+
+// TestTrackAlbumTagIfMissingBareNameDoesNotCreateAlbumWhenSkipped checks the core bug fix:
+// when a track already has an album tag, a subsequent IfMissing write with a bare name
+// does NOT create a new album (because the tag is skipped).
+func TestTrackAlbumTagIfMissingBareNameDoesNotCreateAlbumWhenSkipped(test *testing.T) {
+	clearData()
+	// Create an album and tag a track to it.
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+	trackURL := "http://example.org/albums-test/if-missing-skip"
+	escapedURL := url.QueryEscape(trackURL)
+	trackPath := "/v3/tracks?url=" + escapedURL
+	// Write with If-None-Match: * semantics (IfMissing path) — existing album via URI.
+	setupRequest(test, "PUT", trackPath, `{"fingerprint":"albumifmissing1","duration":200,"tags":{"album":[{"uri":"/albums/1"}]}}`, 200)
+
+	// Now send a second import-style write with a different album name (bare name, IfMissing).
+	// This simulates a stale ID3 tag from the import client.
+	ifMissingReq := basicRequest(test, "PUT", trackPath, `{"fingerprint":"albumifmissing1","duration":200,"tags":{"album":[{"name":"Stale Album Name"}]}}`)
+	ifMissingReq.Header.Set("If-None-Match", "*")
+	ifMissingResp, _ := doRawRequest(test, ifMissingReq)
+	if ifMissingResp.StatusCode != 200 {
+		test.Errorf("Expected 200 for IfMissing PUT, got %d", ifMissingResp.StatusCode)
+	}
+
+	// The "Stale Album Name" album should NOT have been created.
+	listReq := basicRequest(test, "GET", "/v3/albums", "")
+	listResp, _ := doRawRequest(test, listReq)
+	var list AlbumListV3
+	json.NewDecoder(listResp.Body).Decode(&list)
+	if list.TotalItems != 1 {
+		test.Errorf("Expected 1 album (stale album must not be created), got %d", list.TotalItems)
+	}
+	if list.Albums[0].Name != "Abbey Road" {
+		test.Errorf("Expected only 'Abbey Road', got %q", list.Albums[0].Name)
+	}
+
+	// The track's album tag should still be the original one.
+	getReq := basicRequest(test, "GET", trackPath, "")
+	getResp, _ := doRawRequest(test, getReq)
+	var track map[string]interface{}
+	json.NewDecoder(getResp.Body).Decode(&track)
+	tags := track["tags"].(map[string]interface{})
+	albumArr := tags["album"].([]interface{})
+	albumObj := albumArr[0].(map[string]interface{})
+	assertEqual(test, "album name unchanged", "Abbey Road", albumObj["name"].(string))
 }
 
 // TestTrackAlbumTagWriteUnknownURIRejected checks that writing an album tag
