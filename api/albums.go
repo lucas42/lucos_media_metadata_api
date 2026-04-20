@@ -314,8 +314,8 @@ func (store Datastore) mergeAlbums(targetID int, sourceIDs []int) (album AlbumV3
 }
 
 // resolveOrCreateAlbumByName looks up an album by name. If no album with that
-// name exists, one is created. Used in the tag write path when a ResolvableByName
-// predicate receives a tag with a name but no URI.
+// name exists, one is created. Wired up as the ResolveNameToURI function for
+// the album predicate in predicateRegistry.
 func (store Datastore) resolveOrCreateAlbumByName(name string) (album AlbumV3, err error) {
 	type albumRow struct {
 		ID   int    `db:"id"`
