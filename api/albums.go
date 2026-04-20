@@ -313,6 +313,27 @@ func (store Datastore) mergeAlbums(targetID int, sourceIDs []int) (album AlbumV3
 	return
 }
 
+// resolveOrCreateAlbumByName looks up an album by name. If no album with that
+// name exists, one is created. Wired up as the ResolveNameToURI function for
+// the album predicate in predicateRegistry.
+func (store Datastore) resolveOrCreateAlbumByName(name string) (album AlbumV3, err error) {
+	type albumRow struct {
+		ID   int    `db:"id"`
+		Name string `db:"name"`
+	}
+	var row albumRow
+	err = store.DB.Get(&row, "SELECT id, name FROM album WHERE name = $1", name)
+	if err == nil {
+		album = AlbumV3{ID: row.ID, Name: row.Name, URI: store.albumURI(row.ID)}
+		return
+	}
+	if err.Error() != "sql: no rows in result set" {
+		return
+	}
+	err = nil
+	return store.createAlbum(name)
+}
+
 // resolveAlbumNameFromURI extracts the album id from a URI and returns the
 // album's name. Used on write to populate the tag value when an album tag
 // is written with a URI only.

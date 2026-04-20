@@ -15,6 +15,18 @@ type PredicateConfig struct {
 	// field to be valid; tags without a URI are skipped by the RDF
 	// exporter and rejected by write validation.
 	RequiresURI bool
+
+	// ResolveNameToURI, if non-nil, enables name-to-URI resolution for this
+	// predicate. When a tag value has a name but no URI, the write path calls
+	// this to resolve (or create) the entity and populate the URI. Resolution
+	// happens before RequiresURI validation. In the IfMissing path, resolution
+	// only fires for tags that will actually be written.
+	ResolveNameToURI func(store Datastore, name string) (string, error)
+
+	// ResolveURIToName, if non-nil, enables URI-to-name resolution. When a tag
+	// value has a URI but no name, the write path calls this to populate the
+	// name field before storing.
+	ResolveURIToName func(store Datastore, uri string) (string, error)
 }
 
 // predicateRegistry defines per-predicate configuration.
@@ -26,7 +38,16 @@ var predicateRegistry = map[string]PredicateConfig{
 	"offence":  {MultiValue: true},
 	"about":    {MultiValue: true, RequiresURI: true},
 	"mentions": {MultiValue: true, RequiresURI: true},
-	"album":    {RequiresURI: true},
+	"album": {
+		RequiresURI: true,
+		ResolveNameToURI: func(store Datastore, name string) (string, error) {
+			album, err := store.resolveOrCreateAlbumByName(name)
+			return album.URI, err
+		},
+		ResolveURIToName: func(store Datastore, uri string) (string, error) {
+			return store.resolveAlbumNameFromURI(uri)
+		},
+	},
 }
 
 // GetPredicateConfig returns the configuration for a predicate.
