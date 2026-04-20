@@ -119,16 +119,16 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 			return fmt.Errorf("multiple values for single-value predicate %q not allowed", predicate)
 		}
 		config := GetPredicateConfig(predicate)
-		// For ResolvableByName predicates: resolve name to URI before RequiresURI
-		// validation, so the resolved URI satisfies that constraint.
-		if config.ResolvableByName {
+		// Resolve name to URI before RequiresURI validation so the resolved
+		// URI satisfies that constraint.
+		if config.ResolveNameToURI != nil {
 			for i, v := range nonEmpty {
 				if v.URI == "" && v.Name != "" {
-					album, resolveErr := store.resolveOrCreateAlbumByName(v.Name)
+					uri, resolveErr := config.ResolveNameToURI(store, v.Name)
 					if resolveErr != nil {
-						return fmt.Errorf("could not resolve album %q: %w", v.Name, resolveErr)
+						return fmt.Errorf("could not resolve %q for predicate %q: %w", v.Name, predicate, resolveErr)
 					}
-					nonEmpty[i].URI = album.URI
+					nonEmpty[i].URI = uri
 				}
 			}
 		}
@@ -168,16 +168,15 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 		}
 	}
 
-	// For ResolvableByName predicates: populate the Name field by looking up the
-	// entity from its URI (e.g. album written with URI only).
+	// Populate the Name field for URI-only tag values.
 	for i, u := range updates {
 		config := GetPredicateConfig(u.predicate)
-		if config.ResolvableByName {
+		if config.ResolveURIToName != nil {
 			for j, v := range u.values {
 				if v.Name == "" && v.URI != "" {
-					name, resolveErr := store.resolveAlbumNameFromURI(v.URI)
+					name, resolveErr := config.ResolveURIToName(store, v.URI)
 					if resolveErr != nil {
-						return fmt.Errorf("album tag URI %q does not match a known album: %w", v.URI, resolveErr)
+						return fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, u.predicate, resolveErr)
 					}
 					updates[i].values[j].Name = name
 				}
@@ -232,24 +231,26 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 				continue
 			}
 			config := GetPredicateConfig(predicate)
-			// For ResolvableByName predicates: resolve name to URI before RequiresURI
-			// validation. Only fires here because the predicate is missing (will be written).
-			if config.ResolvableByName {
+			// Resolve name to URI before RequiresURI validation. Only fires
+			// here because the predicate is missing (tag will be written).
+			if config.ResolveNameToURI != nil {
 				for i, v := range nonEmpty {
 					if v.URI == "" && v.Name != "" {
-						album, resolveErr := store.resolveOrCreateAlbumByName(v.Name)
+						uri, resolveErr := config.ResolveNameToURI(store, v.Name)
 						if resolveErr != nil {
-							return fmt.Errorf("could not resolve album %q: %w", v.Name, resolveErr)
+							return fmt.Errorf("could not resolve %q for predicate %q: %w", v.Name, predicate, resolveErr)
 						}
-						nonEmpty[i].URI = album.URI
+						nonEmpty[i].URI = uri
 					}
 				}
-				// Populate Name from URI for URI-only values.
+			}
+			// Populate Name from URI for URI-only values.
+			if config.ResolveURIToName != nil {
 				for i, v := range nonEmpty {
 					if v.Name == "" && v.URI != "" {
-						name, resolveErr := store.resolveAlbumNameFromURI(v.URI)
+						name, resolveErr := config.ResolveURIToName(store, v.URI)
 						if resolveErr != nil {
-							return fmt.Errorf("album tag URI %q does not match a known album: %w", v.URI, resolveErr)
+							return fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, predicate, resolveErr)
 						}
 						nonEmpty[i].Name = name
 					}
