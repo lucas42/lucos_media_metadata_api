@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof"
 	"strings"
 )
 
@@ -26,6 +27,11 @@ func FrontController(store Datastore, clientKeys string) http.Handler {
 	router.HandleFunc("/v2/export", RDFHandler)
 	router.HandleFunc("/ontology", OntologyHandler)
 	router.HandleFunc("/_info", store.InfoController)
+	router.HandleFunc("/_debug/pprof/", http.DefaultServeMux.ServeHTTP)
+	router.HandleFunc("/_debug/pprof/cmdline", http.DefaultServeMux.ServeHTTP)
+	router.HandleFunc("/_debug/pprof/profile", http.DefaultServeMux.ServeHTTP)
+	router.HandleFunc("/_debug/pprof/symbol", http.DefaultServeMux.ServeHTTP)
+	router.HandleFunc("/_debug/pprof/trace", http.DefaultServeMux.ServeHTTP)
 	router.HandleFunc("/", HomepageController)
 
 	/** The following routes used to be part of the V1 API - return a Gone status */
