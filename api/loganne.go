@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 )
 
 type LoganneInterface interface {
@@ -21,6 +22,10 @@ type Loganne struct {
 	endpoint           string
 	mediaMetadataManagerOrigin string
 }
+
+// loganneHTTPClient is a dedicated client with a short timeout so that a slow
+// or unreachable Loganne service never blocks request handlers indefinitely.
+var loganneHTTPClient = &http.Client{Timeout: 5 * time.Second}
 
 func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack Track, existingTrack Track) {
 	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "url", loganne.endpoint, "updatedTrack", updatedTrack, "existingTrack", existingTrack)
@@ -50,7 +55,7 @@ func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := http.DefaultClient.Do(req); err != nil {
+	if _, err := loganneHTTPClient.Do(req); err != nil {
 		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
 	}
 }
@@ -75,7 +80,7 @@ func (loganne Loganne) albumPost(eventType string, humanReadable string, album A
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := http.DefaultClient.Do(req); err != nil {
+	if _, err := loganneHTTPClient.Do(req); err != nil {
 		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
 	}
 }
@@ -103,7 +108,7 @@ func (loganne Loganne) albumMergedPost(eventType string, humanReadable string, s
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := http.DefaultClient.Do(req); err != nil {
+	if _, err := loganneHTTPClient.Do(req); err != nil {
 		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
 	}
 }
@@ -135,7 +140,7 @@ func (loganne Loganne) collectionPost(eventType string, humanReadable string, up
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := http.DefaultClient.Do(req); err != nil {
+	if _, err := loganneHTTPClient.Do(req); err != nil {
 		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
 	}
 }

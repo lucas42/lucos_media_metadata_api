@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/deiu/rdf2go"
 )
@@ -39,6 +40,7 @@ func fetchEolasNames(uris []string) map[string]string {
 
 	// Only reattach auth header when the redirect stays on the same host
 	client := &http.Client{
+		Timeout: 30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if req.URL.Host == eolasHost.Host {
 				req.Header.Set("Authorization", "Bearer "+key)

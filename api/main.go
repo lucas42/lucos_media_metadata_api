@@ -3,7 +3,12 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
+	"os/signal"
+	"runtime"
+	"syscall"
+	"time"
 )
 
 /**
@@ -20,6 +25,25 @@ func main() {
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}
 
+	// Expose pprof on a localhost-only listener so it's reachable via docker exec
+	// but never from the public internet.
+	go func() {
+		if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
+			slog.Warn("pprof listener failed", slog.Any("error", err))
+		}
+	}()
+
+	// Dump all goroutine stacks to the log on SIGUSR1 for live deadlock diagnosis.
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGUSR1)
+		for range ch {
+			buf := make([]byte, 1<<20)
+			n := runtime.Stack(buf, true)
+			slog.Warn("SIGUSR1 received — goroutine dump", "stacks", string(buf[:n]))
+		}
+	}()
+
 	loganne := Loganne{
 		endpoint:           os.Getenv("LOGANNE_ENDPOINT"),
 		source:             "lucos_media_metadata_api",
@@ -34,7 +58,14 @@ func main() {
 		port = "8080"
 	}
 	slog.Info("Listening for incoming connections", "port", port)
-	err := http.ListenAndServe(":"+port, FrontController(store, os.Getenv("CLIENT_KEYS")))
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           FrontController(store, os.Getenv("CLIENT_KEYS")),
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	err := server.ListenAndServe()
 	slog.Error("HTTP server errored", slog.Any("error", err))
 	os.Exit(1)
 }
