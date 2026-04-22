@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -23,6 +24,14 @@ func main() {
 		// Can be replaced with `slog.SetLogLoggerLevel(slog.LevelDebug)` in golang 1.22
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}
+
+	// Expose pprof on a localhost-only listener so it's reachable via docker exec
+	// but never from the public internet.
+	go func() {
+		if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
+			slog.Warn("pprof listener failed", slog.Any("error", err))
+		}
+	}()
 
 	// Dump all goroutine stacks to the log on SIGUSR1 for live deadlock diagnosis.
 	go func() {
