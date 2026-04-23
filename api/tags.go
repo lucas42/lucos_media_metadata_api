@@ -39,6 +39,17 @@ func (tl TagList) GetValues(predicate string) []string {
 	return vals
 }
 
+// GetURIs returns all URI values for the given predicate.
+func (tl TagList) GetURIs(predicate string) []string {
+	var uris []string
+	for _, tag := range tl {
+		if tag.PredicateID == predicate {
+			uris = append(uris, tag.URI)
+		}
+	}
+	return uris
+}
+
 // SetValue sets the value for a predicate. If the predicate already exists,
 // it updates the first occurrence. Otherwise it appends a new tag.
 func (tl *TagList) SetValue(predicate string, value string) {
