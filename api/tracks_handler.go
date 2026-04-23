@@ -537,6 +537,7 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 		trackV3.Fingerprint = fingerprint
 	}
 	onlyMissing := (r.Header.Get("If-None-Match") == "*")
+	slog.Info("track update request", "method", r.Method, "filterField", filterfield, "filterValue", filtervalue, "onlyMissing", onlyMissing, "userAgent", r.Header.Get("User-Agent"))
 	existingTrack, err := store.getTrackDataByField(filterfield, filtervalue)
 
 	// Convert to internal Track for the updateCreateTrackDataByField call.
