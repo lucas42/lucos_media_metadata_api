@@ -182,3 +182,22 @@ The following systems read from or write to this API and will need migration pla
 7. Update rdfgen to remove `splitCSV` calls (#40)
 8. Migrate consumers from v2 to v3 (#41)
 9. Deprecate and remove v2 endpoints (#42)
+
+## §9 Tag Value Validation
+
+v3 write endpoints (`PUT /v3/tracks/...`, `PATCH /v3/tracks/...`) validate tag values at the wire boundary and return `400 invalid_tag_value` for invalid inputs. The `predicate` field in the error response identifies the offending predicate.
+
+| Request shape | Server behaviour |
+|---|---|
+| `tags` key omitted | Do not touch any tags |
+| `tags: {}` | Do not touch any tags |
+| `tags: {"comment": [{"name": "X"}]}` | Replace `comment` with `[X]` |
+| `tags: {"comment": []}` | Clear all values for `comment` |
+| `tags: {"comment": null}` | **400** `invalid_tag_value` — use `[]` to clear |
+| `tags: {"comment": [{"name": ""}]}` | **400** `invalid_tag_value` — name must be non-empty |
+| `tags: {"comment": [{"name": "", "uri": ""}]}` | **400** `invalid_tag_value` — name must be non-empty |
+| `tags: {"comment": [{"name": "X", "uri": null}]}` | Replace `comment` with `[X]`, no URI bound |
+| `tags: {"comment": [{"name": "X"}]}` (uri omitted) | Equivalent to uri null |
+| `tags: {"album": [{"uri": "/albums/1"}]}` (name omitted) | Valid — URI-only; server resolves name |
+
+The most important distinction: **omission (`tags` absent or `{}`) is "leave alone"**, while **`[]` is "clear"**.

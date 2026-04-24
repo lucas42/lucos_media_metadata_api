@@ -36,9 +36,11 @@ type SearchResultV3 struct {
 }
 
 // V3Error is the structured JSON error response per ADR §7.
+// Predicate is an optional extension for tag-level errors identifying the offending predicate.
 type V3Error struct {
-	Error string `json:"error"`
-	Code  string `json:"code"`
+	Error     string `json:"error"`
+	Code      string `json:"code"`
+	Predicate string `json:"predicate,omitempty"`
 }
 
 // writeV3ErrorResponse writes a structured JSON error response.
@@ -47,6 +49,32 @@ func writeV3ErrorResponse(w http.ResponseWriter, statusCode int, message string,
 	w.Header().Set("Cache-Control", "no-cache, max-age=0, no-store, must-revalidate")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(V3Error{Error: message, Code: code})
+}
+
+// writeV3TagValidationError writes a 400 invalid_tag_value error for a specific predicate.
+func writeV3TagValidationError(w http.ResponseWriter, predicate string, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, max-age=0, no-store, must-revalidate")
+	w.WriteHeader(http.StatusBadRequest)
+	json.NewEncoder(w).Encode(V3Error{Error: message, Code: "invalid_tag_value", Predicate: predicate})
+}
+
+// validateTagsV3 validates tag values from a v3 write request.
+// Returns the offending predicate name and an error message if any value is invalid:
+//   - a nil slice for a predicate (use [] to clear, not null)
+//   - a value with both name and uri empty (no identifying information)
+func validateTagsV3(tags map[string][]TagValueV3) (predicate string, message string, invalid bool) {
+	for pred, values := range tags {
+		if values == nil {
+			return pred, "tag value array must not be null; use [] to clear", true
+		}
+		for _, v := range values {
+			if v.Name == "" && v.URI == "" {
+				return pred, "tag value name must be non-empty", true
+			}
+		}
+	}
+	return "", "", false
 }
 
 // writeV3Error maps common errors to structured JSON responses.
@@ -475,6 +503,11 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 		writeV3ErrorResponse(w, http.StatusBadRequest, "Can't bulk update fingerprint", "bad_request")
 		return
 	}
+	// Validate tag values before touching the database.
+	if pred, msg, invalid := validateTagsV3(trackV3.Tags); invalid {
+		writeV3TagValidationError(w, pred, msg)
+		return
+	}
 	// Strip tags from internal track — handle them via the v3 path per track
 	v3Tags := trackV3.Tags
 	internalTrack := trackV3ToInternal(trackV3)
@@ -538,6 +571,13 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 	}
 	onlyMissing := (r.Header.Get("If-None-Match") == "*")
 	slog.Info("track update request", "method", r.Method, "filterField", filterfield, "filterValue", filtervalue, "onlyMissing", onlyMissing, "userAgent", r.Header.Get("User-Agent"))
+
+	// Validate tag values before touching the database.
+	if pred, msg, invalid := validateTagsV3(trackV3.Tags); invalid {
+		writeV3TagValidationError(w, pred, msg)
+		return
+	}
+
 	existingTrack, err := store.getTrackDataByField(filterfield, filtervalue)
 
 	// Convert to internal Track for the updateCreateTrackDataByField call.
