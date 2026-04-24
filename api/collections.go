@@ -260,9 +260,8 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 	action = "noChange"
 	storedCollection = existingCollection
 
-	// For accurate track comparison, load ALL existing track IDs (not paginated)
-	// when the request includes a tracks list.
-	existingForComparison := existingCollection
+	// Load all existing track IDs (not paginated) into existingCollection for
+	// accurate comparison and sync when the request includes a tracks list.
 	if newCollection.Tracks != nil && existingCollection.Slug != "" {
 		allIDs, idErr := store.getAllTrackIDsInCollection(existingCollection.Slug)
 		if idErr != nil {
@@ -273,7 +272,7 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 		for i, id := range allIDs {
 			allTracks[i] = Track{ID: id}
 		}
-		existingForComparison.Tracks = &allTracks
+		existingCollection.Tracks = &allTracks
 	}
 
 	if newCollection.Tracks == nil {
@@ -281,7 +280,7 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 	}
 
 	// If no changes are needed, return the existing collection
-	if !existingForComparison.updateNeeded(newCollection) {
+	if !existingCollection.updateNeeded(newCollection) {
 		slog.Debug("Update collection not needed", "newCollection", newCollection)
 		return
 	}
@@ -311,33 +310,30 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 		}
 	}
 
-	// Sync track membership: add/remove tracks to match newCollection.Tracks.
-	// existingForComparison.Tracks contains all existing IDs (unpaginated).
-	if len(*newCollection.Tracks) > 0 || (existingForComparison.Tracks != nil && len(*existingForComparison.Tracks) > 0) {
-		existingIDs := make(map[int]bool)
-		if existingForComparison.Tracks != nil {
-			for _, t := range *existingForComparison.Tracks {
-				existingIDs[t.ID] = true
+	// Sync track membership: add tracks not yet in collection, remove tracks no longer wanted.
+	existingIDs := make(map[int]bool)
+	if existingCollection.Tracks != nil {
+		for _, t := range *existingCollection.Tracks {
+			existingIDs[t.ID] = true
+		}
+	}
+	newIDs := make(map[int]bool)
+	for _, t := range *newCollection.Tracks {
+		newIDs[t.ID] = true
+	}
+	for id := range newIDs {
+		if !existingIDs[id] {
+			err = store.addTrackToCollection(storedCollection.Slug, id)
+			if err != nil {
+				return
 			}
 		}
-		newIDs := make(map[int]bool)
-		for _, t := range *newCollection.Tracks {
-			newIDs[t.ID] = true
-		}
-		for id := range newIDs {
-			if !existingIDs[id] {
-				err = store.addTrackToCollection(storedCollection.Slug, id)
-				if err != nil {
-					return
-				}
-			}
-		}
-		for id := range existingIDs {
-			if !newIDs[id] {
-				err = store.removeTrackFromCollection(storedCollection.Slug, id)
-				if err != nil {
-					return
-				}
+	}
+	for id := range existingIDs {
+		if !newIDs[id] {
+			err = store.removeTrackFromCollection(storedCollection.Slug, id)
+			if err != nil {
+				return
 			}
 		}
 	}
