@@ -169,6 +169,7 @@ func (store Datastore) updateAlbum(id int, name string) (album AlbumV3, err erro
 	if err != nil {
 		return
 	}
+	defer func() { _ = tx.Rollback() }()
 
 	result, err := tx.Exec("UPDATE album SET name = $1 WHERE id = $2", name, id)
 	if err != nil {
@@ -280,6 +281,7 @@ func (store Datastore) mergeAlbums(targetID int, sourceIDs []int) (album AlbumV3
 	if err != nil {
 		return
 	}
+	defer func() { _ = tx.Rollback() }()
 
 	for _, src := range sources {
 		// Repoint all tag rows that reference this source album URI.
