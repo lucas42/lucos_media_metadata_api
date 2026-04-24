@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // TrackV3 is the v3 wire representation of a track.
@@ -191,9 +193,8 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 		if len(u.values) == 0 {
 			continue // delete path — predicate already exists
 		}
-		hasPred, err2 := store.hasPredicate(u.predicate)
-		if err2 != nil {
-			err = err2
+		var hasPred bool
+		if hasPred, err = store.hasPredicate(u.predicate); err != nil {
 			return
 		}
 		if !hasPred {
@@ -254,8 +255,8 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 	}
 
 	// Apply all tag writes atomically in a single transaction.
-	tx, err2 := store.DB.Beginx()
-	if err2 != nil {
+	var tx *sqlx.Tx
+	if tx, err = store.DB.Beginx(); err != nil {
 		return
 	}
 	for _, u := range updates {
@@ -339,9 +340,8 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 			}
 			// Ensure predicate exists. createPredicate is idempotent and safe
 			// outside the main transaction.
-			hasPred, err2 := store.hasPredicate(predicate)
-			if err2 != nil {
-				err = err2
+			var hasPred bool
+			if hasPred, err = store.hasPredicate(predicate); err != nil {
 				return
 			}
 			if !hasPred {
@@ -361,8 +361,8 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 	changed = true
 
 	// Insert all missing predicate values atomically in a single transaction.
-	tx, err2 := store.DB.Beginx()
-	if err2 != nil {
+	var tx *sqlx.Tx
+	if tx, err = store.DB.Beginx(); err != nil {
 		return
 	}
 	for _, ins := range inserts {
@@ -562,25 +562,38 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 	internalTrack := trackV3ToInternal(trackV3)
 	internalTrack.Tags = nil
 	onlyMissing := (r.Header.Get("If-None-Match") == "*")
-	scalarResult, _, err := updateMultipleTracks(store, r, internalTrack)
+
+	// Query matched tracks once, used for both scalar and tag updates.
+	matchedTracks, _, _, _, err := queryMultipleTracksV3(store, r)
 	if err != nil {
 		writeV3Error(w, err)
 		return
 	}
 
-	// Collect all changed track IDs from the scalar path and the v3 tag path.
-	// Using a set ensures tracks changed by both paths are counted once.
-	changedTrackIDs := make(map[int]bool, len(scalarResult.Tracks))
-	for _, t := range scalarResult.Tracks {
-		changedTrackIDs[t.ID] = true
-	}
-	if v3Tags != nil {
-		tracks, _, _, _, err2 := queryMultipleTracksV3(store, r)
-		if err2 != nil {
-			writeV3Error(w, err2)
+	// Collect all changed track IDs. Using a set ensures tracks changed by
+	// both scalar and tag paths are counted once in the Loganne event.
+	changedTrackIDs := make(map[int]bool)
+
+	// Apply scalar field updates per track.
+	for i := range matchedTracks {
+		trackupdates := internalTrack
+		trackupdates.ID = matchedTracks[i].ID
+		storedTrack, trackAction, trackErr := store.updateCreateTrackDataByField("id", matchedTracks[i].ID, trackupdates, matchedTracks[i], onlyMissing)
+		if trackErr != nil {
+			writeV3Error(w, trackErr)
 			return
 		}
-		for _, t := range tracks {
+		if trackAction == "trackUpdated" {
+			changedTrackIDs[storedTrack.ID] = true
+		} else if trackAction != "noChange" {
+			writeV3Error(w, errors.New("Unexpected action "+trackAction))
+			return
+		}
+	}
+
+	// Apply v3 tag updates per track.
+	if v3Tags != nil {
+		for _, t := range matchedTracks {
 			var tagChanged bool
 			if onlyMissing {
 				tagChanged, err = store.updateTagsV3IfMissing(t.ID, v3Tags)
