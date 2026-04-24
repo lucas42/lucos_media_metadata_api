@@ -660,3 +660,79 @@ func TestV3RejectsEmptyTagOnPatch(test *testing.T) {
 		test.Errorf("Expected 400 for empty name on PATCH, got %d", resp.StatusCode)
 	}
 }
+
+// TestV3PutSingleTrackSetsTrackActionHeaderTrackAdded checks that PUTting a new
+// track returns Track-Action: trackAdded.
+func TestV3PutSingleTrackSetsTrackActionHeaderTrackAdded(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/ta-new")
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"ta1","duration":100,"tags":{"title":[{"name":"New Track"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "trackAdded", resp.Header.Get("Track-Action"))
+}
+
+// TestV3PutSingleTrackSetsTrackActionHeaderTrackUpdated checks that PUTting an
+// existing track with a changed duration returns Track-Action: trackUpdated.
+func TestV3PutSingleTrackSetsTrackActionHeaderTrackUpdated(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/ta-update")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"ta2","duration":100}`, 200)
+
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"ta2","duration":200}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
+}
+
+// TestV3PutSingleTrackSetsTrackActionHeaderNoChange checks that PUTting identical
+// data returns Track-Action: noChange.
+func TestV3PutSingleTrackSetsTrackActionHeaderNoChange(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/ta-noop")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"ta3","duration":100}`, 200)
+
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"ta3","duration":100}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "noChange", resp.Header.Get("Track-Action"))
+}
+
+// TestV3PatchSingleTrackSetsTrackActionHeader checks that PATCH sets Track-Action.
+func TestV3PatchSingleTrackSetsTrackActionHeader(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/ta-patch")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"ta4","duration":100}`, 200)
+
+	req := basicRequest(test, "PATCH", v3Path, `{"duration":150}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
+}
+
+// TestV3PutTagOnlyChangeSetsTrackActionHeader documents that tag-only PUTs return
+// noChange on the scalar-fields path (PR #198 strips tags from internalTrack to
+// prevent the old URI-unaware write path from running; tag-only changes do not
+// drive updateNeeded).
+func TestV3PutTagOnlyChangeSetsTrackActionHeader(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/ta-tagonly")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"ta5","duration":100,"tags":{"title":[{"name":"Old Title"}]}}`, 200)
+
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"ta5","duration":100,"tags":{"title":[{"name":"New Title"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	// Tags are written by the v3 path; scalar fields are unchanged so the scalar
+	// path returns noChange. See #196 for the design context.
+	assertEqual(test, "Track-Action header", "noChange", resp.Header.Get("Track-Action"))
+}
