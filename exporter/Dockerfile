@@ -27,5 +27,7 @@ RUN apk add --no-cache ca-certificates bash busybox-extras procps
 COPY --from=builder /rdf-exporter /usr/local/bin/rdf-exporter
 
 COPY exporter/crontab /etc/crontabs/root
+COPY exporter/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-CMD ["crond", "-f", "-L", "/dev/stdout"]
+CMD ["/usr/local/bin/entrypoint.sh"]
