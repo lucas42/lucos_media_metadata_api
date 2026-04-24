@@ -35,11 +35,11 @@ services:
       - exports:/exports
     restart: always
     healthcheck:
-      test: ["CMD", "pgrep", "crond"]
-      interval: 10s
+      test: ["CMD-SHELL", "find \"$$RDF_OUTPUT_PATH\" -mmin -120 | grep -q ."]
+      interval: 60s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 2m
     environment:
       - SQLITE_DB_PATH=/data/media.sqlite
       - RDF_OUTPUT_PATH=/exports/all-media.ttl
