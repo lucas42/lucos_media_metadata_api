@@ -553,3 +553,110 @@ func TestV3PatchMultiplePredicatesAtomic(test *testing.T) {
 		test.Errorf("Expected language 'Irish', got %v", langArr[0])
 	}
 }
+
+// TestV3RejectsEmptyNameAndURI checks that a tag value with both name and uri empty is rejected.
+func TestV3RejectsEmptyNameAndURI(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3track/empty-tag"
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", url.QueryEscape(trackurl))
+
+	// PUT with {name: "", uri: ""} — must be rejected.
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"v3empty1","duration":100,"tags":{"comment":[{"name":"","uri":""}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 400 {
+		test.Errorf("Expected 400 for empty name+uri tag value, got %d", resp.StatusCode)
+	}
+	var errResp V3Error
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp.Code != "invalid_tag_value" {
+		test.Errorf("Expected code 'invalid_tag_value', got %q", errResp.Code)
+	}
+	if errResp.Predicate != "comment" {
+		test.Errorf("Expected predicate 'comment', got %q", errResp.Predicate)
+	}
+}
+
+// TestV3RejectsEmptyNameTag checks that a tag value with empty name (and no uri) is rejected.
+func TestV3RejectsEmptyNameTag(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3track/empty-name"
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", url.QueryEscape(trackurl))
+
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"v3empty2","duration":100,"tags":{"title":[{"name":""}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 400 {
+		test.Errorf("Expected 400 for empty name tag value, got %d", resp.StatusCode)
+	}
+	var errResp V3Error
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp.Code != "invalid_tag_value" {
+		test.Errorf("Expected code 'invalid_tag_value', got %q", errResp.Code)
+	}
+	if errResp.Predicate != "title" {
+		test.Errorf("Expected predicate 'title', got %q", errResp.Predicate)
+	}
+}
+
+// TestV3RejectsNullTagArray checks that a null array for a predicate is rejected (use [] to clear).
+func TestV3RejectsNullTagArray(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3track/null-tag"
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", url.QueryEscape(trackurl))
+
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"v3null1","duration":100,"tags":{"comment":null}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 400 {
+		test.Errorf("Expected 400 for null tag array, got %d", resp.StatusCode)
+	}
+	var errResp V3Error
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp.Code != "invalid_tag_value" {
+		test.Errorf("Expected code 'invalid_tag_value', got %q", errResp.Code)
+	}
+}
+
+// TestV3AcceptsURIOnlyTagValue checks that a value with empty name but non-empty uri is still valid.
+func TestV3AcceptsURIOnlyTagValue(test *testing.T) {
+	clearData()
+	// Create album first so the URI resolves.
+	setupRequest(test, "POST", "/v3/albums", `{"name":"Abbey Road"}`, 201)
+
+	trackurl := "http://example.org/v3track/uri-only"
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", url.QueryEscape(trackurl))
+
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"v3urionly1","duration":100,"tags":{"album":[{"uri":"/albums/1"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Errorf("Expected 200 for URI-only album tag, got %d", resp.StatusCode)
+	}
+}
+
+// TestV3AcceptsClearWithEmptyArray checks that an empty array for a predicate is accepted (clears it).
+func TestV3AcceptsClearWithEmptyArray(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3track/clear-empty-arr"
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", url.QueryEscape(trackurl))
+
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"v3clr1","duration":100,"tags":{"title":[{"name":"To Clear"}]}}`, 200)
+
+	// PATCH with [] to clear the predicate — must succeed.
+	req := basicRequest(test, "PATCH", v3Path, `{"tags":{"title":[]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Errorf("Expected 200 for empty-array predicate clear, got %d", resp.StatusCode)
+	}
+}
+
+// TestV3RejectsEmptyTagOnPatch checks validation also fires on PATCH.
+func TestV3RejectsEmptyTagOnPatch(test *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3track/empty-patch"
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", url.QueryEscape(trackurl))
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"v3epatch1","duration":100,"tags":{"title":[{"name":"Original"}]}}`, 200)
+
+	req := basicRequest(test, "PATCH", v3Path, `{"tags":{"title":[{"name":""}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 400 {
+		test.Errorf("Expected 400 for empty name on PATCH, got %d", resp.StatusCode)
+	}
+}
