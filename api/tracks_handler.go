@@ -96,6 +96,34 @@ func writeV3Error(w http.ResponseWriter, err error) {
 	}
 }
 
+// tagsWillChange reports whether applying desired v3 tags to a track with the
+// given existing tags would result in a data change. Used to detect tag-only
+// bulk PATCH updates so Loganne can be fired when scalar fields are unchanged.
+//
+// For the IfMissing path, a predicate changes only if it has no existing values
+// and the desired update is non-empty. For the full-replace path, a predicate
+// changes if its current values differ from the desired values.
+func tagsWillChange(existing TagList, desired map[string][]TagValueV3, onlyMissing bool) bool {
+	for pred, values := range desired {
+		desiredNames := make([]string, 0, len(values))
+		for _, v := range values {
+			if v.Name != "" || v.URI != "" {
+				desiredNames = append(desiredNames, v.Name)
+			}
+		}
+		if onlyMissing {
+			if len(desiredNames) > 0 && len(existing.GetValues(pred)) == 0 {
+				return true
+			}
+		} else {
+			if !stringSlicesEqual(existing.GetValues(pred), desiredNames) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // TrackToV3 converts an internal Track to a TrackV3 for v3 serialisation.
 func TrackToV3(t Track) TrackV3 {
 	tags := make(map[string][]TagValueV3)
@@ -518,7 +546,10 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 		writeV3Error(w, err)
 		return
 	}
-	// Apply v3 tags to each matched track
+	// Apply v3 tags to each matched track and detect if any actually changed.
+	// queryMultipleTracksV3 returns tracks with tags loaded, so we use the pre-update
+	// tags for change detection without an extra DB round-trip.
+	var tagChangedCount int
 	if v3Tags != nil {
 		tracks, _, _, _, err2 := queryMultipleTracksV3(store, r)
 		if err2 != nil {
@@ -526,6 +557,9 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		for _, t := range tracks {
+			if tagsWillChange(t.Tags, v3Tags, onlyMissing) {
+				tagChangedCount++
+			}
 			if onlyMissing {
 				err = store.updateTagsV3IfMissing(t.ID, v3Tags)
 			} else {
@@ -536,6 +570,11 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 				return
 			}
 		}
+	}
+	// If only tags changed (scalar path returned noChange), upgrade action and fire Loganne.
+	if tagChangedCount > 0 && action == "noChange" {
+		action = "tracksUpdated"
+		store.Loganne.post(action, strconv.Itoa(tagChangedCount)+" tracks updated", Track{}, Track{})
 	}
 	// Re-query to get v3-formatted results
 	tracks, totalPages, totalTracks, page, err := queryMultipleTracksV3(store, r)

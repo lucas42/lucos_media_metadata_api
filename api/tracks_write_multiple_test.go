@@ -32,8 +32,6 @@ func getTagValue(test *testing.T, fingerprint, predicate string) string {
 
 /**
  * Checks that tracks can be updated in bulk based on a predicate.
- * Note: v3 bulk tag-only updates do not set Track-Action to "tracksUpdated" or fire
- * Loganne events — tag changes bypass updateMultipleTracks. Duration changes do.
  */
 func TestPatchTracksByPredicate(test *testing.T) {
 	clearData()
@@ -256,4 +254,52 @@ func TestBulkUpdateNoPagination(test *testing.T) {
 			test.Errorf("Track %d: expected genre 'Maritime Songs', got %v", trackID, genreArr[0])
 		}
 	}
+}
+
+// TestBulkPatchTagOnlyFiresLoganne checks that a bulk PATCH that changes only tags
+// (no scalar fields) fires a Loganne tracksUpdated event and returns Track-Action: tracksUpdated.
+func TestBulkPatchTagOnlyFiresLoganne(test *testing.T) {
+	clearData()
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=tagfire1", `{"url":"http://example.org/tagfire/1","duration":7,"tags":{"title":[{"name":"Yellow Submarine"}]}}`, 200)
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=tagfire2", `{"url":"http://example.org/tagfire/2","duration":7,"tags":{"title":[{"name":"Yellow Submarine"}]}}`, 200)
+	loganneRequestCount = 0
+
+	request := basicRequest(test, "PATCH", "/v3/tracks?p.title=Yellow%20Submarine", `{"tags":{"genre":[{"name":"Maritime Songs"}]}}`)
+	response, _ := doRawRequest(test, request)
+
+	checkResponseHeader(test, response, "Track-Action", "tracksUpdated")
+	assertEqual(test, "Loganne event type", "tracksUpdated", lastLoganneType)
+	assertEqual(test, "Loganne request count", 1, loganneRequestCount)
+}
+
+// TestBulkPatchTagOnlyNoChangeIsNoOp checks that a bulk PATCH with identical tag values
+// does not fire Loganne and returns Track-Action: noChange.
+func TestBulkPatchTagOnlyNoChangeIsNoOp(test *testing.T) {
+	clearData()
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=tagnoop1", `{"url":"http://example.org/tagnoop/1","duration":7,"tags":{"title":[{"name":"Yellow Submarine"}],"genre":[{"name":"Maritime Songs"}]}}`, 200)
+	loganneRequestCount = 0
+
+	request := basicRequest(test, "PATCH", "/v3/tracks?p.title=Yellow%20Submarine", `{"tags":{"genre":[{"name":"Maritime Songs"}]}}`)
+	response, _ := doRawRequest(test, request)
+
+	checkResponseHeader(test, response, "Track-Action", "noChange")
+	assertEqual(test, "Loganne request count after no-op", 0, loganneRequestCount)
+}
+
+// TestBulkPatchMixedScalarAndTagsNoExtraLoganne checks that mixing scalar and tag
+// changes does not fire an extra Loganne event for the tags on top of the scalar events.
+// The scalar path fires one individual trackUpdated and one bulk tracksUpdated (count=2).
+// Tags must not add a third event.
+func TestBulkPatchMixedScalarAndTagsNoExtraLoganne(test *testing.T) {
+	clearData()
+	setupRequest(test, "PUT", "/v3/tracks?fingerprint=mixedone1", `{"url":"http://example.org/mixedone/1","duration":7,"tags":{"title":[{"name":"Yellow Submarine"}]}}`, 200)
+	loganneRequestCount = 0
+
+	request := basicRequest(test, "PATCH", "/v3/tracks?p.title=Yellow%20Submarine", `{"duration":137,"tags":{"genre":[{"name":"Maritime Songs"}]}}`)
+	response, _ := doRawRequest(test, request)
+
+	checkResponseHeader(test, response, "Track-Action", "tracksUpdated")
+	assertEqual(test, "Loganne event type", "tracksUpdated", lastLoganneType)
+	// Scalar path fires 2 events (trackUpdated + tracksUpdated); tags must not add a third.
+	assertEqual(test, "Loganne request count (expect 2, not 3)", 2, loganneRequestCount)
 }
