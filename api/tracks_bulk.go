@@ -55,8 +55,5 @@ func updateMultipleTracks(store Datastore, r *http.Request, updatesForTracks Tra
 		result.Tracks = append(result.Tracks, storedTrack)
 		action = "tracksUpdated"
 	}
-	if action != "noChange" {
-		store.Loganne.post(action, strconv.Itoa(len(result.Tracks)) + " tracks updated", Track{}, Track{})
-	}
 	return
 }

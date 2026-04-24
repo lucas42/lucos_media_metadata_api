@@ -96,33 +96,6 @@ func writeV3Error(w http.ResponseWriter, err error) {
 	}
 }
 
-// tagsWillChange reports whether applying desired v3 tags to a track with the
-// given existing tags would result in a data change. Used to detect tag-only
-// bulk PATCH updates so Loganne can be fired when scalar fields are unchanged.
-//
-// For the IfMissing path, a predicate changes only if it has no existing values
-// and the desired update is non-empty. For the full-replace path, a predicate
-// changes if its current values differ from the desired values.
-func tagsWillChange(existing TagList, desired map[string][]TagValueV3, onlyMissing bool) bool {
-	for pred, values := range desired {
-		desiredNames := make([]string, 0, len(values))
-		for _, v := range values {
-			if v.Name != "" || v.URI != "" {
-				desiredNames = append(desiredNames, v.Name)
-			}
-		}
-		if onlyMissing {
-			if len(desiredNames) > 0 && len(existing.GetValues(pred)) == 0 {
-				return true
-			}
-		} else {
-			if !stringSlicesEqual(existing.GetValues(pred), desiredNames) {
-				return true
-			}
-		}
-	}
-	return false
-}
 
 // TrackToV3 converts an internal Track to a TrackV3 for v3 serialisation.
 func TrackToV3(t Track) TrackV3 {
@@ -153,7 +126,8 @@ func DecodeTrackV3(r io.Reader) (TrackV3, error) {
 // provided array. Empty arrays delete the predicate's tags.
 // All predicate updates are applied atomically in a single transaction.
 // Stores both name (value) and uri per tag row.
-func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (err error) {
+// Returns changed=true if any predicate's stored values actually differed from the desired values.
+func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (changed bool, err error) {
 	type predicateUpdate struct {
 		predicate string
 		values    []TagValueV3 // empty slice means delete all values
@@ -172,7 +146,8 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 			}
 		}
 		if !IsMultiValue(predicate) && len(nonEmpty) > 1 {
-			return fmt.Errorf("multiple values for single-value predicate %q not allowed", predicate)
+			err = fmt.Errorf("multiple values for single-value predicate %q not allowed", predicate)
+			return
 		}
 		config := GetPredicateConfig(predicate)
 		// Resolve name to URI before RequiresURI validation so the resolved
@@ -182,7 +157,8 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 				if v.URI == "" && v.Name != "" {
 					uri, resolveErr := config.ResolveNameToURI(store, v.Name)
 					if resolveErr != nil {
-						return fmt.Errorf("could not resolve %q for predicate %q: %w", v.Name, predicate, resolveErr)
+						err = fmt.Errorf("could not resolve %q for predicate %q: %w", v.Name, predicate, resolveErr)
+						return
 					}
 					nonEmpty[i].URI = uri
 				}
@@ -191,7 +167,8 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 		if config.RequiresURI {
 			for _, v := range nonEmpty {
 				if v.URI == "" {
-					return fmt.Errorf("predicate %q requires a URI", predicate)
+					err = fmt.Errorf("predicate %q requires a URI", predicate)
+					return
 				}
 			}
 		}
@@ -204,7 +181,8 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 		return
 	}
 	if !trackFound {
-		return errors.New("Unknown Track")
+		err = errors.New("Unknown Track")
+		return
 	}
 
 	// Ensure predicates exist for non-delete updates. createPredicate is
@@ -215,7 +193,8 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 		}
 		hasPred, err2 := store.hasPredicate(u.predicate)
 		if err2 != nil {
-			return err2
+			err = err2
+			return
 		}
 		if !hasPred {
 			if err = store.createPredicate(u.predicate); err != nil {
@@ -232,7 +211,8 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 				if v.Name == "" && v.URI != "" {
 					name, resolveErr := config.ResolveURIToName(store, v.URI)
 					if resolveErr != nil {
-						return fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, u.predicate, resolveErr)
+						err = fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, u.predicate, resolveErr)
+						return
 					}
 					updates[i].values[j].Name = name
 				}
@@ -240,10 +220,43 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 		}
 	}
 
+	// Compare desired values against current DB state to detect actual changes.
+	type tagRow struct {
+		Value string `db:"value"`
+		URI   string `db:"uri"`
+	}
+	for _, u := range updates {
+		var current []tagRow
+		if err = store.DB.Select(&current, "SELECT value, uri FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, u.predicate); err != nil {
+			return
+		}
+		if len(current) != len(u.values) {
+			changed = true
+			break
+		}
+		type tagKey = [2]string
+		currentSet := make(map[tagKey]bool, len(current))
+		for _, row := range current {
+			currentSet[tagKey{row.Value, row.URI}] = true
+		}
+		for _, v := range u.values {
+			if !currentSet[tagKey{v.Name, v.URI}] {
+				changed = true
+				break
+			}
+		}
+		if changed {
+			break
+		}
+	}
+	if !changed {
+		return
+	}
+
 	// Apply all tag writes atomically in a single transaction.
 	tx, err2 := store.DB.Beginx()
 	if err2 != nil {
-		return err2
+		return
 	}
 	for _, u := range updates {
 		_, err = tx.Exec("DELETE FROM tag WHERE trackid = $1 AND predicateid = $2", trackid, u.predicate)
@@ -259,13 +272,15 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 			}
 		}
 	}
-	return tx.Commit()
+	err = tx.Commit()
+	return
 }
 
 // updateTagsV3IfMissing updates tags only if the predicate has no existing values.
 // All inserts are applied atomically in a single transaction.
 // Stores both name (value) and uri per tag row.
-func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagValueV3) (err error) {
+// Returns changed=true if any tags were actually written.
+func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagValueV3) (changed bool, err error) {
 	type predicateInsert struct {
 		predicate string
 		values    []TagValueV3
@@ -294,7 +309,8 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 					if v.URI == "" && v.Name != "" {
 						uri, resolveErr := config.ResolveNameToURI(store, v.Name)
 						if resolveErr != nil {
-							return fmt.Errorf("could not resolve %q for predicate %q: %w", v.Name, predicate, resolveErr)
+							err = fmt.Errorf("could not resolve %q for predicate %q: %w", v.Name, predicate, resolveErr)
+							return
 						}
 						nonEmpty[i].URI = uri
 					}
@@ -306,7 +322,8 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 					if v.Name == "" && v.URI != "" {
 						name, resolveErr := config.ResolveURIToName(store, v.URI)
 						if resolveErr != nil {
-							return fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, predicate, resolveErr)
+							err = fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, predicate, resolveErr)
+							return
 						}
 						nonEmpty[i].Name = name
 					}
@@ -315,7 +332,8 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 			if config.RequiresURI {
 				for _, v := range nonEmpty {
 					if v.URI == "" {
-						return fmt.Errorf("predicate %q requires a URI", predicate)
+						err = fmt.Errorf("predicate %q requires a URI", predicate)
+						return
 					}
 				}
 			}
@@ -323,7 +341,8 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 			// outside the main transaction.
 			hasPred, err2 := store.hasPredicate(predicate)
 			if err2 != nil {
-				return err2
+				err = err2
+				return
 			}
 			if !hasPred {
 				if err = store.createPredicate(predicate); err != nil {
@@ -339,11 +358,12 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 	if len(inserts) == 0 {
 		return
 	}
+	changed = true
 
 	// Insert all missing predicate values atomically in a single transaction.
 	tx, err2 := store.DB.Beginx()
 	if err2 != nil {
-		return err2
+		return
 	}
 	for _, ins := range inserts {
 		for _, v := range ins.values {
@@ -354,7 +374,8 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 			}
 		}
 	}
-	return tx.Commit()
+	err = tx.Commit()
+	return
 }
 
 // getTrackDataByFieldV3 gets a track and returns it in v3 format.
@@ -541,15 +562,18 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 	internalTrack := trackV3ToInternal(trackV3)
 	internalTrack.Tags = nil
 	onlyMissing := (r.Header.Get("If-None-Match") == "*")
-	_, action, err := updateMultipleTracks(store, r, internalTrack)
+	scalarResult, _, err := updateMultipleTracks(store, r, internalTrack)
 	if err != nil {
 		writeV3Error(w, err)
 		return
 	}
-	// Apply v3 tags to each matched track and detect if any actually changed.
-	// queryMultipleTracksV3 returns tracks with tags loaded, so we use the pre-update
-	// tags for change detection without an extra DB round-trip.
-	var tagChangedCount int
+
+	// Collect all changed track IDs from the scalar path and the v3 tag path.
+	// Using a set ensures tracks changed by both paths are counted once.
+	changedTrackIDs := make(map[int]bool, len(scalarResult.Tracks))
+	for _, t := range scalarResult.Tracks {
+		changedTrackIDs[t.ID] = true
+	}
 	if v3Tags != nil {
 		tracks, _, _, _, err2 := queryMultipleTracksV3(store, r)
 		if err2 != nil {
@@ -557,24 +581,27 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		for _, t := range tracks {
-			if tagsWillChange(t.Tags, v3Tags, onlyMissing) {
-				tagChangedCount++
-			}
+			var tagChanged bool
 			if onlyMissing {
-				err = store.updateTagsV3IfMissing(t.ID, v3Tags)
+				tagChanged, err = store.updateTagsV3IfMissing(t.ID, v3Tags)
 			} else {
-				err = store.updateTagsV3(t.ID, v3Tags)
+				tagChanged, err = store.updateTagsV3(t.ID, v3Tags)
 			}
 			if err != nil {
 				writeV3Error(w, err)
 				return
 			}
+			if tagChanged {
+				changedTrackIDs[t.ID] = true
+			}
 		}
 	}
-	// If only tags changed (scalar path returned noChange), upgrade action and fire Loganne.
-	if tagChangedCount > 0 && action == "noChange" {
+
+	// Fire a single Loganne event covering all changes (scalar + tag).
+	action := "noChange"
+	if len(changedTrackIDs) > 0 {
 		action = "tracksUpdated"
-		store.Loganne.post(action, strconv.Itoa(tagChangedCount)+" tracks updated", Track{}, Track{})
+		store.Loganne.post(action, strconv.Itoa(len(changedTrackIDs))+" tracks updated", Track{}, Track{})
 	}
 	// Re-query to get v3-formatted results
 	tracks, totalPages, totalTracks, page, err := queryMultipleTracksV3(store, r)
@@ -663,9 +690,9 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		if onlyMissing {
-			err = store.updateTagsV3IfMissing(storedTrack.ID, v3Tags)
+			_, err = store.updateTagsV3IfMissing(storedTrack.ID, v3Tags)
 		} else {
-			err = store.updateTagsV3(storedTrack.ID, v3Tags)
+			_, err = store.updateTagsV3(storedTrack.ID, v3Tags)
 		}
 		if err != nil {
 			writeV3Error(w, err)
