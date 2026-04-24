@@ -541,17 +541,19 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 	existingTrack, err := store.getTrackDataByField(filterfield, filtervalue)
 
 	// Convert to internal Track for the updateCreateTrackDataByField call.
-	// Tags are included so updateNeeded can detect tag changes and Loganne fires.
-	// After the call, we overwrite tags via the v3-aware path.
+	// Strip tags so the old (URI-unaware) tag write path never runs on the v3 handler.
+	// Tags are written exclusively via the v3-aware path below.
 	v3Tags := trackV3.Tags
 	internalTrack := trackV3ToInternal(trackV3)
+	internalTrack.Tags = nil
 
+	var action string
 	if r.Method == "PATCH" {
 		if err != nil && err.Error() == "Track Not Found" {
 			writeV3ErrorResponse(w, http.StatusNotFound, "Track Not Found", "not_found")
 			return
 		}
-		_, _, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing)
+		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing)
 	} else {
 		missingFields := []string{}
 		if internalTrack.Fingerprint == "" {
@@ -567,7 +569,7 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 			writeV3ErrorResponse(w, http.StatusBadRequest, "Missing fields \""+strings.Join(missingFields, "\" and \"")+"\"", "bad_request")
 			return
 		}
-		_, _, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing)
+		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing)
 	}
 	if err != nil {
 		writeV3Error(w, err)
@@ -598,6 +600,7 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 		writeV3Error(w, err)
 		return
 	}
+	w.Header().Set("Track-Action", action)
 	writeJSONResponse(w, savedTrack, nil)
 }
 

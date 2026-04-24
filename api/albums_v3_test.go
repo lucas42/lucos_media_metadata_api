@@ -619,3 +619,68 @@ func TestAlbumMergeMethodNotAllowed(test *testing.T) {
 	makeRequestWithUnallowedMethod(test, "/v3/albums/merge", "PUT", []string{"POST"})
 	makeRequestWithUnallowedMethod(test, "/v3/albums/merge", "DELETE", []string{"POST"})
 }
+
+// TestTrackAlbumTagIfMissingBareNameCreatesAlbumAndURI checks the core bug fix for #188:
+// when a track is new and written with If-None-Match: *, a bare-name album tag must create
+// the album entity and store the URI — the old double-write path must not block the resolver.
+func TestTrackAlbumTagIfMissingBareNameCreatesAlbumAndURI(test *testing.T) {
+	clearData()
+	trackURL := "http://example.org/albums-test/if-missing-new"
+	escapedURL := url.QueryEscape(trackURL)
+	trackPath := "/v3/tracks?url=" + escapedURL
+
+	// PUT with If-None-Match: * (the import client's mode) and a bare album name.
+	req := basicRequest(test, "PUT", trackPath, `{"fingerprint":"albumifmissing2","duration":240,"tags":{"album":[{"name":"Abbey Road"}]}}`)
+	req.Header.Set("If-None-Match", "*")
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200 for IfMissing PUT with bare album name, got %d", resp.StatusCode)
+	}
+
+	// The album entity must have been created.
+	makeRequest(test, "GET", "/v3/albums/1", "", 200, `{"id":1,"name":"Abbey Road","uri":"/albums/1"}`, true)
+
+	// The track's album tag must have both name and URI populated.
+	getReq := basicRequest(test, "GET", trackPath, "")
+	getResp, _ := doRawRequest(test, getReq)
+	var track map[string]interface{}
+	json.NewDecoder(getResp.Body).Decode(&track)
+	tags := track["tags"].(map[string]interface{})
+	albumArr, ok := tags["album"].([]interface{})
+	if !ok || len(albumArr) != 1 {
+		test.Fatalf("Expected 1 album tag in response")
+	}
+	albumObj := albumArr[0].(map[string]interface{})
+	assertEqual(test, "album name", "Abbey Road", albumObj["name"].(string))
+	if albumObj["uri"] == nil || albumObj["uri"].(string) == "" {
+		test.Error("Expected album URI to be populated after IfMissing bare-name write")
+	}
+}
+
+// TestV3PutSetsTrackActionHeader checks that PUT /v3/tracks sets the Track-Action response header.
+func TestV3PutSetsTrackActionHeader(test *testing.T) {
+	clearData()
+	trackURL := "http://example.org/v3track/action-header"
+	escapedURL := url.QueryEscape(trackURL)
+	v3Path := "/v3/tracks?url=" + escapedURL
+
+	// New track — should get trackAdded.
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"v3actionhdr1","duration":200,"tags":{"title":[{"name":"Header Test"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	action := resp.Header.Get("Track-Action")
+	if action == "" {
+		test.Error("Expected Track-Action header to be present on PUT response, got empty")
+	}
+
+	// Repeat PUT (no change) — should get noChange.
+	req2 := basicRequest(test, "PUT", v3Path, `{"fingerprint":"v3actionhdr1","duration":200,"tags":{"title":[{"name":"Header Test"}]}}`)
+	req2.Header.Set("If-None-Match", "*")
+	resp2, _ := doRawRequest(test, req2)
+	action2 := resp2.Header.Get("Track-Action")
+	if action2 == "" {
+		test.Error("Expected Track-Action header to be present on no-op PUT response, got empty")
+	}
+}
