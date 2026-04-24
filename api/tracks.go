@@ -55,10 +55,8 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 	// Compare tags per predicate, supporting multi-value predicates.
 	// Group changeSet tags by predicate, then compare against original.
 	changeByPred := make(map[string][]string)
-	changeURIsByPred := make(map[string][]string)
 	for _, changeTag := range changeSet.Tags {
 		changeByPred[changeTag.PredicateID] = append(changeByPred[changeTag.PredicateID], changeTag.Value)
-		changeURIsByPred[changeTag.PredicateID] = append(changeURIsByPred[changeTag.PredicateID], changeTag.URI)
 	}
 	for pred, newVals := range changeByPred {
 		if onlyMissing && original.Tags.GetValue(pred) != "" {
@@ -71,8 +69,6 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 				"predicate", pred,
 				"oldValues", fmt.Sprintf("%#v", origVals),
 				"newValues", fmt.Sprintf("%#v", newVals),
-				"oldURIs", fmt.Sprintf("%#v", original.Tags.GetURIs(pred)),
-				"newURIs", fmt.Sprintf("%#v", changeURIsByPred[pred]),
 			)
 			return true
 		}
