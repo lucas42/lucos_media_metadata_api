@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/jmoiron/sqlx"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math/rand"
 	"net/http"
@@ -37,28 +36,22 @@ func (track Track) getName() (string) {
 }
 func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 	if changeSet.Fingerprint != "" && changeSet.Fingerprint != original.Fingerprint{
-		slog.Debug("updateNeeded: fingerprint changed", "trackID", original.ID, "url", original.URL, "old", fmt.Sprintf("%#v", original.Fingerprint), "new", fmt.Sprintf("%#v", changeSet.Fingerprint))
 		return true
 	}
 	if changeSet.Duration != 0 && changeSet.Duration != original.Duration{
-		slog.Debug("updateNeeded: duration changed", "trackID", original.ID, "url", original.URL, "old", original.Duration, "new", changeSet.Duration)
 		return true
 	}
 	if changeSet.URL != "" && changeSet.URL != original.URL{
-		slog.Debug("updateNeeded: url changed", "trackID", original.ID, "url", original.URL, "old", fmt.Sprintf("%#v", original.URL), "new", fmt.Sprintf("%#v", changeSet.URL))
 		return true
 	}
 	if changeSet.Weighting != 0 && changeSet.Weighting != original.Weighting{
-		slog.Debug("updateNeeded: weighting changed", "trackID", original.ID, "url", original.URL, "old", fmt.Sprintf("%#v", original.Weighting), "new", fmt.Sprintf("%#v", changeSet.Weighting))
 		return true
 	}
 	// Compare tags per predicate, supporting multi-value predicates.
 	// Group changeSet tags by predicate, then compare against original.
 	changeByPred := make(map[string][]string)
-	changeURIsByPred := make(map[string][]string)
 	for _, changeTag := range changeSet.Tags {
 		changeByPred[changeTag.PredicateID] = append(changeByPred[changeTag.PredicateID], changeTag.Value)
-		changeURIsByPred[changeTag.PredicateID] = append(changeURIsByPred[changeTag.PredicateID], changeTag.URI)
 	}
 	for pred, newVals := range changeByPred {
 		if onlyMissing && original.Tags.GetValue(pred) != "" {
@@ -66,20 +59,11 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 		}
 		origVals := original.Tags.GetValues(pred)
 		if !stringSlicesEqual(origVals, newVals) {
-			slog.Debug("updateNeeded: tag values changed",
-				"trackID", original.ID, "url", original.URL,
-				"predicate", pred,
-				"oldValues", fmt.Sprintf("%#v", origVals),
-				"newValues", fmt.Sprintf("%#v", newVals),
-				"oldURIs", fmt.Sprintf("%#v", original.Tags.GetURIs(pred)),
-				"newURIs", fmt.Sprintf("%#v", changeURIsByPred[pred]),
-			)
 			return true
 		}
 	}
 	if changeSet.Collections != nil {
 		if (original.Collections == nil) {
-			slog.Debug("updateNeeded: collections changed (original nil)", "trackID", original.ID, "url", original.URL)
 			return true
 		}
 		// Check for collections which are on the existing track but not the new one
@@ -91,7 +75,6 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 				}
 			}
 			if remove {
-				slog.Debug("updateNeeded: collection removed", "trackID", original.ID, "url", original.URL, "collection", existingCollection.Slug)
 				return true
 			}
 		}
@@ -104,7 +87,6 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 				}
 			}
 			if add {
-				slog.Debug("updateNeeded: collection added", "trackID", original.ID, "url", original.URL, "collection", newCollection.Slug)
 				return true
 			}
 		}
