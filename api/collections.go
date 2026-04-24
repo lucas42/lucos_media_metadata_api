@@ -134,6 +134,13 @@ func (store Datastore) getTracksInCollection(slug string, offset int, limit int)
 	return
  }
 
+// getAllTrackIDsInCollection returns all track IDs for a collection without pagination.
+func (store Datastore) getAllTrackIDsInCollection(slug string) (ids []int, err error) {
+	ids = []int{}
+	err = store.DB.Select(&ids, "SELECT trackid FROM collection_track WHERE collectionslug = $1", slug)
+	return
+}
+
 /**
  * Gets all the collections a given track is in
  */
@@ -158,7 +165,26 @@ func (original Collection) updateNeeded(changeSet Collection) bool {
 	if changeSet.Icon != "" && changeSet.Icon != original.Icon {
 		return true
 	}
-	// TODO: check for different tracks in collection
+	if changeSet.Tracks != nil {
+		changeIDs := make(map[int]bool, len(*changeSet.Tracks))
+		for _, t := range *changeSet.Tracks {
+			changeIDs[t.ID] = true
+		}
+		origIDs := make(map[int]bool)
+		if original.Tracks != nil {
+			for _, t := range *original.Tracks {
+				origIDs[t.ID] = true
+			}
+		}
+		if len(changeIDs) != len(origIDs) {
+			return true
+		}
+		for id := range changeIDs {
+			if !origIDs[id] {
+				return true
+			}
+		}
+	}
 	return false
 }
 
@@ -233,12 +259,29 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 
 	action = "noChange"
 	storedCollection = existingCollection
+
+	// For accurate track comparison, load ALL existing track IDs (not paginated)
+	// when the request includes a tracks list.
+	existingForComparison := existingCollection
+	if newCollection.Tracks != nil && existingCollection.Slug != "" {
+		allIDs, idErr := store.getAllTrackIDsInCollection(existingCollection.Slug)
+		if idErr != nil {
+			err = idErr
+			return
+		}
+		allTracks := make([]Track, len(allIDs))
+		for i, id := range allIDs {
+			allTracks[i] = Track{ID: id}
+		}
+		existingForComparison.Tracks = &allTracks
+	}
+
 	if newCollection.Tracks == nil {
 		newCollection.Tracks = &[]Track{}
 	}
 
 	// If no changes are needed, return the existing collection
-	if !existingCollection.updateNeeded(newCollection) {
+	if !existingForComparison.updateNeeded(newCollection) {
 		slog.Debug("Update collection not needed", "newCollection", newCollection)
 		return
 	}
@@ -267,6 +310,38 @@ func (store Datastore) updateCreateCollection(existingCollection Collection, new
 			return
 		}
 	}
+
+	// Sync track membership: add/remove tracks to match newCollection.Tracks.
+	// existingForComparison.Tracks contains all existing IDs (unpaginated).
+	if len(*newCollection.Tracks) > 0 || (existingForComparison.Tracks != nil && len(*existingForComparison.Tracks) > 0) {
+		existingIDs := make(map[int]bool)
+		if existingForComparison.Tracks != nil {
+			for _, t := range *existingForComparison.Tracks {
+				existingIDs[t.ID] = true
+			}
+		}
+		newIDs := make(map[int]bool)
+		for _, t := range *newCollection.Tracks {
+			newIDs[t.ID] = true
+		}
+		for id := range newIDs {
+			if !existingIDs[id] {
+				err = store.addTrackToCollection(storedCollection.Slug, id)
+				if err != nil {
+					return
+				}
+			}
+		}
+		for id := range existingIDs {
+			if !newIDs[id] {
+				err = store.removeTrackFromCollection(storedCollection.Slug, id)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}
+
 	standardLimit := 20
 	offset, limit := parsePageParam(rawpagenumber, standardLimit)
 	tracks, totalTracks, err := store.getTracksInCollection(storedCollection.Slug, offset, limit)

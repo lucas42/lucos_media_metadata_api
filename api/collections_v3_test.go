@@ -212,3 +212,72 @@ func TestV3CollectionRandomOnNonexistentCollection(test *testing.T) {
 	clearData()
 	makeRequest(test, "GET", "/v3/collections/nonexistent/random", "", 404, `{"error":"Collection Not Found","code":"not_found"}`, true)
 }
+
+// TestV3CollectionPutAddsTracksFromBody checks that PUTting a collection with a
+// tracks list adds those tracks to the collection.
+func TestV3CollectionPutAddsTracksFromBody(test *testing.T) {
+	clearData()
+	// Create two tracks
+	setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/coll-tracks/1"), `{"fingerprint":"ct1","duration":100}`, 200)
+	setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/coll-tracks/2"), `{"fingerprint":"ct2","duration":100}`, 200)
+
+	// Create collection with both tracks in the body (v2 track format uses "trackid")
+	setupRequest(test, "PUT", "/v3/collections/tracksync", `{"name":"Track Sync","icon":"🎵","tracks":[{"trackid":1},{"trackid":2}]}`, 200)
+
+	// Both tracks should now be in the collection
+	makeRequest(test, "GET", "/v3/collections/tracksync/1", "", 200, `{"inCollection":true}`, true)
+	makeRequest(test, "GET", "/v3/collections/tracksync/2", "", 200, `{"inCollection":true}`, true)
+}
+
+// TestV3CollectionPutRemovesTracksNotInBody checks that PUTting a collection with a
+// tracks list removes tracks that are no longer present.
+func TestV3CollectionPutRemovesTracksNotInBody(test *testing.T) {
+	clearData()
+	// Create two tracks and add both to a collection
+	setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/coll-remove/1"), `{"fingerprint":"cr1","duration":100}`, 200)
+	setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/coll-remove/2"), `{"fingerprint":"cr2","duration":100}`, 200)
+	setupRequest(test, "PUT", "/v3/collections/removesync", `{"name":"Remove Sync","icon":"🗑️"}`, 200)
+	setupRequest(test, "PUT", "/v3/collections/removesync/1", "", 200)
+	setupRequest(test, "PUT", "/v3/collections/removesync/2", "", 200)
+
+	// PUT with only track 1 — track 2 should be removed
+	setupRequest(test, "PUT", "/v3/collections/removesync", `{"name":"Remove Sync","icon":"🗑️","tracks":[{"trackid":1}]}`, 200)
+
+	makeRequest(test, "GET", "/v3/collections/removesync/1", "", 200, `{"inCollection":true}`, true)
+	makeRequest(test, "GET", "/v3/collections/removesync/2", "", 404, `{"error":"Track Not In Collection","code":"not_found"}`, true)
+}
+
+// TestV3CollectionPutTrackOnlyChangeFiresLoganne checks that a tracks-only change
+// (no name/icon change) fires a collectionUpdated Loganne event.
+func TestV3CollectionPutTrackOnlyChangeFiresLoganne(test *testing.T) {
+	clearData()
+	setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/coll-loganne/1"), `{"fingerprint":"cl1","duration":100}`, 200)
+	setupRequest(test, "PUT", "/v3/collections/logannecoll", `{"name":"Loganne Coll","icon":"📢"}`, 200)
+	loganneRequestCount = 0
+
+	// PUT with a track — only track changes, name/icon same
+	setupRequest(test, "PUT", "/v3/collections/logannecoll", `{"name":"Loganne Coll","icon":"📢","tracks":[{"trackid":1}]}`, 200)
+
+	if lastLoganneType != "collectionUpdated" {
+		test.Errorf("Expected collectionUpdated Loganne event, got %q", lastLoganneType)
+	}
+	if loganneRequestCount != 1 {
+		test.Errorf("Expected 1 Loganne request, got %d", loganneRequestCount)
+	}
+}
+
+// TestV3CollectionPutNoTrackChangeIsNoOp checks that a PUT with unchanged tracks
+// does not fire a Loganne event.
+func TestV3CollectionPutNoTrackChangeIsNoOp(test *testing.T) {
+	clearData()
+	setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape("http://example.org/coll-noop/1"), `{"fingerprint":"cn1","duration":100}`, 200)
+	setupRequest(test, "PUT", "/v3/collections/noopcoll", `{"name":"Noop Coll","icon":"🤫","tracks":[{"trackid":1}]}`, 200)
+	loganneRequestCount = 0
+
+	// PUT again with the same data — should be a no-op
+	setupRequest(test, "PUT", "/v3/collections/noopcoll", `{"name":"Noop Coll","icon":"🤫","tracks":[{"trackid":1}]}`, 200)
+
+	if loganneRequestCount != 0 {
+		test.Errorf("Expected no Loganne event for no-op PUT, got %d", loganneRequestCount)
+	}
+}
