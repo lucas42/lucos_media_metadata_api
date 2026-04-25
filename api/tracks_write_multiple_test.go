@@ -269,7 +269,9 @@ func TestBulkPatchTagOnlyFiresLoganne(test *testing.T) {
 
 	checkResponseHeader(test, response, "Track-Action", "tracksUpdated")
 	assertEqual(test, "Loganne event type", "tracksUpdated", lastLoganneType)
-	assertEqual(test, "Loganne request count", 1, loganneRequestCount)
+	// 2 matched tracks fire individual trackUpdated events + 1 bulk tracksUpdated = 3 total.
+	// This is consistent with scalar bulk change behaviour.
+	assertEqual(test, "Loganne request count", 3, loganneRequestCount)
 }
 
 // TestBulkPatchTagOnlyNoChangeIsNoOp checks that a bulk PATCH with identical tag values
