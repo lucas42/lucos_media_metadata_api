@@ -722,17 +722,37 @@ func TestV3PatchSingleTrackSetsTrackActionHeader(test *testing.T) {
 // noChange on the scalar-fields path (PR #198 strips tags from internalTrack to
 // prevent the old URI-unaware write path from running; tag-only changes do not
 // drive updateNeeded).
+// TestV3PutTagOnlyChangeSetsTrackActionHeader checks that a PUT where only tags
+// change (scalar fields unchanged) returns Track-Action: trackUpdated and fires Loganne.
 func TestV3PutTagOnlyChangeSetsTrackActionHeader(test *testing.T) {
 	clearData()
 	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/ta-tagonly")
 	setupRequest(test, "PUT", v3Path, `{"fingerprint":"ta5","duration":100,"tags":{"title":[{"name":"Old Title"}]}}`, 200)
+	loganneRequestCount = 0
 
 	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"ta5","duration":100,"tags":{"title":[{"name":"New Title"}]}}`)
 	resp, _ := doRawRequest(test, req)
 	if resp.StatusCode != 200 {
 		test.Fatalf("Expected 200, got %d", resp.StatusCode)
 	}
-	// Tags are written by the v3 path; scalar fields are unchanged so the scalar
-	// path returns noChange. See #196 for the design context.
+	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
+	assertEqual(test, "Loganne event type", "trackUpdated", lastLoganneType)
+	assertEqual(test, "Loganne request count", 1, loganneRequestCount)
+}
+
+// TestV3PutTagOnlyNoChangeIsNoOp checks that a PUT with identical tags does not
+// fire Loganne and returns Track-Action: noChange.
+func TestV3PutTagOnlyNoChangeIsNoOp(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/ta-tagonly-noop")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"ta6","duration":100,"tags":{"title":[{"name":"Same Title"}]}}`, 200)
+	loganneRequestCount = 0
+
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"ta6","duration":100,"tags":{"title":[{"name":"Same Title"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
 	assertEqual(test, "Track-Action header", "noChange", resp.Header.Get("Track-Action"))
+	assertEqual(test, "Loganne request count", 0, loganneRequestCount)
 }

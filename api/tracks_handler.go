@@ -702,14 +702,20 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 			writeV3Error(w, err)
 			return
 		}
+		var tagChanged bool
 		if onlyMissing {
-			_, err = store.updateTagsV3IfMissing(storedTrack.ID, v3Tags)
+			tagChanged, err = store.updateTagsV3IfMissing(storedTrack.ID, v3Tags)
 		} else {
-			_, err = store.updateTagsV3(storedTrack.ID, v3Tags)
+			tagChanged, err = store.updateTagsV3(storedTrack.ID, v3Tags)
 		}
 		if err != nil {
 			writeV3Error(w, err)
 			return
+		}
+		// If only tags changed (scalar path was a no-op), fire trackUpdated Loganne.
+		if tagChanged && action == "noChange" {
+			action = "trackUpdated"
+			store.Loganne.post(action, "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
 		}
 	}
 
