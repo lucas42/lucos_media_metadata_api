@@ -557,10 +557,6 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 		writeV3TagValidationError(w, pred, msg)
 		return
 	}
-	// Strip tags from internal track — handle them via the v3 path per track
-	v3Tags := trackV3.Tags
-	internalTrack := trackV3ToInternal(trackV3)
-	internalTrack.Tags = nil
 	onlyMissing := (r.Header.Get("If-None-Match") == "*")
 
 	// Query matched tracks once, used for both scalar and tag updates.
@@ -570,13 +566,13 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Update all matched tracks (scalar fields + v3 tags) via updateCreateTrackDataByField.
+	// Update all matched tracks via updateCreateTrackDataByField.
 	// Collect changed IDs to fire a single bulk Loganne event.
 	changedTrackIDs := make(map[int]bool)
 	for i := range matchedTracks {
-		trackupdates := internalTrack
-		trackupdates.ID = matchedTracks[i].ID
-		storedTrack, trackAction, trackErr := store.updateCreateTrackDataByField("id", matchedTracks[i].ID, trackupdates, matchedTracks[i], onlyMissing, v3Tags)
+		t := trackV3
+		t.ID = matchedTracks[i].ID
+		storedTrack, trackAction, trackErr := store.updateCreateTrackDataByField("id", matchedTracks[i].ID, t, matchedTracks[i], onlyMissing)
 		if trackErr != nil {
 			writeV3Error(w, trackErr)
 			return
@@ -635,36 +631,29 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 
 	existingTrack, err := store.getTrackDataByField(filterfield, filtervalue)
 
-	// Convert to internal Track for the updateCreateTrackDataByField call.
-	// Strip tags so the old (URI-unaware) tag write path never runs on the v3 handler.
-	// Tags are written exclusively via the v3-aware path below.
-	v3Tags := trackV3.Tags
-	internalTrack := trackV3ToInternal(trackV3)
-	internalTrack.Tags = nil
-
 	var action string
 	if r.Method == "PATCH" {
 		if err != nil && err.Error() == "Track Not Found" {
 			writeV3ErrorResponse(w, http.StatusNotFound, "Track Not Found", "not_found")
 			return
 		}
-		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing, v3Tags)
+		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, trackV3, existingTrack, onlyMissing)
 	} else {
 		missingFields := []string{}
-		if internalTrack.Fingerprint == "" {
+		if trackV3.Fingerprint == "" {
 			missingFields = append(missingFields, "fingerprint")
 		}
-		if internalTrack.URL == "" {
+		if trackV3.URL == "" {
 			missingFields = append(missingFields, "url")
 		}
-		if internalTrack.Duration == 0 {
+		if trackV3.Duration == 0 {
 			missingFields = append(missingFields, "duration")
 		}
 		if len(missingFields) > 0 {
 			writeV3ErrorResponse(w, http.StatusBadRequest, "Missing fields \""+strings.Join(missingFields, "\" and \"")+"\"", "bad_request")
 			return
 		}
-		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing, v3Tags)
+		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, trackV3, existingTrack, onlyMissing)
 	}
 	if err != nil {
 		writeV3Error(w, err)

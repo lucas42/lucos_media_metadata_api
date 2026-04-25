@@ -131,15 +131,22 @@ func stringSlicesEqual(a, b []string) bool {
  * Updates or Creates fields about a track based on a given field
  *
  */
-// updateCreateTrackDataByField updates or creates a track's scalar fields and, when
-// v3Tags is non-nil, also applies v3 tag writes via updateTagsV3/updateTagsV3IfMissing.
+// updateCreateTrackDataByField updates or creates a track from the given TrackV3.
+// It handles both scalar field writes and v3 tag writes, detecting actual changes
+// and firing Loganne events. The conversion from TrackV3 to internal Track happens
+// here so callers can pass the wire object directly without further transformation.
 // Returns the updated track, the action taken ("noChange", "trackUpdated", "trackAdded"),
 // and any error.
-func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, existingTrack Track, onlyMissing bool, v3Tags map[string][]TagValueV3) (storedTrack Track, action string, err error) {
+func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, trackV3 TrackV3, existingTrack Track, onlyMissing bool) (storedTrack Track, action string, err error) {
+	// Convert to internal track; nil out old-style Tags so the URI-unaware write
+	// path never runs — v3 tags are handled separately below.
+	track := trackV3ToInternal(trackV3)
+	track.Tags = nil
+
 	scalarChanged := existingTrack.updateNeeded(track, onlyMissing)
 
 	// True no-op: no scalar changes and no v3 tags to apply.
-	if !scalarChanged && v3Tags == nil {
+	if !scalarChanged && trackV3.Tags == nil {
 		slog.Debug("Update track not needed", "filterField", filterField, "value", value, "onlyMissing", onlyMissing)
 		return existingTrack, "noChange", nil
 	}
@@ -253,12 +260,12 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 
 	// Apply v3 tags if provided. The action is upgraded to trackUpdated and Loganne
 	// fires if tags actually changed and no scalar change already fired an event.
-	if v3Tags != nil {
+	if trackV3.Tags != nil {
 		var tagChanged bool
 		if onlyMissing {
-			tagChanged, err = store.updateTagsV3IfMissing(storedTrack.ID, v3Tags)
+			tagChanged, err = store.updateTagsV3IfMissing(storedTrack.ID, trackV3.Tags)
 		} else {
-			tagChanged, err = store.updateTagsV3(storedTrack.ID, v3Tags)
+			tagChanged, err = store.updateTagsV3(storedTrack.ID, trackV3.Tags)
 		}
 		if err != nil {
 			return
