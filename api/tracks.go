@@ -142,133 +142,116 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		return existingTrack, "noChange", nil
 	}
 
-	action = "noChange"
+	slog.Info("update/create track", "filterField", filterField, "value", value)
 	storedTrack = existingTrack
 
-	// Apply scalar field updates if any scalar field actually changed.
-	scalarChanged := existingTrack.ID == 0 ||
-		(track.Fingerprint != "" && track.Fingerprint != existingTrack.Fingerprint) ||
-		(track.Duration != 0 && track.Duration != existingTrack.Duration) ||
-		(track.URL != "" && track.URL != existingTrack.URL) ||
-		(track.Weighting != 0 && track.Weighting != existingTrack.Weighting) ||
-		track.Collections != nil
-	if scalarChanged {
-		slog.Info("update/create track", "filterField", filterField, "value", value)
-		updateFields := []string{}
-		if track.Duration != 0 {
-			updateFields = append(updateFields, "duration = :duration")
-		}
-		if track.URL != "" {
-			err = store.checkForDuplicateTrack("url", track.URL, filterField, value)
-			if err != nil {
-				return
-			}
-			updateFields = append(updateFields, "url = :url")
-		}
-		if track.Fingerprint != "" {
-			err = store.checkForDuplicateTrack("fingerprint", track.Fingerprint, filterField, value)
-			if err != nil {
-				return
-			}
-			updateFields = append(updateFields, "fingerprint = :fingerprint")
-		}
-		if existingTrack.ID > 0 {
-			if len(updateFields) > 0 {
-				_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
-			}
-		} else {
-			_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
-		}
+	// Apply scalar field updates.
+	updateFields := []string{}
+	if track.Duration != 0 {
+		updateFields = append(updateFields, "duration = :duration")
+	}
+	if track.URL != "" {
+		err = store.checkForDuplicateTrack("url", track.URL, filterField, value)
 		if err != nil {
 			return
 		}
-		storedTrack, err = store.getTrackDataByField(filterField, value)
+		updateFields = append(updateFields, "url = :url")
+	}
+	if track.Fingerprint != "" {
+		err = store.checkForDuplicateTrack("fingerprint", track.Fingerprint, filterField, value)
 		if err != nil {
 			return
 		}
-
-		// Set "added" tag for new tracks if neither the existing track nor the client provides it.
-		if existingTrack.Tags.GetValue("added") == "" && (track.Tags == nil || len(track.Tags["added"]) == 0) {
-			err = store.updateTagIfMissing(storedTrack.ID, "added", time.Now().Format(time.RFC3339))
-			if err != nil {
-				return
-			}
+		updateFields = append(updateFields, "fingerprint = :fingerprint")
+	}
+	if existingTrack.ID > 0 {
+		if len(updateFields) > 0 {
+			_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
 		}
+	} else {
+		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
+	}
+	if err != nil {
+		return
+	}
+	// Fetch storedTrack to get the ID (needed for new inserts and subsequent writes).
+	storedTrack, err = store.getTrackDataByField(filterField, value)
+	if err != nil {
+		return
+	}
 
-		// Sync collection membership to match the requested list.
-		if track.Collections != nil {
-			if existingTrack.Collections != nil {
+	// Set "added" tag for new tracks if neither the existing track nor the client provides it.
+	if existingTrack.Tags.GetValue("added") == "" && (track.Tags == nil || len(track.Tags["added"]) == 0) {
+		err = store.updateTagIfMissing(storedTrack.ID, "added", time.Now().Format(time.RFC3339))
+		if err != nil {
+			return
+		}
+	}
+
+	// Sync collection membership to match the requested list.
+	if track.Collections != nil {
+		if existingTrack.Collections != nil {
+			for _, existingCollection := range *existingTrack.Collections {
+				remove := true
+				for _, newCollection := range *track.Collections {
+					if existingCollection.Slug == newCollection.Slug {
+						remove = false
+					}
+				}
+				if remove {
+					err = store.removeTrackFromCollection(existingCollection.Slug, storedTrack.ID)
+					if err != nil {
+						return
+					}
+				}
+			}
+			for _, newCollection := range *track.Collections {
+				add := true
 				for _, existingCollection := range *existingTrack.Collections {
-					remove := true
-					for _, newCollection := range *track.Collections {
-						if existingCollection.Slug == newCollection.Slug {
-							remove = false
-						}
-					}
-					if remove {
-						err = store.removeTrackFromCollection(existingCollection.Slug, storedTrack.ID)
-						if err != nil {
-							return
-						}
+					if existingCollection.Slug == newCollection.Slug {
+						add = false
 					}
 				}
-				for _, newCollection := range *track.Collections {
-					add := true
-					for _, existingCollection := range *existingTrack.Collections {
-						if existingCollection.Slug == newCollection.Slug {
-							add = false
-						}
-					}
-					if add {
-						err = store.addTrackToCollection(newCollection.Slug, storedTrack.ID)
-						if err != nil {
-							return
-						}
-					}
-				}
-			} else {
-				for _, newCollection := range *track.Collections {
+				if add {
 					err = store.addTrackToCollection(newCollection.Slug, storedTrack.ID)
 					if err != nil {
 						return
 					}
 				}
 			}
-		}
-
-		storedTrack, err = store.getTrackDataByField(filterField, value)
-		if err != nil {
-			return
-		}
-		if existingTrack.ID > 0 {
-			action = "trackUpdated"
-			store.Loganne.post(action, "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
 		} else {
-			action = "trackAdded"
-			store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack)
+			for _, newCollection := range *track.Collections {
+				err = store.addTrackToCollection(newCollection.Slug, storedTrack.ID)
+				if err != nil {
+					return
+				}
+			}
 		}
 	}
 
-	// Apply v3 tags if provided. The action is upgraded to trackUpdated and Loganne
-	// fires if tags actually changed and no scalar/collection change already fired an event.
+	// Apply v3 tags if provided.
 	if track.Tags != nil {
-		var tagChanged bool
 		if onlyMissing {
-			tagChanged, err = store.updateTagsV3IfMissing(storedTrack.ID, track.Tags)
+			_, err = store.updateTagsV3IfMissing(storedTrack.ID, track.Tags)
 		} else {
-			tagChanged, err = store.updateTagsV3(storedTrack.ID, track.Tags)
+			_, err = store.updateTagsV3(storedTrack.ID, track.Tags)
 		}
 		if err != nil {
 			return
 		}
-		if tagChanged && action == "noChange" {
-			storedTrack, err = store.getTrackDataByField(filterField, value)
-			if err != nil {
-				return
-			}
-			action = "trackUpdated"
-			store.Loganne.post(action, "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
-		}
+	}
+
+	// Re-fetch after all writes so Loganne receives the complete updated state.
+	storedTrack, err = store.getTrackDataByField(filterField, value)
+	if err != nil {
+		return
+	}
+	if existingTrack.ID > 0 {
+		action = "trackUpdated"
+		store.Loganne.post(action, "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
+	} else {
+		action = "trackAdded"
+		store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack)
 	}
 	return
 }
