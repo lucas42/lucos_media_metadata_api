@@ -35,50 +35,50 @@ func (track Track) getName() (string) {
 	}
 	return "#"+strconv.Itoa(track.ID)
 }
-func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
-	if changeSet.Fingerprint != "" && changeSet.Fingerprint != original.Fingerprint{
+func (original Track) updateNeeded(changeSet TrackV3, onlyMissing bool) bool {
+	if changeSet.Fingerprint != "" && changeSet.Fingerprint != original.Fingerprint {
 		slog.Debug("updateNeeded: fingerprint changed", "trackID", original.ID, "url", original.URL, "old", fmt.Sprintf("%#v", original.Fingerprint), "new", fmt.Sprintf("%#v", changeSet.Fingerprint))
 		return true
 	}
-	if changeSet.Duration != 0 && changeSet.Duration != original.Duration{
+	if changeSet.Duration != 0 && changeSet.Duration != original.Duration {
 		slog.Debug("updateNeeded: duration changed", "trackID", original.ID, "url", original.URL, "old", original.Duration, "new", changeSet.Duration)
 		return true
 	}
-	if changeSet.URL != "" && changeSet.URL != original.URL{
+	if changeSet.URL != "" && changeSet.URL != original.URL {
 		slog.Debug("updateNeeded: url changed", "trackID", original.ID, "url", original.URL, "old", fmt.Sprintf("%#v", original.URL), "new", fmt.Sprintf("%#v", changeSet.URL))
 		return true
 	}
-	if changeSet.Weighting != 0 && changeSet.Weighting != original.Weighting{
+	if changeSet.Weighting != 0 && changeSet.Weighting != original.Weighting {
 		slog.Debug("updateNeeded: weighting changed", "trackID", original.ID, "url", original.URL, "old", fmt.Sprintf("%#v", original.Weighting), "new", fmt.Sprintf("%#v", changeSet.Weighting))
 		return true
 	}
-	// Compare tags per predicate, supporting multi-value predicates.
-	// Group changeSet tags by predicate, then compare against original.
-	changeByPred := make(map[string][]string)
-	for _, changeTag := range changeSet.Tags {
-		changeByPred[changeTag.PredicateID] = append(changeByPred[changeTag.PredicateID], changeTag.Value)
-	}
-	for pred, newVals := range changeByPred {
+	// Compare v3 tags per predicate against existing tag values (by name).
+	for pred, values := range changeSet.Tags {
 		if onlyMissing && original.Tags.GetValue(pred) != "" {
 			continue
 		}
+		newNames := make([]string, 0, len(values))
+		for _, v := range values {
+			if v.Name != "" || v.URI != "" {
+				newNames = append(newNames, v.Name)
+			}
+		}
 		origVals := original.Tags.GetValues(pred)
-		if !stringSlicesEqual(origVals, newVals) {
+		if !stringSlicesEqual(origVals, newNames) {
 			slog.Debug("updateNeeded: tag values changed",
 				"trackID", original.ID, "url", original.URL,
 				"predicate", pred,
 				"oldValues", fmt.Sprintf("%#v", origVals),
-				"newValues", fmt.Sprintf("%#v", newVals),
+				"newValues", fmt.Sprintf("%#v", newNames),
 			)
 			return true
 		}
 	}
 	if changeSet.Collections != nil {
-		if (original.Collections == nil) {
+		if original.Collections == nil {
 			slog.Debug("updateNeeded: collections changed (original nil)", "trackID", original.ID, "url", original.URL)
 			return true
 		}
-		// Check for collections which are on the existing track but not the new one
 		for _, existingCollection := range *original.Collections {
 			remove := true
 			for _, newCollection := range *changeSet.Collections {
@@ -91,7 +91,6 @@ func (original Track) updateNeeded (changeSet Track, onlyMissing bool) bool {
 				return true
 			}
 		}
-		// Check for collections which are on the new track and not the existing one
 		for _, newCollection := range *changeSet.Collections {
 			add := true
 			for _, existingCollection := range *original.Collections {
@@ -137,18 +136,8 @@ func stringSlicesEqual(a, b []string) bool {
 // Returns the updated track, the action taken ("noChange", "trackUpdated", "trackAdded"),
 // and any error.
 func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track TrackV3, existingTrack Track, onlyMissing bool) (storedTrack Track, action string, err error) {
-	// Build a minimal Track for change detection (scalar fields + collections only).
-	changeSet := Track{
-		Fingerprint: track.Fingerprint,
-		Duration:    track.Duration,
-		URL:         track.URL,
-		Weighting:   track.Weighting,
-		Collections: track.Collections,
-	}
-	needsUpdate := existingTrack.updateNeeded(changeSet, onlyMissing)
-
-	// True no-op: no scalar/collection changes and no v3 tags to apply.
-	if !needsUpdate && track.Tags == nil {
+	// Return early if nothing has changed (scalars, tags, or collections).
+	if !existingTrack.updateNeeded(track, onlyMissing) {
 		slog.Debug("Update track not needed", "filterField", filterField, "value", value, "onlyMissing", onlyMissing)
 		return existingTrack, "noChange", nil
 	}
@@ -156,7 +145,14 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 	action = "noChange"
 	storedTrack = existingTrack
 
-	if needsUpdate {
+	// Apply scalar field updates if any scalar field actually changed.
+	scalarChanged := existingTrack.ID == 0 ||
+		(track.Fingerprint != "" && track.Fingerprint != existingTrack.Fingerprint) ||
+		(track.Duration != 0 && track.Duration != existingTrack.Duration) ||
+		(track.URL != "" && track.URL != existingTrack.URL) ||
+		(track.Weighting != 0 && track.Weighting != existingTrack.Weighting) ||
+		track.Collections != nil
+	if scalarChanged {
 		slog.Info("update/create track", "filterField", filterField, "value", value)
 		updateFields := []string{}
 		if track.Duration != 0 {
