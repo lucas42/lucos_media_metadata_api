@@ -570,47 +570,23 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Collect all changed track IDs. Using a set ensures tracks changed by
-	// both scalar and tag paths are counted once in the Loganne event.
+	// Update all matched tracks (scalar fields + v3 tags) via updateCreateTrackDataByField.
+	// Collect changed IDs to fire a single bulk Loganne event.
 	changedTrackIDs := make(map[int]bool)
-
-	// Apply scalar field updates per track.
 	for i := range matchedTracks {
 		trackupdates := internalTrack
 		trackupdates.ID = matchedTracks[i].ID
-		storedTrack, trackAction, trackErr := store.updateCreateTrackDataByField("id", matchedTracks[i].ID, trackupdates, matchedTracks[i], onlyMissing)
+		storedTrack, trackAction, trackErr := store.updateCreateTrackDataByField("id", matchedTracks[i].ID, trackupdates, matchedTracks[i], onlyMissing, v3Tags)
 		if trackErr != nil {
 			writeV3Error(w, trackErr)
 			return
 		}
-		if trackAction == "trackUpdated" {
+		if trackAction != "noChange" {
 			changedTrackIDs[storedTrack.ID] = true
-		} else if trackAction != "noChange" {
-			writeV3Error(w, errors.New("Unexpected action "+trackAction))
-			return
 		}
 	}
 
-	// Apply v3 tag updates per track.
-	if v3Tags != nil {
-		for _, t := range matchedTracks {
-			var tagChanged bool
-			if onlyMissing {
-				tagChanged, err = store.updateTagsV3IfMissing(t.ID, v3Tags)
-			} else {
-				tagChanged, err = store.updateTagsV3(t.ID, v3Tags)
-			}
-			if err != nil {
-				writeV3Error(w, err)
-				return
-			}
-			if tagChanged {
-				changedTrackIDs[t.ID] = true
-			}
-		}
-	}
-
-	// Fire a single Loganne event covering all changes (scalar + tag).
+	// Fire a single bulk Loganne event covering all per-track changes.
 	action := "noChange"
 	if len(changedTrackIDs) > 0 {
 		action = "tracksUpdated"
@@ -672,7 +648,7 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 			writeV3ErrorResponse(w, http.StatusNotFound, "Track Not Found", "not_found")
 			return
 		}
-		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing)
+		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing, v3Tags)
 	} else {
 		missingFields := []string{}
 		if internalTrack.Fingerprint == "" {
@@ -688,29 +664,11 @@ func (store Datastore) putPatchSingleTrackV3(w http.ResponseWriter, r *http.Requ
 			writeV3ErrorResponse(w, http.StatusBadRequest, "Missing fields \""+strings.Join(missingFields, "\" and \"")+"\"", "bad_request")
 			return
 		}
-		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing)
+		_, action, err = store.updateCreateTrackDataByField(filterfield, filtervalue, internalTrack, existingTrack, onlyMissing, v3Tags)
 	}
 	if err != nil {
 		writeV3Error(w, err)
 		return
-	}
-
-	// Overwrite tags via the v3-aware path which handles multi-value predicates and URIs.
-	if v3Tags != nil {
-		storedTrack, err := store.getTrackDataByField(filterfield, filtervalue)
-		if err != nil {
-			writeV3Error(w, err)
-			return
-		}
-		if onlyMissing {
-			_, err = store.updateTagsV3IfMissing(storedTrack.ID, v3Tags)
-		} else {
-			_, err = store.updateTagsV3(storedTrack.ID, v3Tags)
-		}
-		if err != nil {
-			writeV3Error(w, err)
-			return
-		}
 	}
 
 	// Re-fetch in v3 format after the update

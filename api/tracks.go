@@ -131,116 +131,146 @@ func stringSlicesEqual(a, b []string) bool {
  * Updates or Creates fields about a track based on a given field
  *
  */
-func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, existingTrack Track, onlyMissing bool) (storedTrack Track, action string, err error) {
-	// If no changes are needed, return the existing track
-	if !existingTrack.updateNeeded(track, onlyMissing) {
+// updateCreateTrackDataByField updates or creates a track's scalar fields and, when
+// v3Tags is non-nil, also applies v3 tag writes via updateTagsV3/updateTagsV3IfMissing.
+// Returns the updated track, the action taken ("noChange", "trackUpdated", "trackAdded"),
+// and any error.
+func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track Track, existingTrack Track, onlyMissing bool, v3Tags map[string][]TagValueV3) (storedTrack Track, action string, err error) {
+	scalarChanged := existingTrack.updateNeeded(track, onlyMissing)
+
+	// True no-op: no scalar changes and no v3 tags to apply.
+	if !scalarChanged && v3Tags == nil {
 		slog.Debug("Update track not needed", "filterField", filterField, "value", value, "onlyMissing", onlyMissing)
 		return existingTrack, "noChange", nil
 	}
 
-	slog.Info("update/create track", "filterField", filterField, "value", value)
-	action = "Changed"
-	updateFields := []string{}
-	if track.Duration != 0 {
-		updateFields = append(updateFields, "duration = :duration")
-	}
-	if track.URL != "" {
-		err = store.checkForDuplicateTrack("url", track.URL, filterField, value)
-		if err != nil {
-			return
-		}
-		updateFields = append(updateFields, "url = :url")
-	}
-	if track.Fingerprint != "" {
-		err = store.checkForDuplicateTrack("fingerprint", track.Fingerprint, filterField, value)
-		if err != nil {
-			return
-		}
-		updateFields = append(updateFields, "fingerprint = :fingerprint")
-	}
-	if existingTrack.ID > 0 {
-		if len(updateFields) > 0 {
-			_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
-		}
-	} else {
-		_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
-	}
-	if err != nil {
-		return
-	}
-	storedTrack, err = store.getTrackDataByField(filterField, value)
-	if err != nil {
-		return
-	}
-	if track.Tags == nil {
-		track.Tags = TagList{}
-	}
-	if existingTrack.Tags.GetValue("added") == "" && track.Tags.GetValue("added") == "" {
-		track.Tags.SetValue("added", time.Now().Format(time.RFC3339))
-	}
-	if !onlyMissing {
-		err = store.updateTags(storedTrack.ID, track.Tags);
-	} else {
-		err = store.updateTagsIfMissing(storedTrack.ID, track.Tags);
-	}
-	if err != nil {
-		return
-	}
+	action = "noChange"
+	storedTrack = existingTrack
 
-	// If Collections are given, add and remove collection to match
-	// Only looks at the collection's slug to identify it.  All other fields are ignored.
-	if track.Collections != nil {
-		if (existingTrack.Collections != nil) {
-			// Check for collections which are on the existing track but not the new one, and remove them
-			for _, existingCollection := range *existingTrack.Collections {
-				remove := true
-				for _, newCollection := range *track.Collections {
-					if existingCollection.Slug == newCollection.Slug {
-						remove = false
-					}
-				}
-				if remove {
-					err = store.removeTrackFromCollection(existingCollection.Slug, storedTrack.ID)
-					if err != nil {
-						return
-					}
-				}
+	if scalarChanged {
+		slog.Info("update/create track", "filterField", filterField, "value", value)
+		updateFields := []string{}
+		if track.Duration != 0 {
+			updateFields = append(updateFields, "duration = :duration")
+		}
+		if track.URL != "" {
+			err = store.checkForDuplicateTrack("url", track.URL, filterField, value)
+			if err != nil {
+				return
 			}
-			// Check for collections which are on the new track and not the existing one, and add them
-			for _, newCollection := range *track.Collections {
-				add := true
+			updateFields = append(updateFields, "url = :url")
+		}
+		if track.Fingerprint != "" {
+			err = store.checkForDuplicateTrack("fingerprint", track.Fingerprint, filterField, value)
+			if err != nil {
+				return
+			}
+			updateFields = append(updateFields, "fingerprint = :fingerprint")
+		}
+		if existingTrack.ID > 0 {
+			if len(updateFields) > 0 {
+				_, err = store.DB.NamedExec("UPDATE TRACK SET "+strings.Join(updateFields, ", ")+" WHERE "+filterField+" = :"+filterField, track)
+			}
+		} else {
+			_, err = store.DB.NamedExec("INSERT INTO track(duration, url, fingerprint) values(:duration, :url, :fingerprint)", track)
+		}
+		if err != nil {
+			return
+		}
+		storedTrack, err = store.getTrackDataByField(filterField, value)
+		if err != nil {
+			return
+		}
+		if track.Tags == nil {
+			track.Tags = TagList{}
+		}
+		if existingTrack.Tags.GetValue("added") == "" && track.Tags.GetValue("added") == "" {
+			track.Tags.SetValue("added", time.Now().Format(time.RFC3339))
+		}
+		if !onlyMissing {
+			err = store.updateTags(storedTrack.ID, track.Tags)
+		} else {
+			err = store.updateTagsIfMissing(storedTrack.ID, track.Tags)
+		}
+		if err != nil {
+			return
+		}
+
+		// If Collections are given, add and remove collection to match
+		// Only looks at the collection's slug to identify it.  All other fields are ignored.
+		if track.Collections != nil {
+			if existingTrack.Collections != nil {
 				for _, existingCollection := range *existingTrack.Collections {
-					if existingCollection.Slug == newCollection.Slug {
-						add = false
+					remove := true
+					for _, newCollection := range *track.Collections {
+						if existingCollection.Slug == newCollection.Slug {
+							remove = false
+						}
+					}
+					if remove {
+						err = store.removeTrackFromCollection(existingCollection.Slug, storedTrack.ID)
+						if err != nil {
+							return
+						}
 					}
 				}
-				if add {
+				for _, newCollection := range *track.Collections {
+					add := true
+					for _, existingCollection := range *existingTrack.Collections {
+						if existingCollection.Slug == newCollection.Slug {
+							add = false
+						}
+					}
+					if add {
+						err = store.addTrackToCollection(newCollection.Slug, storedTrack.ID)
+						if err != nil {
+							return
+						}
+					}
+				}
+			} else {
+				for _, newCollection := range *track.Collections {
 					err = store.addTrackToCollection(newCollection.Slug, storedTrack.ID)
 					if err != nil {
 						return
 					}
 				}
 			}
-		} else {
-			// If there's no existing Collections add all the new ones
-			for _, newCollection := range *track.Collections {
-				err = store.addTrackToCollection(newCollection.Slug, storedTrack.ID)
-				if err != nil {
-					return
-				}
-			}
+		}
 
+		storedTrack, err = store.getTrackDataByField(filterField, value)
+		if err != nil {
+			return
+		}
+		if existingTrack.ID > 0 {
+			action = "trackUpdated"
+			store.Loganne.post(action, "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
+		} else {
+			action = "trackAdded"
+			store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack)
 		}
 	}
 
-	storedTrack, err = store.getTrackDataByField(filterField, value)
-	if existingTrack.ID > 0 {
-		action = "trackUpdated"
-		store.Loganne.post(action, "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
-	} else {
-		action = "trackAdded"
-		store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack)
-
+	// Apply v3 tags if provided. The action is upgraded to trackUpdated and Loganne
+	// fires if tags actually changed and no scalar change already fired an event.
+	if v3Tags != nil {
+		var tagChanged bool
+		if onlyMissing {
+			tagChanged, err = store.updateTagsV3IfMissing(storedTrack.ID, v3Tags)
+		} else {
+			tagChanged, err = store.updateTagsV3(storedTrack.ID, v3Tags)
+		}
+		if err != nil {
+			return
+		}
+		if tagChanged && action == "noChange" {
+			storedTrack, err = store.getTrackDataByField(filterField, value)
+			if err != nil {
+				return
+			}
+			action = "trackUpdated"
+			store.Loganne.post(action, "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
+		}
 	}
 	return
 }
