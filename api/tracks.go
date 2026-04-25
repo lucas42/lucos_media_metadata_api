@@ -133,20 +133,22 @@ func stringSlicesEqual(a, b []string) bool {
  */
 // updateCreateTrackDataByField updates or creates a track from the given TrackV3.
 // It handles both scalar field writes and v3 tag writes, detecting actual changes
-// and firing Loganne events. The conversion from TrackV3 to internal Track happens
-// here so callers can pass the wire object directly without further transformation.
+// and firing Loganne events.
 // Returns the updated track, the action taken ("noChange", "trackUpdated", "trackAdded"),
 // and any error.
-func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, trackV3 TrackV3, existingTrack Track, onlyMissing bool) (storedTrack Track, action string, err error) {
-	// Convert to internal track; nil out old-style Tags so the URI-unaware write
-	// path never runs — v3 tags are handled separately below.
-	track := trackV3ToInternal(trackV3)
-	track.Tags = nil
+func (store Datastore) updateCreateTrackDataByField(filterField string, value interface{}, track TrackV3, existingTrack Track, onlyMissing bool) (storedTrack Track, action string, err error) {
+	// Build a minimal Track for change detection (scalar fields + collections only).
+	changeSet := Track{
+		Fingerprint: track.Fingerprint,
+		Duration:    track.Duration,
+		URL:         track.URL,
+		Weighting:   track.Weighting,
+		Collections: track.Collections,
+	}
+	needsUpdate := existingTrack.updateNeeded(changeSet, onlyMissing)
 
-	scalarChanged := existingTrack.updateNeeded(track, onlyMissing)
-
-	// True no-op: no scalar changes and no v3 tags to apply.
-	if !scalarChanged && trackV3.Tags == nil {
+	// True no-op: no scalar/collection changes and no v3 tags to apply.
+	if !needsUpdate && track.Tags == nil {
 		slog.Debug("Update track not needed", "filterField", filterField, "value", value, "onlyMissing", onlyMissing)
 		return existingTrack, "noChange", nil
 	}
@@ -154,7 +156,7 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 	action = "noChange"
 	storedTrack = existingTrack
 
-	if scalarChanged {
+	if needsUpdate {
 		slog.Info("update/create track", "filterField", filterField, "value", value)
 		updateFields := []string{}
 		if track.Duration != 0 {
@@ -188,23 +190,16 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		if err != nil {
 			return
 		}
-		if track.Tags == nil {
-			track.Tags = TagList{}
-		}
-		if existingTrack.Tags.GetValue("added") == "" && track.Tags.GetValue("added") == "" {
-			track.Tags.SetValue("added", time.Now().Format(time.RFC3339))
-		}
-		if !onlyMissing {
-			err = store.updateTags(storedTrack.ID, track.Tags)
-		} else {
-			err = store.updateTagsIfMissing(storedTrack.ID, track.Tags)
-		}
-		if err != nil {
-			return
+
+		// Set "added" tag for new tracks if neither the existing track nor the client provides it.
+		if existingTrack.Tags.GetValue("added") == "" && (track.Tags == nil || len(track.Tags["added"]) == 0) {
+			err = store.updateTagIfMissing(storedTrack.ID, "added", time.Now().Format(time.RFC3339))
+			if err != nil {
+				return
+			}
 		}
 
-		// If Collections are given, add and remove collection to match
-		// Only looks at the collection's slug to identify it.  All other fields are ignored.
+		// Sync collection membership to match the requested list.
 		if track.Collections != nil {
 			if existingTrack.Collections != nil {
 				for _, existingCollection := range *existingTrack.Collections {
@@ -259,13 +254,13 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 	}
 
 	// Apply v3 tags if provided. The action is upgraded to trackUpdated and Loganne
-	// fires if tags actually changed and no scalar change already fired an event.
-	if trackV3.Tags != nil {
+	// fires if tags actually changed and no scalar/collection change already fired an event.
+	if track.Tags != nil {
 		var tagChanged bool
 		if onlyMissing {
-			tagChanged, err = store.updateTagsV3IfMissing(storedTrack.ID, trackV3.Tags)
+			tagChanged, err = store.updateTagsV3IfMissing(storedTrack.ID, track.Tags)
 		} else {
-			tagChanged, err = store.updateTagsV3(storedTrack.ID, trackV3.Tags)
+			tagChanged, err = store.updateTagsV3(storedTrack.ID, track.Tags)
 		}
 		if err != nil {
 			return
