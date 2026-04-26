@@ -82,13 +82,16 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		CREATE TABLE "collection_track" (
 			"collectionslug" TEXT NOT NULL,
 			"trackid" TEXT NOT NULL,
-			"cum_weighting" FLOAT NOT NULL DEFAULT 0,
 			FOREIGN KEY (collectionslug) REFERENCES collection(slug),
 			FOREIGN KEY (trackid) REFERENCES track(id),
 			CONSTRAINT track_collection_unique UNIQUE (collectionslug, trackid)
 		);
 		`
 		database.DB.MustExec(sqlStmt)
+	}
+	if database.ColExists("collection_track", "cum_weighting") {
+		slog.Info("Dropping unused `cum_weighting` column from `collection_track`")
+		database.DB.MustExec(`ALTER TABLE "collection_track" DROP COLUMN "cum_weighting"`)
 	}
 	if !database.ColExists("collection", "icon") {
 		slog.Info("Updating table `collection` to add icon field")

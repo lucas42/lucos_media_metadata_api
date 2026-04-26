@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/jmoiron/sqlx"
 	"encoding/json"
 	"errors"
 	"io"
@@ -64,14 +63,9 @@ func (store Datastore) getCollection(slug string, rawpagenumber string) (collect
  * Doesn't include list of tracks for each, instead has a totalTracks field which gives a count
  */
 func (store Datastore) getAllCollections() (collections []Collection, err error) {
-	tx, err := store.DB.Beginx()
-	if err != nil {
-		return
-	}
 	collections = []Collection{}
 	err = store.DB.Select(&collections, "SELECT slug, name, icon FROM collection")
 	if err != nil {
-		_ = tx.Rollback()
 		return
 	}
 
@@ -81,22 +75,20 @@ func (store Datastore) getAllCollections() (collections []Collection, err error)
 		standardLimit := 20
 		totalTracks, err := store.getTrackCountForCollection(collection.Slug)
 		if err != nil {
-			_ = tx.Rollback()
 			return collections, err
 		}
 		collection.TotalTracks = &totalTracks
 		totalPages := int(math.Ceil(float64(totalTracks) / float64(standardLimit)))
 		collection.TotalPages = &totalPages
 
-		maxCumWeighting, err := store.getCollectionMaxCumWeighting(tx, collection.Slug)
+		var playableCount int
+		err = store.DB.Get(&playableCount, "SELECT COUNT(*) FROM collection_track LEFT JOIN track ON collection_track.trackid = track.id WHERE collection_track.collectionslug = $1 AND track.weighting > 0", collection.Slug)
 		if err != nil {
-			_ = tx.Rollback()
 			return collections, err
 		}
-		isPlayable := (maxCumWeighting > 0) // To be playable, a collection needs to contain at least one non-zero-weighted track
+		isPlayable := playableCount > 0 // To be playable, a collection needs to contain at least one non-zero-weighted track
 		collection.IsPlayable = &isPlayable
 	}
-	err = tx.Commit();
 	return
 }
 
@@ -149,15 +141,6 @@ func (store Datastore) getCollectionsByTrack(trackid int) (collections []Collect
 	err = store.DB.Select(&collections, "SELECT slug, name, icon FROM collection_track LEFT JOIN collection ON collection_track.collectionslug = collection.slug WHERE collection_track.trackid = $1", trackid)
 	return
 }
-/**
- * Gets all the collections a given track is in
- */
-func (store Datastore) getCollectionsByTrackUsingTx(tx *sqlx.Tx, trackid int) (collections []Collection, err error) {
-	collections = []Collection{}
-	err = tx.Select(&collections, "SELECT slug, name, icon FROM collection_track LEFT JOIN collection ON collection_track.collectionslug = collection.slug WHERE collection_track.trackid = $1", trackid)
-	return
-}
-
 func (original Collection) updateNeeded(changeSet Collection) bool {
 	if changeSet.Name != "" && changeSet.Name != original.Name {
 		return true
@@ -366,57 +349,19 @@ func (store Datastore) isTrackInCollection(collectionslug string, trackid int) (
 	return
 }
 /**
- * Checks whether a collection contains a given track
+ * Adds a track to a collection
  */
 func (store Datastore) addTrackToCollection(collectionslug string, trackid int) (err error) {
-	tx, err := store.DB.Beginx()
-	if err != nil {
-		return
-	}
 	slog.Info("Add track to collection", "collectionslug", collectionslug, "trackid", trackid)
 	_, err = store.DB.Exec("INSERT OR IGNORE INTO collection_track (collectionslug, trackid) VALUES ($1, $2)", collectionslug, trackid)
-	if err != nil {
-		_ = tx.Rollback()
-		return
-	}
-	weighting, err := store.getTrackWeighting(trackid)
-	if err != nil {
-		_ = tx.Rollback()
-		return
-	}
-	err = store.updateTrackCollectionCumWeighting(tx, collectionslug, trackid, 0, weighting)
-	if err != nil {
-		_ = tx.Rollback()
-		return
-	}
-	err = tx.Commit();
 	return
 }
 /**
- * Checks whether a collection contains a given track
+ * Removes a track from a collection
  */
 func (store Datastore) removeTrackFromCollection(collectionslug string, trackid int) (err error) {
-	tx, err := store.DB.Beginx()
-	if err != nil {
-		return
-	}
 	slog.Info("Remove track from collection", "collectionslug", collectionslug, "trackid", trackid)
-	oldWeighting, err := store.getTrackWeighting(trackid)
-	if err != nil {
-		_ = tx.Rollback()
-		return
-	}
-	err = store.updateTrackCollectionCumWeighting(tx, collectionslug, trackid, oldWeighting, 0)
-	if err != nil {
-		_ = tx.Rollback()
-		return
-	}
-	_, err = tx.Exec("DELETE FROM collection_track WHERE collectionslug == $1 AND trackid == $2", collectionslug, trackid)
-	if err != nil {
-		_ = tx.Rollback()
-		return
-	}
-	err = tx.Commit();
+	_, err = store.DB.Exec("DELETE FROM collection_track WHERE collectionslug == $1 AND trackid == $2", collectionslug, trackid)
 	return
 }
 
@@ -429,120 +374,82 @@ func DecodeCollection(r io.Reader) (Collection, error) {
 	return *collection, err
 }
 
-/**
- * Gets the highest cumulative weighting value for a given Collection (defaults to 0)
- *
- */
-func (store Datastore) getCollectionMaxCumWeighting(tx *sqlx.Tx, slug string) (maxcumweighting float64, err error) {
-	err = tx.Get(&maxcumweighting, "SELECT IFNULL(MAX(cum_weighting), 0) FROM collection_track WHERE collectionslug == $1", slug)
-	if maxcumweighting < 0 {
-		err = errors.New("cum_weightings are negative, max: " + strconv.FormatFloat(maxcumweighting, 'f', -1, 64))
-	}
-	return
+// trackWeightPair holds a track ID and its weighting for in-memory sampling.
+type trackWeightPair struct {
+	TrackID   int     `db:"trackid"`
+	Weighting float64 `db:"weighting"`
 }
 
 /**
- * Updates the cumulative weightings for a given track across all its collections
- *
- */
-func (store Datastore) updateTrackAllCollectionsCumWeighting(tx *sqlx.Tx, trackid int, oldWeighting float64, newWeighting float64) (err error) {
-	collections, err := store.getCollectionsByTrackUsingTx(tx, trackid)
-	if err != nil {
-		slog.Warn("Can't get list of collections for track", "trackid", trackid)
-		return
-	}
-	for i := range collections {
-		err = store.updateTrackCollectionCumWeighting(tx, collections[i].Slug, trackid, oldWeighting, newWeighting)
-		if err != nil {
-			return
-		}
-	}
-	return
-}
-/**
- * Updates the cumulative weightings for a given track in a given collection
- *
- */
-func (store Datastore) updateTrackCollectionCumWeighting(tx *sqlx.Tx, collectionslug string, trackid int, oldWeighting float64, newWeighting float64) (err error) {
-	slog.Debug("Set Cumulative Weighting in collection", "collectionslug", collectionslug, "trackid", trackid, "oldWeighting", oldWeighting, "newWeighting", newWeighting)
-	// Any tracks currently with a higher cumulative weighting than this one should be shmooshed down to remove this one
-	_, err = tx.Exec("UPDATE collection_track SET cum_weighting = cum_weighting - $1 WHERE collectionslug == $2 AND cum_weighting >= (SELECT cum_weighting FROM collection_track WHERE collectionslug == $3 AND trackid == $4)", oldWeighting, collectionslug, collectionslug, trackid)
-	if err != nil {
-		slog.Warn("Can't bulk update collection cum_weightings", "slug", collectionslug)
-		return
-	}
-	var newCumulativeWeighting float64
-
-	// If there's a non zero weighting, then stick this track to the end of the cumulative weighting list
-	if newWeighting > 0 {
-		var max float64
-		max, err = store.getCollectionMaxCumWeighting(tx, collectionslug)
-		if err != nil {
-			slog.Warn("Can't get max cum_weighting for collection", "slug", collectionslug)
-			return
-		}
-		newCumulativeWeighting = max + newWeighting
-
-	// If the weighting is zero, then set the cumulative weighting to zero too, to avoid 2 tracks with the same weighting
-	} else {
-		newCumulativeWeighting = 0
-	}
-	_, err = tx.Exec("UPDATE collection_track SET cum_weighting = $1 WHERE collectionslug == $2 AND trackid == $3", newCumulativeWeighting, collectionslug, trackid)
-	if err != nil {
-		slog.Warn("Can't update weighting for track in collection", "slug", collectionslug)
-		return
-	}
-	return
-}
-
-/**
- * Gets data about a random set of tracks for a given collection
+ * Gets data about a random set of tracks for a given collection using
+ * weighted-without-replacement sampling. No track will appear more than once
+ * in the response. If count >= pool size, all tracks in the pool are returned.
  *
  */
 func (store Datastore) getRandomTracksInCollection(slug string, count int) (collection Collection, err error) {
-	tx, err := store.DB.Beginx()
-	if err != nil {
-		return
-	}
 	collection, err = store.getBasicCollection(slug)
 	if err != nil {
-		_ = tx.Rollback()
 		return
 	}
 	tracks := []Track{}
 
-	max, err := store.getCollectionMaxCumWeighting(tx, slug)
+	// Pull all tracks with a positive weighting for the collection into memory.
+	// Zero-weight tracks are excluded — they should never be selected.
+	var pool []trackWeightPair
+	err = store.DB.Select(&pool, "SELECT collection_track.trackid, track.weighting FROM collection_track LEFT JOIN track ON collection_track.trackid = track.id WHERE collection_track.collectionslug = $1 AND track.weighting > 0", slug)
 	if err != nil {
-		_ = tx.Rollback()
 		return
 	}
 
-	if max > 0 {
-		for i := 0; i < count; i++ {
-			var trackid int
-			var track Track
-			weighting := rand.Float64() * max
-			err = store.DB.Get(&trackid, "SELECT trackid FROM collection_track WHERE collectionslug == $1 AND cum_weighting > $2 ORDER BY cum_weighting ASC LIMIT 1", slug, weighting)
-			if err != nil {
-				_ = tx.Rollback()
-				return
+	var selectedIDs []int
+	if len(pool) <= count {
+		// K >= N: return every track in the pool exactly once
+		for _, tw := range pool {
+			selectedIDs = append(selectedIDs, tw.TrackID)
+		}
+	} else {
+		// Weighted-without-replacement: each round pick one track proportional to
+		// its weight, remove it from the pool, then repeat.
+		remaining := make([]trackWeightPair, len(pool))
+		copy(remaining, pool)
+		for i := 0; i < count && len(remaining) > 0; i++ {
+			totalWeight := 0.0
+			for _, tw := range remaining {
+				totalWeight += tw.Weighting
 			}
-			track, err = store.getTrackDataByField("id", trackid)
-			if err != nil {
-				_ = tx.Rollback()
-				return
+			if totalWeight <= 0 {
+				break // no selectable tracks remain
 			}
-			tracks = append(tracks, track)
+			target := rand.Float64() * totalWeight
+			cumulative := 0.0
+			chosen := len(remaining) - 1 // fallback for floating-point edge case
+			for j, tw := range remaining {
+				cumulative += tw.Weighting
+				if cumulative > target {
+					chosen = j
+					break
+				}
+			}
+			selectedIDs = append(selectedIDs, remaining[chosen].TrackID)
+			remaining = append(remaining[:chosen], remaining[chosen+1:]...)
 		}
 	}
 
+	for _, trackID := range selectedIDs {
+		var track Track
+		track, err = store.getTrackDataByField("id", trackID)
+		if err != nil {
+			return
+		}
+		tracks = append(tracks, track)
+	}
+
 	totalPages := 0
-	if (len(tracks) > 0) {
+	if len(tracks) > 0 {
 		totalPages = 1
 	}
 	collection.Tracks = &tracks
 	collection.TotalPages = &totalPages
-	err = tx.Commit();
 	return
 }
 

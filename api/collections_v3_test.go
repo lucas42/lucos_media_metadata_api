@@ -281,3 +281,91 @@ func TestV3CollectionPutNoTrackChangeIsNoOp(test *testing.T) {
 		test.Errorf("Expected no Loganne event for no-op PUT, got %d", loganneRequestCount)
 	}
 }
+
+// TestV3CollectionRandomNoDuplicates verifies that getRandomTracksInCollection
+// never returns the same track twice in a single response (K < N case).
+func TestV3CollectionRandomNoDuplicates(test *testing.T) {
+	clearData()
+	// Create 25 tracks so that K=20 < N=25
+	for i := 1; i <= 25; i++ {
+		trackURL := fmt.Sprintf("http://example.org/wwr-dedup/%d", i)
+		fingerprint := fmt.Sprintf("wwrdedup%d", i)
+		setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape(trackURL),
+			fmt.Sprintf(`{"fingerprint":%q,"duration":100}`, fingerprint), 200)
+		// Give each track a positive weighting so it is selectable
+		setupRequest(test, "PUT", fmt.Sprintf("/v3/tracks/%d/weighting", i), "1", 200)
+	}
+	setupRequest(test, "PUT", "/v3/collections/wwr-dedup", `{"name":"WWR Dedup","icon":"🎲"}`, 200)
+	for i := 1; i <= 25; i++ {
+		setupRequest(test, "PUT", fmt.Sprintf("/v3/collections/wwr-dedup/%d", i), "", 200)
+	}
+
+	request := basicRequest(test, "GET", "/v3/collections/wwr-dedup/random", "")
+	resp, _ := doRawRequest(test, request)
+	var collection map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&collection)
+
+	tracks, ok := collection["tracks"].([]interface{})
+	if !ok {
+		test.Fatal("Expected tracks array in response")
+	}
+	if len(tracks) != 20 {
+		test.Errorf("Expected 20 tracks, got %d", len(tracks))
+	}
+
+	// Check for duplicates by collecting track IDs (v3 uses "id" not "trackid")
+	seen := make(map[float64]bool)
+	for _, t := range tracks {
+		track := t.(map[string]interface{})
+		id := track["id"].(float64)
+		if seen[id] {
+			test.Errorf("Duplicate track id %.0f in random response", id)
+		}
+		seen[id] = true
+	}
+}
+
+// TestV3CollectionRandomKGreaterThanN verifies that when more tracks are requested
+// than the pool contains, all N tracks are returned without error.
+func TestV3CollectionRandomKGreaterThanN(test *testing.T) {
+	clearData()
+	// Create 3 tracks — fewer than the 20 the endpoint requests
+	for i := 1; i <= 3; i++ {
+		trackURL := fmt.Sprintf("http://example.org/wwr-kgtn/%d", i)
+		fingerprint := fmt.Sprintf("wwrkgtn%d", i)
+		setupRequest(test, "PUT", "/v3/tracks?url="+url.QueryEscape(trackURL),
+			fmt.Sprintf(`{"fingerprint":%q,"duration":100}`, fingerprint), 200)
+		setupRequest(test, "PUT", fmt.Sprintf("/v3/tracks/%d/weighting", i), "5", 200)
+	}
+	setupRequest(test, "PUT", "/v3/collections/wwr-kgtn", `{"name":"WWR K>N","icon":"🎲"}`, 200)
+	for i := 1; i <= 3; i++ {
+		setupRequest(test, "PUT", fmt.Sprintf("/v3/collections/wwr-kgtn/%d", i), "", 200)
+	}
+
+	request := basicRequest(test, "GET", "/v3/collections/wwr-kgtn/random", "")
+	resp, _ := doRawRequest(test, request)
+	if resp.StatusCode != 200 {
+		test.Errorf("Expected 200, got %d", resp.StatusCode)
+	}
+	var collection map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&collection)
+
+	tracks, ok := collection["tracks"].([]interface{})
+	if !ok {
+		test.Fatal("Expected tracks array in response")
+	}
+	// All 3 tracks should be returned when pool size < requested count
+	if len(tracks) != 3 {
+		test.Errorf("Expected all 3 tracks returned when pool < requested count, got %d", len(tracks))
+	}
+	// Verify no duplicates even in this edge case (v3 uses "id" not "trackid")
+	seen := make(map[float64]bool)
+	for _, t := range tracks {
+		track := t.(map[string]interface{})
+		id := track["id"].(float64)
+		if seen[id] {
+			test.Errorf("Duplicate track id %.0f in K>N random response", id)
+		}
+		seen[id] = true
+	}
+}

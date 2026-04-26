@@ -358,12 +358,6 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 		_ = tx.Rollback()
 		return
 	}
-	err = store.updateTrackAllCollectionsCumWeighting(tx, trackid, oldWeighting, newWeighting)
-	if err != nil {
-		slog.Warn("Can't update collection cum_weightings; rolling back")
-		_ = tx.Rollback()
-		return
-	}
 	err = tx.Commit();
 	if err != nil {
 		return
