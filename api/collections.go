@@ -495,54 +495,81 @@ func (store Datastore) updateTrackCollectionCumWeighting(tx *sqlx.Tx, collection
 	return
 }
 
+// trackWeightPair holds a track ID and its weighting for in-memory sampling.
+type trackWeightPair struct {
+	TrackID   int     `db:"trackid"`
+	Weighting float64 `db:"weighting"`
+}
+
 /**
- * Gets data about a random set of tracks for a given collection
+ * Gets data about a random set of tracks for a given collection using
+ * weighted-without-replacement sampling. No track will appear more than once
+ * in the response. If count >= pool size, all tracks in the pool are returned.
  *
  */
 func (store Datastore) getRandomTracksInCollection(slug string, count int) (collection Collection, err error) {
-	tx, err := store.DB.Beginx()
-	if err != nil {
-		return
-	}
 	collection, err = store.getBasicCollection(slug)
 	if err != nil {
-		_ = tx.Rollback()
 		return
 	}
 	tracks := []Track{}
 
-	max, err := store.getCollectionMaxCumWeighting(tx, slug)
+	// Pull all (trackid, weighting) for the collection into memory
+	var pool []trackWeightPair
+	err = store.DB.Select(&pool, "SELECT collection_track.trackid, track.weighting FROM collection_track LEFT JOIN track ON collection_track.trackid = track.id WHERE collection_track.collectionslug = $1", slug)
 	if err != nil {
-		_ = tx.Rollback()
 		return
 	}
 
-	if max > 0 {
-		for i := 0; i < count; i++ {
-			var trackid int
-			var track Track
-			weighting := rand.Float64() * max
-			err = store.DB.Get(&trackid, "SELECT trackid FROM collection_track WHERE collectionslug == $1 AND cum_weighting > $2 ORDER BY cum_weighting ASC LIMIT 1", slug, weighting)
-			if err != nil {
-				_ = tx.Rollback()
-				return
+	var selectedIDs []int
+	if len(pool) <= count {
+		// K >= N: return every track in the pool exactly once
+		for _, tw := range pool {
+			selectedIDs = append(selectedIDs, tw.TrackID)
+		}
+	} else {
+		// Weighted-without-replacement: each round pick one track proportional to
+		// its weight, remove it from the pool, then repeat.
+		remaining := make([]trackWeightPair, len(pool))
+		copy(remaining, pool)
+		for i := 0; i < count && len(remaining) > 0; i++ {
+			totalWeight := 0.0
+			for _, tw := range remaining {
+				totalWeight += tw.Weighting
 			}
-			track, err = store.getTrackDataByField("id", trackid)
-			if err != nil {
-				_ = tx.Rollback()
-				return
+			if totalWeight <= 0 {
+				break // no selectable tracks remain
 			}
-			tracks = append(tracks, track)
+			target := rand.Float64() * totalWeight
+			cumulative := 0.0
+			chosen := len(remaining) - 1 // fallback for floating-point edge case
+			for j, tw := range remaining {
+				cumulative += tw.Weighting
+				if cumulative > target {
+					chosen = j
+					break
+				}
+			}
+			selectedIDs = append(selectedIDs, remaining[chosen].TrackID)
+			remaining = append(remaining[:chosen], remaining[chosen+1:]...)
 		}
 	}
 
+	for _, trackID := range selectedIDs {
+		var track Track
+		track, err = store.getTrackDataByField("id", trackID)
+		if err != nil {
+			return
+		}
+		tracks = append(tracks, track)
+	}
+
 	totalPages := 0
-	if (len(tracks) > 0) {
+	if len(tracks) > 0 {
 		totalPages = 1
 	}
 	collection.Tracks = &tracks
 	collection.TotalPages = &totalPages
-	err = tx.Commit();
 	return
 }
 
