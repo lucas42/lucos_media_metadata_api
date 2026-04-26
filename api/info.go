@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -39,20 +38,17 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 
 		dbCheck, trackCount := TrackCount(store)
 		weightingCheck, weightingDrift := WeightingCheck(store)
-		collectionsWeightingCheck, collectionsWeightingDrift := CollectionsWeightingCheck(store)
 		uriIntegrityCheck, tagsMissingURIs := URIIntegrityCheck(store)
 
 		info.Checks = map[string]Check{
-			"db":                   dbCheck,
-			"weighting":            weightingCheck,
-			"collections-weighting": collectionsWeightingCheck,
-			"uri-integrity":        uriIntegrityCheck,
+			"db":            dbCheck,
+			"weighting":     weightingCheck,
+			"uri-integrity": uriIntegrityCheck,
 		}
 		info.Metrics = map[string]Metric{
-			"track-count":                  trackCount,
-			"weighting-drift":              weightingDrift,
-			"collections-weighting-drift":  collectionsWeightingDrift,
-			"tags-missing-uris":            tagsMissingURIs,
+			"track-count":       trackCount,
+			"weighting-drift":   weightingDrift,
+			"tags-missing-uris": tagsMissingURIs,
 		}
 		info.CI = map[string]string{
 			"circle": "gh/lucas42/lucos_media_metadata_api",
@@ -125,20 +121,3 @@ func URIIntegrityCheck(store Datastore) (uriCheck Check, missingCount Metric) {
 	return
 }
 
-func CollectionsWeightingCheck(store Datastore) (weightingCheck Check, driftingCollectionsCount Metric) {
-	weightingCheck = Check{TechDetail: "Whether maximum cumulative weighting for each collection matches the sum of all its weightings"}
-	driftingCollectionsCount = Metric{TechDetail: "The number of collections whose maximum cumulative weighting doesn't match the sum of all its weightings"}
-	var driftingCollections []string
-	err := store.DB.Select(&driftingCollections, "SELECT slug from collection WHERE (SELECT MAX(collection_track.cum_weighting) - SUM (weighting) FROM collection_track LEFT JOIN track on trackid=track.id WHERE collectionslug = collection.slug) > 0.1;") // Comparison to 0.1, rather than zero, to account for float point arithmetic
-	driftingCollectionsCount.Value = len(driftingCollections)
-	if err != nil {
-		weightingCheck.OK = false
-		weightingCheck.Debug = err.Error()
-	} else if driftingCollectionsCount.Value != 0 {
-		weightingCheck.OK = false
-		weightingCheck.Debug = "The following collections have a maximum `cum_weighting` value which doesn't match the sum of the `weighting` values for all constituent tracks: "+strings.Join(driftingCollections, ", ")
-	} else {
-		weightingCheck.OK = true
-	}
-	return weightingCheck, driftingCollectionsCount
-}
