@@ -423,7 +423,11 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
 		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"))
 
-	// onAlbum property: track→album, declared as owl:inverseOf mo:track
+	// onAlbum property: track→album, declared as owl:inverseOf mo:track.
+	// Note: mo:track is an external URI (not in our custom ontology namespace) so it
+	// cannot be handled by the addProperty helper above. Any owl:inverseOf declaration
+	// for an external property MUST also emit a skos:prefLabel for that inverse predicate,
+	// as the addProperty helper does automatically for inverses in our own namespace.
 	onAlbum := rdf2go.NewResource(ontologyURI + "#onAlbum")
 	g.AddTriple(onAlbum,
 		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
@@ -437,9 +441,13 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 	g.AddTriple(onAlbum,
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#range"),
 		moRecord)
+	moTrackProperty := rdf2go.NewResource("http://purl.org/ontology/mo/track")
 	g.AddTriple(onAlbum,
 		rdf2go.NewResource("http://www.w3.org/2002/07/owl#inverseOf"),
-		rdf2go.NewResource("http://purl.org/ontology/mo/track"))
+		moTrackProperty)
+	g.AddTriple(moTrackProperty,
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Track", "en"))
 
 	return g, nil
 }

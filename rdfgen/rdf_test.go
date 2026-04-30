@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	rdf2go "github.com/deiu/rdf2go"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -447,6 +448,30 @@ func TestOntologyToRdfIncludesMoRecordAndOnAlbum(t *testing.T) {
 	}
 	if !strings.Contains(output, "mo/track") {
 		t.Error("expected mo:track inverseOf reference in ontology output")
+	}
+}
+
+// TestOntologyToRdfIncludesMoTrackPrefLabel verifies OntologyToRdf emits skos:prefLabel for mo:track.
+// Without this triple, clients that rely on skos:prefLabel cannot display the album→tracks relationship.
+func TestOntologyToRdfIncludesMoTrackPrefLabel(t *testing.T) {
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+
+	g, err := OntologyToRdf()
+	if err != nil {
+		t.Fatalf("OntologyToRdf failed: %v", err)
+	}
+
+	moTrackProperty := rdf2go.NewResource("http://purl.org/ontology/mo/track")
+	prefLabel := rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel")
+	expectedLabel := rdf2go.NewLiteralWithLanguage("Track", "en")
+
+	triples := g.All(moTrackProperty, prefLabel, nil)
+	if len(triples) == 0 {
+		t.Error("expected skos:prefLabel triple for mo:track, got none")
+		return
+	}
+	if triples[0].Object.String() != expectedLabel.String() {
+		t.Errorf("expected mo:track skos:prefLabel to be %q, got %q", expectedLabel, triples[0].Object)
 	}
 }
 
