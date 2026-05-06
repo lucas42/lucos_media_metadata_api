@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -36,9 +37,30 @@ func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("Info controller")
 		info := InfoStruct{System: "lucos_media_metadata_api", Title: "Media Metadata API"}
 
+		totalStart := time.Now()
+
+		trackCountStart := time.Now()
 		dbCheck, trackCount := TrackCount(store)
+		trackCountDuration := time.Since(trackCountStart)
+
+		weightingStart := time.Now()
 		weightingCheck, weightingDrift := WeightingCheck(store)
+		weightingDuration := time.Since(weightingStart)
+
+		uriIntegrityStart := time.Now()
 		uriIntegrityCheck, tagsMissingURIs := URIIntegrityCheck(store)
+		uriIntegrityDuration := time.Since(uriIntegrityStart)
+
+		totalDuration := time.Since(totalStart)
+		const slowThreshold = 200 * time.Millisecond
+		if totalDuration > slowThreshold {
+			slog.Warn("/_info queries slow",
+				"total_ms", totalDuration.Milliseconds(),
+				"track_count_ms", trackCountDuration.Milliseconds(),
+				"weighting_ms", weightingDuration.Milliseconds(),
+				"uri_integrity_ms", uriIntegrityDuration.Milliseconds(),
+			)
+		}
 
 		info.Checks = map[string]Check{
 			"db":            dbCheck,
