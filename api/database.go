@@ -1,6 +1,8 @@
 package main
 
 import (
+	"sync/atomic"
+
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"log/slog"
@@ -14,11 +16,14 @@ type Datastore struct {
 	DB *sqlx.DB
 	Loganne LoganneInterface
 	ManagerOrigin string
+	// infoCache holds a pointer to the most recently computed /_info metrics snapshot.
+	// It is a pointer to an atomic so it remains valid when Datastore is copied by value.
+	infoCache *atomic.Pointer[InfoMetricsSnapshot]
 }
 
 func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
-	database = Datastore{DB: db, Loganne: loganne}
+	database = Datastore{DB: db, Loganne: loganne, infoCache: new(atomic.Pointer[InfoMetricsSnapshot])}
 	database.DB.MustExec("PRAGMA journal_mode=WAL;")
 	database.DB.MustExec("PRAGMA foreign_keys = ON;")
 	if !database.TableExists("track") {

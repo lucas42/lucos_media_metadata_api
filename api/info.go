@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -28,6 +27,38 @@ type Metric struct {
 	Value      int    `json:"value"`
 }
 
+// InfoMetricsSnapshot holds a point-in-time snapshot of all /_info metrics.
+// It is computed by refreshInfoMetrics and served from InfoController.
+type InfoMetricsSnapshot struct {
+	DBCheck        Check
+	TrackCount     Metric
+	WeightingCheck Check
+	WeightingDrift Metric
+	URICheck       Check
+	TagsMissing    Metric
+}
+
+// refreshInfoMetrics recomputes all three /_info metrics and stores the result
+// in the infoCache. If the database is unavailable (dbCheck.OK == false), the
+// previous cached values are preserved and a warning is logged.
+func (store Datastore) refreshInfoMetrics() {
+	dbCheck, trackCount := TrackCount(store)
+	if !dbCheck.OK {
+		slog.Warn("/_info metrics refresh failed — keeping previous cached values", "error", dbCheck.Debug)
+		return
+	}
+	weightingCheck, weightingDrift := WeightingCheck(store)
+	uriCheck, tagsMissing := URIIntegrityCheck(store)
+	snapshot := &InfoMetricsSnapshot{
+		DBCheck:        dbCheck,
+		TrackCount:     trackCount,
+		WeightingCheck: weightingCheck,
+		WeightingDrift: weightingDrift,
+		URICheck:       uriCheck,
+		TagsMissing:    tagsMissing,
+	}
+	store.infoCache.Store(snapshot)
+}
 
 /**
  * A controller for serving /_info
@@ -35,42 +66,30 @@ type Metric struct {
 func (store Datastore) InfoController(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		slog.Debug("Info controller")
-		info := InfoStruct{System: "lucos_media_metadata_api", Title: "Media Metadata API"}
 
-		totalStart := time.Now()
-
-		trackCountStart := time.Now()
-		dbCheck, trackCount := TrackCount(store)
-		trackCountDuration := time.Since(trackCountStart)
-
-		weightingStart := time.Now()
-		weightingCheck, weightingDrift := WeightingCheck(store)
-		weightingDuration := time.Since(weightingStart)
-
-		uriIntegrityStart := time.Now()
-		uriIntegrityCheck, tagsMissingURIs := URIIntegrityCheck(store)
-		uriIntegrityDuration := time.Since(uriIntegrityStart)
-
-		totalDuration := time.Since(totalStart)
-		const slowThreshold = 200 * time.Millisecond
-		if totalDuration > slowThreshold {
-			slog.Warn("/_info queries slow",
-				"total_ms", totalDuration.Milliseconds(),
-				"track_count_ms", trackCountDuration.Milliseconds(),
-				"weighting_ms", weightingDuration.Milliseconds(),
-				"uri_integrity_ms", uriIntegrityDuration.Milliseconds(),
-			)
+		snapshot := store.infoCache.Load()
+		if snapshot == nil {
+			// Cache not yet populated (first request or test environment) — compute synchronously.
+			store.refreshInfoMetrics()
+			snapshot = store.infoCache.Load()
+		}
+		if snapshot == nil {
+			// Database is unavailable and no previous values exist.
+			slog.Error("/_info: database unavailable and no cached values")
+			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+			return
 		}
 
+		info := InfoStruct{System: "lucos_media_metadata_api", Title: "Media Metadata API"}
 		info.Checks = map[string]Check{
-			"db":            dbCheck,
-			"weighting":     weightingCheck,
-			"uri-integrity": uriIntegrityCheck,
+			"db":            snapshot.DBCheck,
+			"weighting":     snapshot.WeightingCheck,
+			"uri-integrity": snapshot.URICheck,
 		}
 		info.Metrics = map[string]Metric{
-			"track-count":       trackCount,
-			"weighting-drift":   weightingDrift,
-			"tags-missing-uris": tagsMissingURIs,
+			"track-count":       snapshot.TrackCount,
+			"weighting-drift":   snapshot.WeightingDrift,
+			"tags-missing-uris": snapshot.TagsMissing,
 		}
 		info.CI = map[string]string{
 			"circle": "gh/lucas42/lucos_media_metadata_api",
@@ -142,4 +161,3 @@ func URIIntegrityCheck(store Datastore) (uriCheck Check, missingCount Metric) {
 	}
 	return
 }
-
