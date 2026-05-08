@@ -51,6 +51,19 @@ func main() {
 	}
 	store := DBInit("/var/lib/media-metadata/media.sqlite", loganne)
 	store.ManagerOrigin = os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
+
+	// Populate the /_info metrics cache once synchronously so the endpoint is
+	// ready before the HTTP listener opens. Then refresh every 60 seconds in
+	// the background so request-path queries are eliminated.
+	store.refreshInfoMetrics()
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			store.refreshInfoMetrics()
+		}
+	}()
+
 	var port string
 	if len(os.Getenv("PORT")) > 0 {
 		port = os.Getenv("PORT")
