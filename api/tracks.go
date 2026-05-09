@@ -63,15 +63,34 @@ func (original Track) updateNeeded(changeSet TrackV3, onlyMissing bool) bool {
 				newNames = append(newNames, v.Name)
 			}
 		}
-		origVals := original.Tags.GetValues(pred)
-		if !stringSlicesEqual(origVals, newNames) {
-			slog.Debug("updateNeeded: tag values changed",
-				"trackID", original.ID, "url", original.URL,
-				"predicate", pred,
-				"oldValues", fmt.Sprintf("%#v", origVals),
-				"newValues", fmt.Sprintf("%#v", newNames),
-			)
-			return true
+		if IsMultiValue(pred) {
+			origVals := original.Tags.GetValues(pred)
+			if !stringSlicesEqual(origVals, newNames) {
+				slog.Debug("updateNeeded: tag values changed",
+					"trackID", original.ID, "url", original.URL,
+					"predicate", pred,
+					"oldValues", fmt.Sprintf("%#v", origVals),
+					"newValues", fmt.Sprintf("%#v", newNames),
+				)
+				return true
+			}
+		} else {
+			// Single-value predicate: compare scalar. The wire boundary has already
+			// rejected len(newNames) > 1; defensively take the first entry if present.
+			var newVal string
+			if len(newNames) > 0 {
+				newVal = newNames[0]
+			}
+			origVal := original.Tags.GetValue(pred)
+			if origVal != newVal {
+				slog.Debug("updateNeeded: tag value changed",
+					"trackID", original.ID, "url", original.URL,
+					"predicate", pred,
+					"oldValue", fmt.Sprintf("%#v", origVal),
+					"newValue", fmt.Sprintf("%#v", newVal),
+				)
+				return true
+			}
 		}
 	}
 	if changeSet.Collections != nil {

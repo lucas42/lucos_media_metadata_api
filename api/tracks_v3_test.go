@@ -740,6 +740,24 @@ func TestV3PutTagOnlyChangeSetsTrackActionHeader(test *testing.T) {
 	assertEqual(test, "Loganne request count", 1, loganneRequestCount)
 }
 
+// TestV3PutSingleValueTagSameValueIsNoOp checks that a PUT where a single-value
+// predicate already has the same value does not fire Loganne and returns noChange.
+// This specifically exercises the scalar comparison branch in updateNeeded.
+func TestV3PutSingleValueTagSameValueIsNoOp(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/scalar-noop")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"scalar1","duration":100,"tags":{"comment":[{"name":"Remastered"}]}}`, 200)
+	loganneRequestCount = 0
+
+	req := basicRequest(test, "PUT", v3Path, `{"fingerprint":"scalar1","duration":100,"tags":{"comment":[{"name":"Remastered"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "noChange", resp.Header.Get("Track-Action"))
+	assertEqual(test, "Loganne request count", 0, loganneRequestCount)
+}
+
 // TestV3PutTagOnlyNoChangeIsNoOp checks that a PUT with identical tags does not
 // fire Loganne and returns Track-Action: noChange.
 func TestV3PutTagOnlyNoChangeIsNoOp(test *testing.T) {
