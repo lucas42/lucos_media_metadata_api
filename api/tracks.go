@@ -384,7 +384,7 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 
 	updatedTrack := existingTrack
 	updatedTrack.Weighting = newWeighting
-	humanReadableMessage := "Weighting for track "+updatedTrack.getName()+" updated from "+strconv.FormatFloat(oldWeighting, 'f', -1, 64)+" to "+strconv.FormatFloat(newWeighting, 'f', -1, 64)
+	humanReadableMessage := "Weighting for track "+updatedTrack.getName()+" updated from "+strconv.FormatFloat(oldWeighting, 'f', 2, 64)+" to "+strconv.FormatFloat(newWeighting, 'f', 2, 64)
 	store.Loganne.post("trackWeightingUpdated", humanReadableMessage, updatedTrack, existingTrack)
 	return
 }
