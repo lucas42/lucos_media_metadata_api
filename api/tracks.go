@@ -267,7 +267,11 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 	}
 	if existingTrack.ID > 0 {
 		action = "trackUpdated"
-		store.Loganne.post(action, "Track "+storedTrack.getName()+" updated", storedTrack, existingTrack)
+		humanReadable := GetBespokeLoganneMessage(track, existingTrack, storedTrack.getName())
+		if humanReadable == "" {
+			humanReadable = "Track " + storedTrack.getName() + " updated"
+		}
+		store.Loganne.post(action, humanReadable, storedTrack, existingTrack)
 	} else {
 		action = "trackAdded"
 		store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack)
