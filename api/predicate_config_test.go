@@ -83,3 +83,4 @@ func TestGetRequiresURIPredicates(test *testing.T) {
 		}
 	}
 }
+

@@ -774,3 +774,75 @@ func TestV3PutTagOnlyNoChangeIsNoOp(test *testing.T) {
 	assertEqual(test, "Track-Action header", "noChange", resp.Header.Get("Track-Action"))
 	assertEqual(test, "Loganne request count", 0, loganneRequestCount)
 }
+
+// TestV3PatchLastSuccessfulPlayProducesBespokeLoganneMessage checks that a PATCH
+// containing only a lastSuccessfulPlay tag emits a bespoke "played" Loganne message.
+func TestV3PatchLastSuccessfulPlayProducesBespokeLoganneMessage(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/bespoke-play")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"bp1","duration":100,"tags":{"title":[{"name":"Tuesday's Gone"}]}}`, 200)
+	loganneRequestCount = 0
+
+	req := basicRequest(test, "PATCH", v3Path, `{"tags":{"lastSuccessfulPlay":[{"name":"2026-05-10T12:00:00Z"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
+	assertEqual(test, "Loganne event type", "trackUpdated", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable message", `Track "Tuesday's Gone" played`, lastLoganneMessage)
+}
+
+// TestV3PatchLastErrorProducesBespokeLoganneMessage checks that a PATCH
+// containing only a lastError tag emits a bespoke "errored" Loganne message.
+func TestV3PatchLastErrorProducesBespokeLoganneMessage(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/bespoke-error")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"be1","duration":100,"tags":{"title":[{"name":"Tuesday's Gone"}]}}`, 200)
+	loganneRequestCount = 0
+
+	req := basicRequest(test, "PATCH", v3Path, `{"tags":{"lastError":[{"name":"2026-05-10T12:00:00Z"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
+	assertEqual(test, "Loganne event type", "trackUpdated", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable message", `Track "Tuesday's Gone" errored`, lastLoganneMessage)
+}
+
+// TestV3PatchLastSkipProducesBespokeLoganneMessage checks that a PATCH
+// containing only a lastSkip tag emits a bespoke "skipped" Loganne message.
+func TestV3PatchLastSkipProducesBespokeLoganneMessage(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/bespoke-skip")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"bs1","duration":100,"tags":{"title":[{"name":"Tuesday's Gone"}]}}`, 200)
+	loganneRequestCount = 0
+
+	req := basicRequest(test, "PATCH", v3Path, `{"tags":{"lastSkip":[{"name":"2026-05-10T12:00:00Z"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
+	assertEqual(test, "Loganne event type", "trackUpdated", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable message", `Track "Tuesday's Gone" skipped`, lastLoganneMessage)
+}
+
+// TestV3PatchMultipleTagsUsesGenericLoganneMessage checks that a PATCH with more
+// than one tag still produces the generic "Track X updated" Loganne message even
+// if one of the tags has a bespoke message configured.
+func TestV3PatchMultipleTagsUsesGenericLoganneMessage(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/bespoke-multi")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"bm1","duration":100,"tags":{"title":[{"name":"Some Track"}]}}`, 200)
+	loganneRequestCount = 0
+
+	req := basicRequest(test, "PATCH", v3Path, `{"tags":{"lastSuccessfulPlay":[{"name":"2026-05-10T12:00:00Z"}],"lastSkip":[{"name":"2026-05-10T11:00:00Z"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
+	assertEqual(test, "Loganne humanReadable message", `Track "Some Track" updated`, lastLoganneMessage)
+}

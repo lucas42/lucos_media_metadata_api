@@ -27,6 +27,12 @@ type PredicateConfig struct {
 	// value has a URI but no name, the write path calls this to populate the
 	// name field before storing.
 	ResolveURIToName func(store Datastore, uri string) (string, error)
+
+	// LoganneHumanReadable, if non-nil, returns a bespoke humanReadable message
+	// for Loganne events when this predicate is the only tag changed in an update
+	// and no scalar track fields (fingerprint, URL, duration) are being modified.
+	// Receives the track name as returned by track.getName() (e.g. `"Tuesday's Gone"` or `#42`).
+	LoganneHumanReadable func(trackName string) string
 }
 
 // predicateRegistry defines per-predicate configuration.
@@ -47,6 +53,15 @@ var predicateRegistry = map[string]PredicateConfig{
 		ResolveURIToName: func(store Datastore, uri string) (string, error) {
 			return store.resolveAlbumNameFromURI(uri)
 		},
+	},
+	"lastSuccessfulPlay": {
+		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " played" },
+	},
+	"lastError": {
+		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " errored" },
+	},
+	"lastSkip": {
+		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " skipped" },
 	},
 }
 
