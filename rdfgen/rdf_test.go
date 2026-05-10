@@ -475,6 +475,155 @@ func TestOntologyToRdfIncludesMoTrackPrefLabel(t *testing.T) {
 	}
 }
 
+// TestExportRDFLanguageDualEmission verifies that a track with a language tag
+// emits BOTH dcterms:language AND mmm:trackLanguage pointing to the same URI
+// (phase 1 of issue #221 — additive, backwards-compatible emission).
+func TestExportRDFLanguageDualEmission(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 180)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	langURI := "https://eolas.l42.eu/metadata/language/gd/"
+	_, err = db.Exec(`INSERT INTO tag (trackid, predicateid, value, uri) VALUES (1, 'language', 'Scottish Gaelic', ?)`, langURI)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpFile := filepath.Join(tmpDir, "output.ttl")
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	if err := ExportRDF(dbPath, tmpFile); err != nil {
+		t.Fatalf("ExportRDF failed: %v", err)
+	}
+	content, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("could not read RDF output file: %v", err)
+	}
+	output := string(content)
+
+	// Both predicates must be present in the output
+	if !strings.Contains(output, "dc/terms/language") {
+		t.Error("expected dcterms:language triple in output (backward-compat)")
+	}
+	if !strings.Contains(output, "ontology#trackLanguage") {
+		t.Error("expected mmm:trackLanguage triple in output (new scoped predicate)")
+	}
+	// Both must point to the language URI
+	if !strings.Contains(output, "eolas.l42.eu/metadata/language/gd/") {
+		t.Error("expected language URI 'eolas.l42.eu/metadata/language/gd/' in output")
+	}
+}
+
+// TestTrackLanguageNoUriNoTrackLanguageTriple verifies that a language tag with
+// no URI emits neither dcterms:language nor mmm:trackLanguage triples on the
+// track subject.  We query the TrackToRdf graph directly rather than
+// string-matching the full serialized output, because OntologyToRdf (merged by
+// ExportRDF) legitimately declares trackLanguage as a property URI.
+func TestTrackLanguageNoUriNoTrackLanguageTriple(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 60)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO tag (trackid, predicateid, value, uri) VALUES (1, 'language', 'en', '')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	rows, err := db.Query(`
+		SELECT t.id, t.url, t.duration, tg.predicateid, tg.value, tg.uri
+		FROM track t
+		LEFT JOIN tag tg ON tg.trackid = t.id
+		ORDER BY t.id
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	g, err := TrackToRdf(rows)
+	if err != nil {
+		t.Fatalf("TrackToRdf failed: %v", err)
+	}
+
+	// No dcterms:language triple expected
+	dctermsLang := rdf2go.NewResource("http://purl.org/dc/terms/language")
+	if triples := g.All(nil, dctermsLang, nil); len(triples) > 0 {
+		t.Errorf("expected no dcterms:language triple when language tag has no URI, got %d", len(triples))
+	}
+	// No mmm:trackLanguage triple expected
+	trackLang := rdf2go.NewResource("http://localhost:8020/ontology#trackLanguage")
+	if triples := g.All(nil, trackLang, nil); len(triples) > 0 {
+		t.Errorf("expected no mmm:trackLanguage triple when language tag has no URI, got %d", len(triples))
+	}
+}
+
+// TestOntologyToRdfIncludesTrackLanguage verifies that OntologyToRdf emits the
+// trackLanguage property, its inverse trackInLanguage, and the correct prefLabels.
+func TestOntologyToRdfIncludesTrackLanguage(t *testing.T) {
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+
+	g, err := OntologyToRdf()
+	if err != nil {
+		t.Fatalf("OntologyToRdf failed: %v", err)
+	}
+
+	var buf strings.Builder
+	if err := g.Serialize(&buf, "text/turtle"); err != nil {
+		t.Fatalf("serialize failed: %v", err)
+	}
+	output := buf.String()
+
+	if !strings.Contains(output, "trackLanguage") {
+		t.Error("expected trackLanguage property in ontology output")
+	}
+	if !strings.Contains(output, "trackInLanguage") {
+		t.Error("expected trackInLanguage inverse property in ontology output")
+	}
+	if !strings.Contains(output, "Track Language") {
+		t.Error("expected prefLabel 'Track Language' in ontology output")
+	}
+	if !strings.Contains(output, "Tracks in this language") {
+		t.Error("expected prefLabel 'Tracks in this language' in ontology output")
+	}
+	if !strings.Contains(output, "inverseOf") {
+		t.Error("expected owl:inverseOf declaration in ontology output")
+	}
+	if !strings.Contains(output, "eolas.l42.eu/metadata/language/") {
+		t.Error("expected range URI 'eolas.l42.eu/metadata/language/' in ontology output")
+	}
+}
+
 // helper to copy DB (used in older tests if needed)
 func copyDB(src, dst string, t *testing.T) {
 	srcFile, err := os.Open(src)
