@@ -65,43 +65,6 @@ var predicateRegistry = map[string]PredicateConfig{
 	},
 }
 
-// GetBespokeLoganneMessage returns a bespoke humanReadable Loganne message when the
-// changeset contains exactly one tag predicate with a LoganneHumanReadable function
-// and no scalar track fields (fingerprint, URL, duration, weighting) are actually
-// changing, and no collection membership changes are present.
-// Returns an empty string when the generic "Track X updated" message should be used.
-//
-// existingTrack is used to distinguish "field is set to current value" (no scalar
-// change) from "field is genuinely changing" — the request handler populates filter
-// fields (e.g. URL) on the changeset even for tag-only PATCHes.
-func GetBespokeLoganneMessage(changeSet TrackV3, existingTrack Track, trackName string) string {
-	if changeSet.Fingerprint != "" && changeSet.Fingerprint != existingTrack.Fingerprint {
-		return ""
-	}
-	if changeSet.URL != "" && changeSet.URL != existingTrack.URL {
-		return ""
-	}
-	if changeSet.Duration != 0 && changeSet.Duration != existingTrack.Duration {
-		return ""
-	}
-	if changeSet.Weighting != 0 && changeSet.Weighting != existingTrack.Weighting {
-		return ""
-	}
-	if changeSet.Collections != nil {
-		return ""
-	}
-	if len(changeSet.Tags) != 1 {
-		return ""
-	}
-	for predicateID := range changeSet.Tags {
-		config := GetPredicateConfig(predicateID)
-		if config.LoganneHumanReadable != nil {
-			return config.LoganneHumanReadable(trackName)
-		}
-	}
-	return ""
-}
-
 // GetPredicateConfig returns the configuration for a predicate.
 // Predicates not in the registry return a zero-value config
 // (single-value, default behaviour).

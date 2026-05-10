@@ -145,6 +145,43 @@ func stringSlicesEqual(a, b []string) bool {
 	return true
 }
 
+// getBespokeLoganneMessage returns a bespoke humanReadable Loganne message when the
+// changeset contains exactly one tag predicate with a LoganneHumanReadable function
+// and no scalar track fields (fingerprint, URL, duration, weighting) are actually
+// changing, and no collection membership changes are present.
+// Returns an empty string when the generic "Track X updated" message should be used.
+//
+// existingTrack is used to distinguish "field is set to current value" (no scalar
+// change) from "field is genuinely changing" — the request handler populates filter
+// fields (e.g. URL) on the changeset even for tag-only PATCHes.
+func getBespokeLoganneMessage(changeSet TrackV3, existingTrack Track, trackName string) string {
+	if changeSet.Fingerprint != "" && changeSet.Fingerprint != existingTrack.Fingerprint {
+		return ""
+	}
+	if changeSet.URL != "" && changeSet.URL != existingTrack.URL {
+		return ""
+	}
+	if changeSet.Duration != 0 && changeSet.Duration != existingTrack.Duration {
+		return ""
+	}
+	if changeSet.Weighting != 0 && changeSet.Weighting != existingTrack.Weighting {
+		return ""
+	}
+	if changeSet.Collections != nil {
+		return ""
+	}
+	if len(changeSet.Tags) != 1 {
+		return ""
+	}
+	for predicateID := range changeSet.Tags {
+		config := GetPredicateConfig(predicateID)
+		if config.LoganneHumanReadable != nil {
+			return config.LoganneHumanReadable(trackName)
+		}
+	}
+	return ""
+}
+
 /**
  * Updates or Creates fields about a track based on a given field
  *
@@ -267,7 +304,7 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 	}
 	if existingTrack.ID > 0 {
 		action = "trackUpdated"
-		humanReadable := GetBespokeLoganneMessage(track, existingTrack, storedTrack.getName())
+		humanReadable := getBespokeLoganneMessage(track, existingTrack, storedTrack.getName())
 		if humanReadable == "" {
 			humanReadable = "Track " + storedTrack.getName() + " updated"
 		}
