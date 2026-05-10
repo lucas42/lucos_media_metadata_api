@@ -4,6 +4,26 @@ import (
 	"testing"
 )
 
+func TestWeightingLoganneMessageRounding(test *testing.T) {
+	clearData()
+	store := DBInit("testweighting.sqlite", MockLoganne{})
+	_, err := store.DB.Exec("INSERT INTO track (url,fingerprint,duration) values ('/track1','abc',3)")
+	if err != nil {
+		test.Errorf("Error inserting track: %s", err.Error())
+	}
+	err = store.setTrackWeighting(1, 5)
+	if err != nil {
+		test.Errorf("Error setting initial weighting: %s", err.Error())
+	}
+	// Change to a fractional value that would produce many decimal places without rounding
+	err = store.setTrackWeighting(1, 5.123456789)
+	if err != nil {
+		test.Errorf("Error changing weighting: %s", err.Error())
+	}
+	assertEqual(test, "Loganne event type", "trackWeightingUpdated", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable message", "Weighting for track #1 updated from 5.00 to 5.12", lastLoganneMessage)
+}
+
 func assertWeighting(test *testing.T, store Datastore, trackid int, expectedWeighting float64, expectedCumulativeWeighting float64) {
 	actualWeighting, err := store.getTrackWeighting(trackid)
 	if err != nil {
