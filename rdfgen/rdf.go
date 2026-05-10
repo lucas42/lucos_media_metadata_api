@@ -264,6 +264,16 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 			for _, obj := range objs {
 				g.AddTriple(subject, rdf2go.NewResource(predURI), obj)
 			}
+			// Phase 1 (issue #221): emit mmm:trackLanguage alongside dcterms:language.
+			// Both predicates point to the same language URI.  Once arachne's
+			// searchindex migrates to mmm:trackLanguage (phase 2 / arachne#458),
+			// dcterms:language emission will be dropped (phase 3 / #222).
+			if *predicateID == "language" && len(objs) > 0 {
+				trackLanguageURI := mediaMetadataManagerOrigin + "/ontology#trackLanguage"
+				for _, obj := range objs {
+					g.AddTriple(subject, rdf2go.NewResource(trackLanguageURI), obj)
+				}
+			}
 		}
 	}
 
@@ -404,6 +414,16 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 	addProperty("mentions", "Mentions", owlObjectProperty,
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
 		"Concepts which are mentioned or alluded to by this track.", "mentionedBy", "Mentioned By")
+
+	// trackLanguage: scoped replacement for dcterms:language (phase 1 of #221).
+	// The inverse trackInLanguage is materialised by the arachne ingestor via
+	// owl:inverseOf, enabling "Tracks in this language" sections on Language pages.
+	// Range is the eolas language collection URI (individual language URIs are
+	// sub-resources, e.g. https://eolas.l42.eu/metadata/language/gd/).
+	addProperty("trackLanguage", "Track Language", owlObjectProperty,
+		rdf2go.NewResource("https://eolas.l42.eu/metadata/language/"),
+		"The language a track is performed in.",
+		"trackInLanguage", "Tracks in this language")
 
 	g.AddTriple(
 		rdf2go.NewResource(mediaMetadataManagerOrigin + "/ontology#about"),
