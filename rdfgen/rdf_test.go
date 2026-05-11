@@ -14,7 +14,7 @@ import (
 
 // Test mapPredicate returns URIs and terms
 func TestMapPredicate(t *testing.T) {
-	pred, terms := mapPredicate("title", "Song A", nil, "http://localhost:8020")
+	pred, terms := mapPredicate("title", "Song A", nil, "http://localhost:8020", "http://localhost:3002")
 	if pred != "http://www.w3.org/2004/02/skos/core#prefLabel" {
 		t.Errorf("unexpected predicate URI: %s", pred)
 	}
@@ -37,12 +37,12 @@ func TestMapPredicateMultiValue(t *testing.T) {
 		{"composer", "Bob", "http://purl.org/ontology/mo/composer"},
 		{"producer", "Charlie", "http://purl.org/ontology/mo/producer"},
 		{"producer", "Dave", "http://purl.org/ontology/mo/producer"},
-		{"offence", "violence", "http://localhost:8020/ontology#trigger"},
+		{"offence", "violence", "http://localhost:3002/ontology#trigger"},
 	}
 	// Track terms by predicate to verify distinct values
 	termsByPredicate := make(map[string][]string)
 	for _, tc := range cases {
-		pred, terms := mapPredicate(tc.predicateID, tc.value, nil, "http://localhost:8020")
+		pred, terms := mapPredicate(tc.predicateID, tc.value, nil, "http://localhost:8020", "http://localhost:3002")
 		if pred != tc.expectedURI {
 			t.Errorf("predicate %q value %q: expected URI %q, got %q", tc.predicateID, tc.value, tc.expectedURI, pred)
 		}
@@ -106,6 +106,7 @@ func TestExportRDF(t *testing.T) {
 
 	tmpFile := filepath.Join(tmpDir, "output.ttl")
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
 	if err := ExportRDF(dbPath, tmpFile); err != nil {
 		t.Fatalf("ExportRDF failed: %v", err)
 	}
@@ -167,6 +168,7 @@ func TestExportRDFUsesTagUriForAboutMentions(t *testing.T) {
 
 	tmpFile := filepath.Join(tmpDir, "output.ttl")
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
 	if err := ExportRDF(dbPath, tmpFile); err != nil {
 		t.Fatalf("ExportRDF failed: %v", err)
 	}
@@ -194,8 +196,8 @@ func TestExportRDFUsesTagUriForAboutMentions(t *testing.T) {
 func TestMapPredicateLanguageUri(t *testing.T) {
 	// With uri set: should use uri directly
 	uri := "https://eolas.l42.eu/metadata/language/gd/"
-	pred, terms := mapPredicate("language", "Scottish Gaelic", &uri, "http://localhost:8020")
-	if pred != "http://localhost:8020/ontology#trackLanguage" {
+	pred, terms := mapPredicate("language", "Scottish Gaelic", &uri, "http://localhost:8020", "http://localhost:3002")
+	if pred != "http://localhost:3002/ontology#trackLanguage" {
 		t.Errorf("unexpected predicate URI: %s", pred)
 	}
 	if len(terms) != 1 {
@@ -210,7 +212,7 @@ func TestMapPredicateLanguageUri(t *testing.T) {
 	}
 
 	// Without uri: tag is skipped (returns empty)
-	pred2, terms2 := mapPredicate("language", "en", nil, "http://localhost:8020")
+	pred2, terms2 := mapPredicate("language", "en", nil, "http://localhost:8020", "http://localhost:3002")
 	if pred2 != "" || len(terms2) != 0 {
 		t.Errorf("expected language tag with no uri to be skipped, got pred=%q terms=%v", pred2, terms2)
 	}
@@ -220,12 +222,12 @@ func TestMapPredicateLanguageUri(t *testing.T) {
 // a uri value are silently skipped rather than using value as a fallback IRI.
 func TestMapPredicateSkipsWhenNoUri(t *testing.T) {
 	for _, predicateID := range []string{"language", "about", "mentions"} {
-		pred, terms := mapPredicate(predicateID, "some label", nil, "http://localhost:8020")
+		pred, terms := mapPredicate(predicateID, "some label", nil, "http://localhost:8020", "http://localhost:3002")
 		if pred != "" || len(terms) != 0 {
 			t.Errorf("predicate %q with nil uri: expected skip (empty pred and terms), got pred=%q terms=%v", predicateID, pred, terms)
 		}
 		emptyURI := ""
-		pred2, terms2 := mapPredicate(predicateID, "some label", &emptyURI, "http://localhost:8020")
+		pred2, terms2 := mapPredicate(predicateID, "some label", &emptyURI, "http://localhost:8020", "http://localhost:3002")
 		if pred2 != "" || len(terms2) != 0 {
 			t.Errorf("predicate %q with empty uri: expected skip (empty pred and terms), got pred=%q terms=%v", predicateID, pred2, terms2)
 		}
@@ -270,6 +272,7 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 
 	tmpFile := filepath.Join(tmpDir, "output.ttl")
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
 	if err := ExportRDF(dbPath, tmpFile); err != nil {
 		t.Fatalf("ExportRDF failed: %v", err)
 	}
@@ -295,8 +298,8 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 // TestMapPredicateAlbumUsesOnAlbum verifies that album tags now map to onAlbum, not dc:isPartOf.
 func TestMapPredicateAlbumUsesOnAlbum(t *testing.T) {
 	uri := "http://localhost:8020/albums/1"
-	pred, terms := mapPredicate("album", "Abbey Road", &uri, "http://localhost:8020")
-	if pred != "http://localhost:8020/ontology#onAlbum" {
+	pred, terms := mapPredicate("album", "Abbey Road", &uri, "http://localhost:8020", "http://localhost:3002")
+	if pred != "http://localhost:3002/ontology#onAlbum" {
 		t.Errorf("expected onAlbum predicate URI, got %q", pred)
 	}
 	if len(terms) != 1 {
@@ -401,6 +404,7 @@ func TestExportRDFIncludesAlbums(t *testing.T) {
 
 	tmpFile := filepath.Join(tmpDir, "output.ttl")
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
 	if err := ExportRDF(dbPath, tmpFile); err != nil {
 		t.Fatalf("ExportRDF failed: %v", err)
 	}
@@ -425,6 +429,7 @@ func TestExportRDFIncludesAlbums(t *testing.T) {
 // TestOntologyToRdfIncludesMoRecordAndOnAlbum verifies OntologyToRdf emits mo:Record metadata and onAlbum property.
 func TestOntologyToRdfIncludesMoRecordAndOnAlbum(t *testing.T) {
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
 
 	g, err := OntologyToRdf()
 	if err != nil {
@@ -455,6 +460,7 @@ func TestOntologyToRdfIncludesMoRecordAndOnAlbum(t *testing.T) {
 // Without this triple, clients that rely on skos:prefLabel cannot display the album→tracks relationship.
 func TestOntologyToRdfIncludesMoTrackPrefLabel(t *testing.T) {
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
 
 	g, err := OntologyToRdf()
 	if err != nil {
@@ -506,6 +512,7 @@ func TestExportRDFTrackLanguageEmission(t *testing.T) {
 
 	tmpFile := filepath.Join(tmpDir, "output.ttl")
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
 	if err := ExportRDF(dbPath, tmpFile); err != nil {
 		t.Fatalf("ExportRDF failed: %v", err)
 	}
@@ -559,6 +566,7 @@ func TestTrackLanguageNoUriNoTrackLanguageTriple(t *testing.T) {
 	}
 
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
 	rows, err := db.Query(`
 		SELECT t.id, t.url, t.duration, tg.predicateid, tg.value, tg.uri
 		FROM track t
@@ -576,7 +584,7 @@ func TestTrackLanguageNoUriNoTrackLanguageTriple(t *testing.T) {
 	}
 
 	// No mmm:trackLanguage triple expected on the track subject
-	trackLang := rdf2go.NewResource("http://localhost:8020/ontology#trackLanguage")
+	trackLang := rdf2go.NewResource("http://localhost:3002/ontology#trackLanguage")
 	if triples := g.All(nil, trackLang, nil); len(triples) > 0 {
 		t.Errorf("expected no mmm:trackLanguage triple when language tag has no URI, got %d", len(triples))
 	}
@@ -586,6 +594,7 @@ func TestTrackLanguageNoUriNoTrackLanguageTriple(t *testing.T) {
 // trackLanguage property, its inverse trackInLanguage, and the correct prefLabels.
 func TestOntologyToRdfIncludesTrackLanguage(t *testing.T) {
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
 
 	g, err := OntologyToRdf()
 	if err != nil {
