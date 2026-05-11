@@ -23,6 +23,7 @@ services:
       - RDF_OUTPUT_PATH=/var/lib/exports/all-media.ttl
       - MEDIA_METADATA_MANAGER_ORIGIN=https://media-metadata.l42.eu
       - PORT
+      - APP_ORIGIN
       - KEY_LUCOS_EOLAS
   exporter:
     build:
@@ -45,6 +46,7 @@ services:
       - RDF_OUTPUT_PATH=/exports/all-media.ttl
       - SCHEDULE_TRACKER_ENDPOINT
       - MEDIA_METADATA_MANAGER_ORIGIN=https://media-metadata.l42.eu
+      - APP_ORIGIN
 
 volumes:
   db:

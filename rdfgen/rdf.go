@@ -32,11 +32,13 @@ func getSearchUrl(predicateID string, value string, mediaMetadataManagerOrigin s
 // Map a predicate/value/uri triplet into predicate URI + list of RDF objects.
 // uri is the value from the tag's uri column (may be nil/empty for legacy data);
 // for predicates that produce IRI objects, uri takes precedence over value when set.
-func mapPredicate(predicateID string, value string, uri *string, mediaMetadataManagerOrigin string) (string, []rdf2go.Term) {
+// appOrigin is used for vocabulary URIs (ontology predicates);
+// mediaMetadataManagerOrigin is used for resource URIs (tracks, albums, search).
+func mapPredicate(predicateID string, value string, uri *string, mediaMetadataManagerOrigin string, appOrigin string) (string, []rdf2go.Term) {
 	switch predicateID {
 
 	case "added":
-		return mediaMetadataManagerOrigin + "/ontology#dateAdded",
+		return appOrigin + "/ontology#dateAdded",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "title":
@@ -53,7 +55,7 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 		if uri == nil || *uri == "" {
 			return "", nil // skip tags with no URI — legacy freetext values are not valid IRIs
 		}
-		return mediaMetadataManagerOrigin + "/ontology#onAlbum",
+		return appOrigin + "/ontology#onAlbum",
 			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "genre":
@@ -74,11 +76,11 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 		if uri == nil || *uri == "" {
 			return "", nil // skip tags with no URI — value alone is not a valid IRI
 		}
-		return mediaMetadataManagerOrigin + "/ontology#trackLanguage",
+		return appOrigin + "/ontology#trackLanguage",
 			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "offence":
-		return mediaMetadataManagerOrigin + "/ontology#trigger",
+		return appOrigin + "/ontology#trigger",
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "mbid_artist":
@@ -114,16 +116,16 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "memory":
-		return mediaMetadataManagerOrigin + "/ontology#memory",
+		return appOrigin + "/ontology#memory",
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "soundtrack":
-		return mediaMetadataManagerOrigin + "/ontology#soundtrack",
+		return appOrigin + "/ontology#soundtrack",
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "theme_tune":
 		// This should be treated as a subClass of soundtrack.  But rather than adding both predicates here, best to specify that in the ontology and apply inferencing
-		return mediaMetadataManagerOrigin + "/ontology#theme_tune",
+		return appOrigin + "/ontology#theme_tune",
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "year":
@@ -131,26 +133,26 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "availability":
-		return mediaMetadataManagerOrigin + "/ontology#availability",
+		return appOrigin + "/ontology#availability",
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "about":
 		if uri == nil || *uri == "" {
 			return "", nil // skip tags with no URI — value alone is not a valid IRI
 		}
-		return mediaMetadataManagerOrigin + "/ontology#about",
+		return appOrigin + "/ontology#about",
 			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "mentions":
 		if uri == nil || *uri == "" {
 			return "", nil // skip tags with no URI — value alone is not a valid IRI
 		}
-		return mediaMetadataManagerOrigin + "/ontology#mentions",
+		return appOrigin + "/ontology#mentions",
 			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 
 	default:
-		return mediaMetadataManagerOrigin + "/ontology#" + predicateID,
+		return appOrigin + "/ontology#" + predicateID,
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 	}
 }
@@ -206,6 +208,7 @@ func ExportRDF(dbPath, outFile string) error {
 }
 func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
+	appOrigin := os.Getenv("APP_ORIGIN")
 	g := rdf2go.NewGraph("")
 	moTrack := rdf2go.NewResource("http://purl.org/ontology/mo/Track")
 	g.AddTriple(moTrack,
@@ -260,7 +263,7 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		}
 
 		if predicateID != nil && value != nil {
-			predURI, objs := mapPredicate(*predicateID, *value, uri, mediaMetadataManagerOrigin)
+			predURI, objs := mapPredicate(*predicateID, *value, uri, mediaMetadataManagerOrigin, appOrigin)
 			for _, obj := range objs {
 				g.AddTriple(subject, rdf2go.NewResource(predURI), obj)
 			}
@@ -315,12 +318,12 @@ func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 }
 
 func OntologyToRdf() (*rdf2go.Graph, error) {
-	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
-	if mediaMetadataManagerOrigin == "" {
-		return nil, fmt.Errorf("MEDIA_METADATA_MANAGER_ORIGIN not set")
+	appOrigin := os.Getenv("APP_ORIGIN")
+	if appOrigin == "" {
+		return nil, fmt.Errorf("APP_ORIGIN not set")
 	}
 
-	ontologyURI := mediaMetadataManagerOrigin + "/ontology"
+	ontologyURI := appOrigin + "/ontology"
 	g := rdf2go.NewGraph(ontologyURI)
 
 	// Define some common URIs
@@ -416,9 +419,9 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		"trackInLanguage", "Tracks in this language")
 
 	g.AddTriple(
-		rdf2go.NewResource(mediaMetadataManagerOrigin + "/ontology#about"),
+		rdf2go.NewResource(appOrigin + "/ontology#about"),
 		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#subPropertyOf"),
-		rdf2go.NewResource(mediaMetadataManagerOrigin + "/ontology#mentions"),
+		rdf2go.NewResource(appOrigin + "/ontology#mentions"),
 	)
 
 	// mo:Record class metadata — albums use this type
