@@ -776,7 +776,7 @@ func TestV3PutTagOnlyNoChangeIsNoOp(test *testing.T) {
 }
 
 // TestV3PatchLastSuccessfulPlayProducesBespokeLoganneMessage checks that a PATCH
-// containing only a lastSuccessfulPlay tag emits a bespoke "played" Loganne message.
+// containing only a lastSuccessfulPlay tag emits a bespoke "finished playing" Loganne message.
 func TestV3PatchLastSuccessfulPlayProducesBespokeLoganneMessage(test *testing.T) {
 	clearData()
 	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/bespoke-play")
@@ -790,7 +790,7 @@ func TestV3PatchLastSuccessfulPlayProducesBespokeLoganneMessage(test *testing.T)
 	}
 	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
 	assertEqual(test, "Loganne event type", "trackUpdated", lastLoganneType)
-	assertEqual(test, "Loganne humanReadable message", `Track "Tuesday's Gone" played`, lastLoganneMessage)
+	assertEqual(test, "Loganne humanReadable message", `Track "Tuesday's Gone" finished playing`, lastLoganneMessage)
 }
 
 // TestV3PatchLastErrorProducesBespokeLoganneMessage checks that a PATCH
