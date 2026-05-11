@@ -195,7 +195,7 @@ func TestMapPredicateLanguageUri(t *testing.T) {
 	// With uri set: should use uri directly
 	uri := "https://eolas.l42.eu/metadata/language/gd/"
 	pred, terms := mapPredicate("language", "Scottish Gaelic", &uri, "http://localhost:8020")
-	if pred != "http://purl.org/dc/terms/language" {
+	if pred != "http://localhost:8020/ontology#trackLanguage" {
 		t.Errorf("unexpected predicate URI: %s", pred)
 	}
 	if len(terms) != 1 {
@@ -475,10 +475,9 @@ func TestOntologyToRdfIncludesMoTrackPrefLabel(t *testing.T) {
 	}
 }
 
-// TestExportRDFLanguageDualEmission verifies that a track with a language tag
-// emits BOTH dcterms:language AND mmm:trackLanguage pointing to the same URI
-// (phase 1 of issue #221 — additive, backwards-compatible emission).
-func TestExportRDFLanguageDualEmission(t *testing.T) {
+// TestExportRDFTrackLanguageEmission verifies that a track with a language tag
+// emits mmm:trackLanguage pointing to the language URI.
+func TestExportRDFTrackLanguageEmission(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -516,24 +515,24 @@ func TestExportRDFLanguageDualEmission(t *testing.T) {
 	}
 	output := string(content)
 
-	// Both predicates must be present in the output
-	if !strings.Contains(output, "dc/terms/language") {
-		t.Error("expected dcterms:language triple in output (backward-compat)")
-	}
+	// mmm:trackLanguage must be present; dcterms:language must not be emitted
 	if !strings.Contains(output, "ontology#trackLanguage") {
-		t.Error("expected mmm:trackLanguage triple in output (new scoped predicate)")
+		t.Error("expected mmm:trackLanguage triple in output")
 	}
-	// Both must point to the language URI
+	if strings.Contains(output, "dc/terms/language") {
+		t.Error("dcterms:language must not be emitted — mmm:trackLanguage is the only language predicate")
+	}
+	// Must point to the language URI
 	if !strings.Contains(output, "eolas.l42.eu/metadata/language/gd/") {
 		t.Error("expected language URI 'eolas.l42.eu/metadata/language/gd/' in output")
 	}
 }
 
 // TestTrackLanguageNoUriNoTrackLanguageTriple verifies that a language tag with
-// no URI emits neither dcterms:language nor mmm:trackLanguage triples on the
-// track subject.  We query the TrackToRdf graph directly rather than
-// string-matching the full serialized output, because OntologyToRdf (merged by
-// ExportRDF) legitimately declares trackLanguage as a property URI.
+// no URI emits no mmm:trackLanguage triple on the track subject.
+// We query the TrackToRdf graph directly rather than string-matching the full
+// serialized output, because OntologyToRdf (merged by ExportRDF) legitimately
+// declares trackLanguage as a property URI.
 func TestTrackLanguageNoUriNoTrackLanguageTriple(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")
@@ -576,12 +575,7 @@ func TestTrackLanguageNoUriNoTrackLanguageTriple(t *testing.T) {
 		t.Fatalf("TrackToRdf failed: %v", err)
 	}
 
-	// No dcterms:language triple expected
-	dctermsLang := rdf2go.NewResource("http://purl.org/dc/terms/language")
-	if triples := g.All(nil, dctermsLang, nil); len(triples) > 0 {
-		t.Errorf("expected no dcterms:language triple when language tag has no URI, got %d", len(triples))
-	}
-	// No mmm:trackLanguage triple expected
+	// No mmm:trackLanguage triple expected on the track subject
 	trackLang := rdf2go.NewResource("http://localhost:8020/ontology#trackLanguage")
 	if triples := g.All(nil, trackLang, nil); len(triples) > 0 {
 		t.Errorf("expected no mmm:trackLanguage triple when language tag has no URI, got %d", len(triples))
