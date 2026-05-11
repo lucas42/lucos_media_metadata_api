@@ -520,7 +520,7 @@ func TestExportRDFTrackLanguageEmission(t *testing.T) {
 		t.Error("expected mmm:trackLanguage triple in output")
 	}
 	if strings.Contains(output, "dc/terms/language") {
-		t.Error("dcterms:language must not be emitted (phase 3 — legacy predicate dropped)")
+		t.Error("dcterms:language must not be emitted — mmm:trackLanguage is the only language predicate")
 	}
 	// Must point to the language URI
 	if !strings.Contains(output, "eolas.l42.eu/metadata/language/gd/") {
