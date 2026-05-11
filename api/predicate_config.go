@@ -55,7 +55,7 @@ var predicateRegistry = map[string]PredicateConfig{
 		},
 	},
 	"lastSuccessfulPlay": {
-		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " played" },
+		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " finished playing" },
 	},
 	"lastError": {
 		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " errored" },

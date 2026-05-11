@@ -14,7 +14,7 @@ func makeTagOnlyChangeSet(predicateID string) TrackV3 {
 
 func TestGetBespokeLoganneMessageLastSuccessfulPlay(test *testing.T) {
 	msg := getBespokeLoganneMessage(makeTagOnlyChangeSet("lastSuccessfulPlay"), Track{}, `"Tuesday's Gone"`)
-	assertEqual(test, "bespoke loganne message for lastSuccessfulPlay", `Track "Tuesday's Gone" played`, msg)
+	assertEqual(test, "bespoke loganne message for lastSuccessfulPlay", `Track "Tuesday's Gone" finished playing`, msg)
 }
 
 func TestGetBespokeLoganneMessageLastError(test *testing.T) {
@@ -61,7 +61,7 @@ func TestGetBespokeLoganneMessageWithSameFingerprintNotBlocked(test *testing.T) 
 	}
 	existing := Track{Fingerprint: "abc123"}
 	msg := getBespokeLoganneMessage(changeSet, existing, `"Tuesday's Gone"`)
-	assertEqual(test, "bespoke loganne message when fingerprint is unchanged", `Track "Tuesday's Gone" played`, msg)
+	assertEqual(test, "bespoke loganne message when fingerprint is unchanged", `Track "Tuesday's Gone" finished playing`, msg)
 }
 
 func TestGetBespokeLoganneMessageUnknownTagReturnsEmpty(test *testing.T) {
