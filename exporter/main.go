@@ -35,7 +35,8 @@ func main() {
 
 	if err := rdfgen.ExportRDF(tmpDB, outFile); err != nil {
 		scheduleTrackerData, _ := json.Marshal(map[string]interface{}{
-			"system":    "media_metadata_api_exporter",
+			"system":    "lucos_media_metadata_api",
+			"job_name":  "exporter",
 			"frequency": 60*60, // 1 hour in seconds
 			"status":    "error",
 			"message":   err.Error(),
@@ -46,7 +47,8 @@ func main() {
 
 	log.Printf("RDF export written to %s", outFile)
 	scheduleTrackerData, _ := json.Marshal(map[string]interface{}{
-		"system":    "media_metadata_api_exporter",
+		"system":    "lucos_media_metadata_api",
+		"job_name":  "exporter",
 		"frequency": 60*60, // 1 hour in seconds
 		"status":    "success",
 	})
