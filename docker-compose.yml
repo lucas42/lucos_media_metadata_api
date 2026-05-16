@@ -25,6 +25,8 @@ services:
       - PORT
       - APP_ORIGIN
       - KEY_LUCOS_EOLAS
+      - DEBUG
+      - SYSTEM
   exporter:
     build:
       dockerfile: exporter/Dockerfile
