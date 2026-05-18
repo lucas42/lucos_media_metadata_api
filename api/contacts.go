@@ -29,7 +29,17 @@ func fetchContactName(uri string) (string, error) {
 		return "", fmt.Errorf("KEY_LUCOS_CONTACTS not set")
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// Block cross-host redirects — the auth token must never be forwarded off contacts.l42.eu.
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Hostname() != contactsHostname {
+				return fmt.Errorf("fetchContactName: redirect to %q blocked (cross-host)", req.URL.Host)
+			}
+			req.Header.Set("Authorization", "Bearer "+key)
+			return nil
+		},
+	}
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to build contacts request: %w", err)

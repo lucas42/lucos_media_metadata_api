@@ -29,6 +29,9 @@ func fetchEntityNameFromSource(entityURI string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid entity URI %q: %w", entityURI, err)
 	}
+	if u.Scheme != "https" {
+		return "", fmt.Errorf("fetchEntityNameFromSource: URI %q has non-HTTPS scheme %q", entityURI, u.Scheme)
+	}
 	switch u.Hostname() {
 	case "eolas.l42.eu":
 		return fetchEolasName(entityURI)
