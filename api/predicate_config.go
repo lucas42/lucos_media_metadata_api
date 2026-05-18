@@ -33,6 +33,14 @@ type PredicateConfig struct {
 	// and no scalar track fields (fingerprint, URL, duration) are being modified.
 	// Receives the track name as returned by track.getName() (e.g. `"Tuesday's Gone"` or `#42`).
 	LoganneHumanReadable func(trackName string) string
+
+	// LoganneSilent marks a predicate as a silent companion that does not affect
+	// which Loganne message is emitted. When true, this predicate is ignored when
+	// getBespokeLoganneMessage decides whether to emit a bespoke or generic message.
+	// This allows a primary predicate (e.g. lastError) to carry a bespoke message
+	// even when paired with a companion predicate (e.g. lastErrorMessage) in the
+	// same PATCH request.
+	LoganneSilent bool
 }
 
 // predicateRegistry defines per-predicate configuration.
@@ -62,6 +70,12 @@ var predicateRegistry = map[string]PredicateConfig{
 	},
 	"lastSkip": {
 		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " skipped" },
+	},
+	// lastErrorMessage is a silent companion to lastError: it stores the error
+	// string from the client but does not affect Loganne message selection, so
+	// a PATCH carrying both tags still emits the bespoke "Track X errored" message.
+	"lastErrorMessage": {
+		LoganneSilent: true,
 	},
 }
 

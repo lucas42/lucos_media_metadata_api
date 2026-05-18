@@ -146,9 +146,12 @@ func stringSlicesEqual(a, b []string) bool {
 }
 
 // getBespokeLoganneMessage returns a bespoke humanReadable Loganne message when the
-// changeset contains exactly one tag predicate with a LoganneHumanReadable function
-// and no scalar track fields (fingerprint, URL, duration, weighting) are actually
-// changing, and no collection membership changes are present.
+// changeset contains exactly one non-silent tag predicate with a LoganneHumanReadable
+// function and no scalar track fields (fingerprint, URL, duration, weighting) are
+// actually changing, and no collection membership changes are present.
+// Predicates marked LoganneSilent (e.g. lastErrorMessage) are ignored when counting
+// and do not suppress the bespoke message, allowing a primary predicate (e.g. lastError)
+// to be paired with a silent companion in a single PATCH without losing its bespoke message.
 // Returns an empty string when the generic "Track X updated" message should be used.
 //
 // existingTrack is used to distinguish "field is set to current value" (no scalar
@@ -170,16 +173,24 @@ func getBespokeLoganneMessage(changeSet TrackV3, existingTrack Track, trackName 
 	if changeSet.Collections != nil {
 		return ""
 	}
-	if len(changeSet.Tags) != 1 {
-		return ""
-	}
+	var bespokeMsg string
 	for predicateID := range changeSet.Tags {
 		config := GetPredicateConfig(predicateID)
+		if config.LoganneSilent {
+			continue
+		}
 		if config.LoganneHumanReadable != nil {
-			return config.LoganneHumanReadable(trackName)
+			if bespokeMsg != "" {
+				// More than one non-silent predicate with a bespoke message: fall back to generic.
+				return ""
+			}
+			bespokeMsg = config.LoganneHumanReadable(trackName)
+		} else {
+			// Non-silent predicate with no bespoke message: fall back to generic.
+			return ""
 		}
 	}
-	return ""
+	return bespokeMsg
 }
 
 /**
