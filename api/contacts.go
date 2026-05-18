@@ -6,14 +6,24 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
 
+const contactsHostname = "contacts.l42.eu"
+
 // fetchContactName fetches the canonical name for a single contact by its URI.
 // Sends a GET request to the URI with Accept: application/json and the
 // KEY_LUCOS_CONTACTS Bearer token. Returns the "name" field from the JSON response.
+//
+// The URI must be on contacts.l42.eu — any other host is rejected to prevent SSRF.
 func fetchContactName(uri string) (string, error) {
+	u, err := url.Parse(uri)
+	if err != nil || u.Hostname() != contactsHostname {
+		return "", fmt.Errorf("fetchContactName: URI %q is not on %s", uri, contactsHostname)
+	}
+
 	key := os.Getenv("KEY_LUCOS_CONTACTS")
 	if key == "" {
 		return "", fmt.Errorf("KEY_LUCOS_CONTACTS not set")
