@@ -26,6 +26,7 @@ func FrontController(store Datastore, clientKeys string) http.Handler {
 	router.HandleFunc("/v2/export", RDFHandler)
 	router.HandleFunc("/ontology", OntologyHandler)
 	router.HandleFunc("/_info", store.InfoController)
+	router.HandleFunc("/webhooks", store.WebhooksController)
 	router.HandleFunc("/", HomepageController)
 
 	/** The following routes used to be part of the V1 API - return a Gone status */
