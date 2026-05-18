@@ -846,3 +846,25 @@ func TestV3PatchMultipleTagsUsesGenericLoganneMessage(test *testing.T) {
 	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
 	assertEqual(test, "Loganne humanReadable message", `Track "Some Track" updated`, lastLoganneMessage)
 }
+
+// TestV3PatchLastErrorWithMessageProducesBespokeLoganneMessage checks that a PATCH
+// containing both lastError and lastErrorMessage (as sent by media_manager after
+// lucas42/lucos_media_manager#258) emits a single bespoke "errored" Loganne message.
+// lastErrorMessage is marked LoganneSilent and must not suppress the bespoke message
+// nor cause a second generic event to be emitted.
+func TestV3PatchLastErrorWithMessageProducesBespokeLoganneMessage(test *testing.T) {
+	clearData()
+	v3Path := "/v3/tracks?url=" + url.QueryEscape("http://example.org/v3track/bespoke-error-with-msg")
+	setupRequest(test, "PUT", v3Path, `{"fingerprint":"bewm1","duration":100,"tags":{"title":[{"name":"Louie Louie"}]}}`, 200)
+	loganneRequestCount = 0
+
+	req := basicRequest(test, "PATCH", v3Path, `{"tags":{"lastError":[{"name":"2026-05-18T14:59:54Z"}],"lastErrorMessage":[{"name":"Http status 404 returned"}]}}`)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200, got %d", resp.StatusCode)
+	}
+	assertEqual(test, "Track-Action header", "trackUpdated", resp.Header.Get("Track-Action"))
+	assertEqual(test, "Loganne event type", "trackUpdated", lastLoganneType)
+	assertEqual(test, "Loganne humanReadable message", `Track "Louie Louie" errored`, lastLoganneMessage)
+	assertEqual(test, "Loganne request count", 1, loganneRequestCount)
+}
