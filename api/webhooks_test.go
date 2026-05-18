@@ -54,14 +54,14 @@ func getTagsForTrack(t *testing.T, trackURL string) map[string][]TagValueV3 {
 	return result.Tags
 }
 
-// postLoganneEvent posts a Loganne webhook event to /loganne and returns the status code.
+// postLoganneEvent posts a Loganne webhook event to /webhooks and returns the status code.
 func postLoganneEvent(t *testing.T, eventType string, eventURL string) int {
 	t.Helper()
 	body := fmt.Sprintf(`{"type": %q, "url": %q, "source": "test"}`, eventType, eventURL)
-	req := basicRequest(t, "POST", "/loganne", body)
+	req := basicRequest(t, "POST", "/webhooks", body)
 	resp, err := doRawRequest(t, req)
 	if err != nil {
-		t.Fatalf("Failed to POST to /loganne: %v", err)
+		t.Fatalf("Failed to POST to /webhooks: %v", err)
 	}
 	return resp.StatusCode
 }
@@ -178,9 +178,9 @@ func TestUnknownLoganneEventIgnored(t *testing.T) {
 	}
 }
 
-// ── Test 6: GET to /loganne is rejected ───────────────────────────────────────
+// ── Test 6: GET to /webhooks is rejected ──────────────────────────────────────
 
-func TestLoganneEndpointRejectsGet(t *testing.T) {
+func TestWebhooksEndpointRejectsGet(t *testing.T) {
 	clearData()
-	makeRequestWithUnallowedMethod(t, "/loganne", "GET", []string{"POST"})
+	makeRequestWithUnallowedMethod(t, "/webhooks", "GET", []string{"POST"})
 }

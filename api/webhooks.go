@@ -28,16 +28,16 @@ func (store Datastore) clearTagUrisByUri(entityUri string) (int64, error) {
 	return rows, nil
 }
 
-// LoganneWebhookController handles inbound Loganne webhook events.
+// WebhooksController handles inbound webhook events from external services.
 //
-//	POST /loganne
+//	POST /webhooks
 //
 // Currently handled event types:
 //   - itemDeleted   (from lucos_eolas) — clears tag URIs matching the deleted entity's URL
 //   - contactDeleted (from lucos_contacts) — same behaviour
 //
 // All other event types are acknowledged with 204 and ignored.
-func (store Datastore) LoganneWebhookController(w http.ResponseWriter, r *http.Request) {
+func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		MethodNotAllowed(w, []string{http.MethodPost})
 		return
