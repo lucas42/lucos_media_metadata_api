@@ -167,14 +167,14 @@ func TestUnknownLoganneEventIgnored(t *testing.T) {
 	clearData()
 	trackURL := createTrackWithURITag(t, "wh-unknown-event-1", entityURI)
 
-	// An unrelated event type must not touch any tags
-	status := postLoganneEvent(t, "itemUpdated", entityURI)
-	assertEqual(t, "unknown event: expected 204", 204, status)
+	// A genuinely unrecognised event type must not touch any tags
+	status := postLoganneEvent(t, "someOtherEvent", entityURI)
+	assertEqual(t, "unrecognised event: expected 204", 204, status)
 
 	// URI must still be present
 	tags := getTagsForTrack(t, trackURL)
 	if len(tags["language"]) == 0 || tags["language"][0].URI != entityURI {
-		t.Errorf("unknown event: URI should be unchanged, got: %+v", tags["language"])
+		t.Errorf("unrecognised event: URI should be unchanged, got: %+v", tags["language"])
 	}
 }
 
