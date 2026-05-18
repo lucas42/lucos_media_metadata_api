@@ -201,6 +201,20 @@ func (store Datastore) getAllTagsForTrack(trackid int) (tags TagList, err error)
 	return
 }
 
+// updateTagNamesByUri sets value = name for all tags whose uri matches entityUri.
+// Only rows where the name has actually changed are updated. Returns the count of
+// rows updated (zero if no tags reference that URI or if the name is already current).
+func (store Datastore) updateTagNamesByUri(entityUri string, name string) (int64, error) {
+	result, err := store.DB.Exec(
+		`UPDATE tag SET value = ? WHERE uri = ? AND value != ?`,
+		name, entityUri, name,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 /**
  * Deletes a given tag
  *

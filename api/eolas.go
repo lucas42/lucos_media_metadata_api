@@ -95,6 +95,21 @@ func fetchEolasNames(uris []string) map[string]string {
 	return names
 }
 
+// fetchEolasName fetches the canonical name for a single eolas entity URI
+// by looking it up in the bulk data endpoint. Returns an error if the URI
+// is not found or if the fetch itself fails.
+func fetchEolasName(uri string) (string, error) {
+	names := fetchEolasNames([]string{uri})
+	if names == nil {
+		return "", fmt.Errorf("eolas fetch failed for %q", uri)
+	}
+	name, ok := names[uri]
+	if !ok {
+		return "", fmt.Errorf("no name found for %q in eolas data", uri)
+	}
+	return name, nil
+}
+
 // eolasLanguageURI builds the canonical eolas URI for a language code.
 func eolasLanguageURI(code string) string {
 	return fmt.Sprintf("%s/metadata/language/%s/", eolasOrigin, url.PathEscape(code))
