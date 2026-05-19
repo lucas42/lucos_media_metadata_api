@@ -8,23 +8,21 @@ import (
 )
 
 // reconcileTagNames walks every distinct non-empty URI stored in tags with
-// RequiresURI predicates, fetches the current canonical name from the
-// appropriate source system, and corrects any rows where the stored name has
-// drifted from the canonical name.
+// RequiresURI predicates, fetches the current canonical name from eolas,
+// and corrects any rows where the stored name has drifted from the canonical
+// name.
 //
 // Routing is by hostname:
-//   - eolas.l42.eu    → fetched in one bulk call via fetchEolasNames
-//   - contacts.l42.eu → fetched individually via fetchContactNames
-//   - other hosts      → skipped (logged at debug level)
+//   - eolas.l42.eu → fetched in one bulk call via fetchEolasNames
+//   - other hosts   → skipped (logged at debug level)
 func (store Datastore) reconcileTagNames() {
-	store.reconcileTagNamesWithFetchers(fetchEolasNames, fetchContactNames)
+	store.reconcileTagNamesWithFetchers(fetchEolasNames)
 }
 
 // reconcileTagNamesWithFetchers is the testable core of reconcileTagNames.
-// Production code calls it via reconcileTagNames; tests inject mock fetchers.
+// Production code calls it via reconcileTagNames; tests inject a mock fetcher.
 func (store Datastore) reconcileTagNamesWithFetchers(
 	eolasNamesFetcher func(uris []string) map[string]string,
-	contactNamesFetcher func(uris []string) map[string]string,
 ) {
 	slog.Info("reconcileTagNames: starting")
 
@@ -57,8 +55,8 @@ func (store Datastore) reconcileTagNamesWithFetchers(
 	}
 	slog.Info("reconcileTagNames: found URIs to check", "count", len(uris))
 
-	// Partition by hostname.
-	var eolasURIs, contactsURIs []string
+	// Partition by hostname — only eolas URIs are fetched; others are skipped.
+	var eolasURIs []string
 	for _, uri := range uris {
 		u, err := url.Parse(uri)
 		if err != nil {
@@ -68,30 +66,19 @@ func (store Datastore) reconcileTagNamesWithFetchers(
 		switch u.Hostname() {
 		case "eolas.l42.eu":
 			eolasURIs = append(eolasURIs, uri)
-		case "contacts.l42.eu":
-			contactsURIs = append(contactsURIs, uri)
 		default:
 			slog.Debug("reconcileTagNames: skipping URI with unrecognised host", "uri", uri)
 		}
 	}
 
-	// Fetch names from each source system.
+	// Fetch names from eolas.
 	allNames := make(map[string]string)
-
 	if len(eolasURIs) > 0 {
 		names := eolasNamesFetcher(eolasURIs)
 		for uri, name := range names {
 			allNames[uri] = name
 		}
 		slog.Info("reconcileTagNames: fetched eolas names", "requested", len(eolasURIs), "resolved", len(names))
-	}
-
-	if len(contactsURIs) > 0 {
-		names := contactNamesFetcher(contactsURIs)
-		for uri, name := range names {
-			allNames[uri] = name
-		}
-		slog.Info("reconcileTagNames: fetched contact names", "requested", len(contactsURIs), "resolved", len(names))
 	}
 
 	// Update any rows where the name has drifted.

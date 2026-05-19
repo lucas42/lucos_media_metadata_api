@@ -25,7 +25,6 @@ services:
       - PORT
       - APP_ORIGIN
       - KEY_LUCOS_EOLAS
-      - KEY_LUCOS_CONTACTS
       - DEBUG
       - SYSTEM
   exporter:

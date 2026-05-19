@@ -22,8 +22,7 @@ var entityNameFetcher func(uri string) (string, error) = fetchEntityNameFromSour
 
 // fetchEntityNameFromSource is the production implementation of entityNameFetcher.
 // It routes by hostname:
-//   - eolas.l42.eu  → fetchEolasName (bulk Turtle endpoint)
-//   - contacts.l42.eu → fetchContactName (individual JSON endpoint)
+//   - eolas.l42.eu → fetchEolasName (bulk Turtle endpoint)
 func fetchEntityNameFromSource(entityURI string) (string, error) {
 	u, err := url.Parse(entityURI)
 	if err != nil {
@@ -35,8 +34,6 @@ func fetchEntityNameFromSource(entityURI string) (string, error) {
 	switch u.Hostname() {
 	case "eolas.l42.eu":
 		return fetchEolasName(entityURI)
-	case "contacts.l42.eu":
-		return fetchContactName(entityURI)
 	default:
 		return "", fmt.Errorf("unrecognised source system host %q in entity URI %q", u.Hostname(), entityURI)
 	}
@@ -62,10 +59,8 @@ func (store Datastore) clearTagUrisByUri(entityUri string) (int64, error) {
 //	POST /webhooks
 //
 // Currently handled event types:
-//   - itemDeleted    (from lucos_eolas)    — clears tag URIs matching the deleted entity's URL
-//   - contactDeleted (from lucos_contacts) — same behaviour
-//   - itemUpdated    (from lucos_eolas)    — refreshes the stored name for matching tag rows
-//   - contactUpdated (from lucos_contacts) — same behaviour
+//   - itemDeleted (from lucos_eolas) — clears tag URIs matching the deleted entity's URL
+//   - itemUpdated (from lucos_eolas) — refreshes the stored name for matching tag rows
 //
 // All other event types are acknowledged with 204 and ignored.
 func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +77,7 @@ func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request
 	}
 
 	switch event.Type {
-	case "itemDeleted", "contactDeleted":
+	case "itemDeleted":
 		if event.URL == "" {
 			slog.Warn("Loganne webhook: missing url field", "type", event.Type)
 			http.Error(w, "Bad Request: url field is required", http.StatusBadRequest)
@@ -96,7 +91,7 @@ func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request
 		}
 		slog.Info("Cleared orphan tag URIs on entity deletion", "type", event.Type, "entityUri", event.URL, "count", count)
 
-	case "itemUpdated", "contactUpdated":
+	case "itemUpdated":
 		if event.URL == "" {
 			// Some eolas itemUpdated events may not carry a url — silently ignore.
 			slog.Debug("Loganne webhook: no url field, ignoring", "type", event.Type)

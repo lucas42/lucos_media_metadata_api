@@ -10,7 +10,6 @@ import (
 
 // entityURI is a stable test URI that represents a deleted source entity.
 const entityURI = "https://eolas.l42.eu/metadata/person/deleted-entity/"
-const contactURI = "https://contacts.l42.eu/people/999"
 
 // createTrackWithURITag creates a track via the v3 API with a language tag that
 // has the given URI, and returns the track URL used.
@@ -94,37 +93,6 @@ func TestItemDeletedClearsTagURI(t *testing.T) {
 	}
 	if tagAfter.Name != nameBefore {
 		t.Errorf("itemDeleted: name changed; before=%q after=%q", nameBefore, tagAfter.Name)
-	}
-}
-
-// ── Test 2: contactDeleted clears matching URI, name preserved ────────────────
-
-func TestContactDeletedClearsTagURI(t *testing.T) {
-	clearData()
-	// Use an about tag (contact URIs are typically referenced by about/mentions predicates).
-	// The DB-level logic is predicate-agnostic; we use language here for simplicity
-	// since language tags require a URI via the v3 validation rules.
-	trackURL := createTrackWithURITag(t, "wh-contactdeleted-1", contactURI)
-
-	tagsBefore := getTagsForTrack(t, trackURL)
-	if len(tagsBefore["language"]) == 0 || tagsBefore["language"][0].URI != contactURI {
-		t.Fatalf("Expected language tag with URI=%q before event, got: %+v", contactURI, tagsBefore["language"])
-	}
-	nameBefore := tagsBefore["language"][0].Name
-
-	status := postLoganneEvent(t, "contactDeleted", contactURI)
-	assertEqual(t, "contactDeleted: expected 204", 204, status)
-
-	tagsAfter := getTagsForTrack(t, trackURL)
-	if len(tagsAfter["language"]) == 0 {
-		t.Fatal("language tag disappeared entirely; expected it to remain with name but no URI")
-	}
-	tagAfter := tagsAfter["language"][0]
-	if tagAfter.URI != "" {
-		t.Errorf("contactDeleted: expected URI to be cleared, got %q", tagAfter.URI)
-	}
-	if tagAfter.Name != nameBefore {
-		t.Errorf("contactDeleted: name changed; before=%q after=%q", nameBefore, tagAfter.Name)
 	}
 }
 
@@ -231,28 +199,6 @@ func TestItemUpdatedRefreshesTagName(t *testing.T) {
 		t.Errorf("itemUpdated: URI should be unchanged, got %q", tagAfter.URI)
 	}
 	assertEqual(t, "itemUpdated: name should be refreshed", "Updated Entity Name", tagAfter.Name)
-}
-
-// ── Test 8: contactUpdated refreshes the stored name ─────────────────────────
-
-func TestContactUpdatedRefreshesTagName(t *testing.T) {
-	clearData()
-	withMockNameFetcher(t, map[string]string{contactURI: "Updated Contact Name"})
-
-	trackURL := createTrackWithURITag(t, "wh-contact-updated-1", contactURI)
-
-	status := postLoganneEvent(t, "contactUpdated", contactURI)
-	assertEqual(t, "contactUpdated: expected 204", 204, status)
-
-	tagsAfter := getTagsForTrack(t, trackURL)
-	if len(tagsAfter["language"]) == 0 {
-		t.Fatal("language tag disappeared after contactUpdated")
-	}
-	tagAfter := tagsAfter["language"][0]
-	if tagAfter.URI != contactURI {
-		t.Errorf("contactUpdated: URI should be unchanged, got %q", tagAfter.URI)
-	}
-	assertEqual(t, "contactUpdated: name should be refreshed", "Updated Contact Name", tagAfter.Name)
 }
 
 // ── Test 9: itemUpdated with no matching tags is a no-op ─────────────────────

@@ -6,17 +6,15 @@ import (
 
 // ── reconcileTagNames unit tests ─────────────────────────────────────────────
 
-// ── Test: reconciliation routes eolas vs contacts URIs correctly ─────────────
+// ── Test: reconciliation fetches and updates eolas URIs ──────────────────────
 
-func TestReconcileRoutesEolasAndContactsURIs(t *testing.T) {
+func TestReconcileUpdatesEolasURIs(t *testing.T) {
 	clearData()
 
 	eolasEntityURI := "https://eolas.l42.eu/metadata/person/old-eolas/"
-	contactEntityURI := "https://contacts.l42.eu/people/42"
 
-	// Create one track tagged with an eolas URI and one with a contacts URI.
+	// Create one track tagged with an eolas URI.
 	eolasTrackURL := createTrackWithURITag(t, "reconcile-eolas-1", eolasEntityURI)
-	contactTrackURL := createTrackWithURITag(t, "reconcile-contact-1", contactEntityURI)
 
 	// Open a second handle to the same DB to call reconcileTagNamesWithFetchers directly.
 	store := DBInit("testrouting.sqlite", MockLoganne{})
@@ -30,15 +28,6 @@ func TestReconcileRoutesEolasAndContactsURIs(t *testing.T) {
 			}
 			return result
 		},
-		func(uris []string) map[string]string {
-			result := make(map[string]string)
-			for _, u := range uris {
-				if u == contactEntityURI {
-					result[u] = "Updated Contact Name"
-				}
-			}
-			return result
-		},
 	)
 
 	// Eolas tag name should be updated.
@@ -48,14 +37,6 @@ func TestReconcileRoutesEolasAndContactsURIs(t *testing.T) {
 	}
 	assertEqual(t, "eolas tag name after reconcile", "Updated Eolas Name", eolasTagsResult["language"][0].Name)
 	assertEqual(t, "eolas URI unchanged after reconcile", eolasEntityURI, eolasTagsResult["language"][0].URI)
-
-	// Contacts tag name should be updated.
-	contactTagsResult := getTagsForTrack(t, contactTrackURL)
-	if len(contactTagsResult["language"]) == 0 {
-		t.Fatal("contacts track has no language tag after reconcile")
-	}
-	assertEqual(t, "contacts tag name after reconcile", "Updated Contact Name", contactTagsResult["language"][0].Name)
-	assertEqual(t, "contacts URI unchanged after reconcile", contactEntityURI, contactTagsResult["language"][0].URI)
 }
 
 // ── Test: reconciliation skips URIs from unrecognised hosts ──────────────────
@@ -71,21 +52,16 @@ func TestReconcileSkipsUnknownHostURIs(t *testing.T) {
 	store.DB.MustExec(`UPDATE tag SET uri = 'https://unknown.example.com/thing/1' WHERE uri = ?`, eolasEntityURI2)
 
 	eolasCallCount := 0
-	contactCallCount := 0
 	store.reconcileTagNamesWithFetchers(
 		func(uris []string) map[string]string {
 			eolasCallCount += len(uris)
 			return nil
 		},
-		func(uris []string) map[string]string {
-			contactCallCount += len(uris)
-			return nil
-		},
 	)
 
-	// The unknown-host URI should not have been passed to either fetcher.
-	if eolasCallCount != 0 || contactCallCount != 0 {
-		t.Errorf("expected no fetcher calls for unknown-host URI; eolas=%d contacts=%d", eolasCallCount, contactCallCount)
+	// The unknown-host URI should not have been passed to the eolas fetcher.
+	if eolasCallCount != 0 {
+		t.Errorf("expected no fetcher calls for unknown-host URI; eolas=%d", eolasCallCount)
 	}
 
 	// The tag row itself should be untouched.
@@ -104,7 +80,6 @@ func TestReconcileNoURITags(t *testing.T) {
 
 	called := false
 	store.reconcileTagNamesWithFetchers(
-		func(uris []string) map[string]string { called = true; return nil },
 		func(uris []string) map[string]string { called = true; return nil },
 	)
 
