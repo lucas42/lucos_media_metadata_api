@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -144,7 +145,11 @@ func reportToScheduleTracker(endpoint, status, message string) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := http.DefaultClient.Do(req); err != nil {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
 		slog.Warn("reconcileTagNames: failed to post to schedule_tracker", slog.Any("error", err))
+		return
 	}
+	defer resp.Body.Close()
 }
