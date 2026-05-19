@@ -153,7 +153,7 @@ func TestWebhooksEndpointRejectsGet(t *testing.T) {
 	makeRequestWithUnallowedMethod(t, "/webhooks", "GET", []string{"POST"})
 }
 
-// ── itemUpdated / contactUpdated tests ───────────────────────────────────────
+// ── itemUpdated tests ────────────────────────────────────────────────────────
 
 // withMockNameFetcher installs a mock entityNameFetcher for the duration of a
 // test and restores the original on cleanup.
