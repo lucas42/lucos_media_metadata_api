@@ -64,6 +64,16 @@ func main() {
 		}
 	}()
 
+	// Reconcile denormalised tag names daily. Catches any drift the webhooks missed
+	// (transient failures, lost deliveries, ordering issues).
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			store.reconcileTagNames()
+		}
+	}()
+
 	var port string
 	if len(os.Getenv("PORT")) > 0 {
 		port = os.Getenv("PORT")

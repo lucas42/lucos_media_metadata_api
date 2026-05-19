@@ -25,6 +25,7 @@ services:
       - PORT
       - APP_ORIGIN
       - KEY_LUCOS_EOLAS
+      - SCHEDULE_TRACKER_ENDPOINT
       - DEBUG
       - SYSTEM
   exporter:
