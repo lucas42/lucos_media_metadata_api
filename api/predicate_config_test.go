@@ -138,9 +138,9 @@ func TestValidateURIOriginSkipsValidationWhenNoAllowlist(test *testing.T) {
 }
 
 func TestValidateURIOriginSkipsValidationWhenAllowlistIsEmpty(test *testing.T) {
-	// mediaMetadataManagerOrigin is "" in tests (initAllowedOrigins called with
-	// it unset), so album's AllowedOrigins is []string{""}.  The empty entry is
-	// filtered out, leaving no valid origins — validation is skipped entirely.
+	// mediaMetadataManagerOrigin is "" in tests, so the originMediaMetadataManager
+	// constant resolves to "" in validateURIOrigin and is filtered out, leaving no
+	// valid origins — validation is skipped entirely.
 	config := GetPredicateConfig("album")
 	msg := config.validateURIOrigin("/albums/1")
 	if msg != "" {

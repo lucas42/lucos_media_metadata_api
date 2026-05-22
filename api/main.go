@@ -30,14 +30,12 @@ func main() {
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}
 
-	eolasOrigin = os.Getenv("EOLAS_ORIGIN")
 	// EOLAS_ORIGIN is required; the service cannot function correctly without it.
 	if eolasOrigin == "" {
 		slog.Error("EOLAS_ORIGIN environment variable is required but not set")
 		os.Exit(1)
 	}
 	mediaMetadataManagerOrigin = os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
-	initAllowedOrigins()
 
 	// Expose pprof on a localhost-only listener so it's reachable via docker exec
 	// but never from the public internet.
