@@ -13,9 +13,10 @@ import (
 )
 
 // eolasOrigin is the base URL of the lucos_eolas service, read from the
-// EOLAS_ORIGIN environment variable. It is used both for fetching data and as
-// the allowed origin for URI validation of eolas predicates.
-var eolasOrigin = os.Getenv("EOLAS_ORIGIN")
+// EOLAS_ORIGIN environment variable at startup (see main()). It is used both
+// for fetching data and as the allowed origin for URI validation of eolas
+// predicates.
+var eolasOrigin string
 
 const eolasDataPath = "/metadata/all/data/"
 const prefLabelURI = "http://www.w3.org/2004/02/skos/core#prefLabel"

@@ -79,11 +79,12 @@ func clearData() {
 }
 func TestMain(m *testing.M) {
 	log.SetOutput(ioutil.Discard)
-	// Set the eolasOrigin package var so that URI hostname validation works in
-	// tests. Tests use the real production eolas hostname; the album predicate's
-	// allowlist naturally accepts relative URIs ("/albums/1") because ManagerOrigin
-	// is empty in the test store, producing an empty host that is filtered out.
+	// Set the eolasOrigin package var so that URI origin validation works in
+	// tests. Tests use the real production eolas origin. mediaMetadataManagerOrigin
+	// is left as "" so that album URIs like "/albums/1" pass validation (the empty
+	// entry is filtered out, leaving no valid origins — validation is skipped).
 	eolasOrigin = "https://eolas.l42.eu"
+	initAllowedOrigins()
 	clearData()
 	result := m.Run()
 	os.Remove("testrouting.sqlite")

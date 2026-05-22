@@ -47,13 +47,14 @@ type PredicateConfig struct {
 	// same PATCH request.
 	LoganneSilent bool
 
-	// AllowedOrigins, if non-nil, returns the set of origins (scheme + host +
-	// port) that are valid for URI values of this predicate. Called at
-	// tag-write time so that env-var-backed values are resolved after startup.
-	// A URI is valid if it starts with one of the listed origins followed by
-	// a "/". Empty entries are ignored; if all entries are empty, validation
-	// is skipped (useful in dev/test when env vars are unset).
-	AllowedOrigins func() []string
+	// AllowedOrigins, if non-nil, holds the set of origins (scheme + host +
+	// port) that are valid for URI values of this predicate. Populated at
+	// startup by initAllowedOrigins() from env vars (EOLAS_ORIGIN,
+	// MEDIA_METADATA_MANAGER_ORIGIN). A URI is valid if it starts with one of
+	// the listed origins followed by a "/". Empty entries are ignored; if all
+	// entries are empty, validation is skipped (useful when an env var is
+	// unset in a dev/test environment).
+	AllowedOrigins []string
 }
 
 // validateURIOrigin checks whether the given URI starts with one of the
@@ -65,8 +66,9 @@ func (config PredicateConfig) validateURIOrigin(uri string) string {
 		return ""
 	}
 	// Build the effective allowlist, dropping empty entries produced when the
-	// backing env var is unset (e.g. in tests that rely on relative album URIs).
-	allowed := config.AllowedOrigins()
+	// backing env var was unset at startup (e.g. MEDIA_METADATA_MANAGER_ORIGIN
+	// in a dev environment without that var set).
+	allowed := config.AllowedOrigins
 	validOrigins := make([]string, 0, len(allowed))
 	for _, o := range allowed {
 		if o != "" {
@@ -90,24 +92,24 @@ var predicateRegistry = map[string]PredicateConfig{
 	"composer": {MultiValue: true},
 	"producer": {MultiValue: true},
 	"language": {
-		MultiValue:     true,
-		RequiresURI:    true,
-		AllowedOrigins: func() []string { return []string{eolasOrigin} },
+		MultiValue:  true,
+		RequiresURI: true,
+		// AllowedOrigins populated by initAllowedOrigins() at startup.
 	},
 	"offence": {MultiValue: true},
 	"about": {
-		MultiValue:     true,
-		RequiresURI:    true,
-		AllowedOrigins: func() []string { return []string{eolasOrigin} },
+		MultiValue:  true,
+		RequiresURI: true,
+		// AllowedOrigins populated by initAllowedOrigins() at startup.
 	},
 	"mentions": {
-		MultiValue:     true,
-		RequiresURI:    true,
-		AllowedOrigins: func() []string { return []string{eolasOrigin} },
+		MultiValue:  true,
+		RequiresURI: true,
+		// AllowedOrigins populated by initAllowedOrigins() at startup.
 	},
 	"album": {
-		RequiresURI:    true,
-		AllowedOrigins: func() []string { return []string{mediaMetadataManagerOrigin} },
+		RequiresURI: true,
+		// AllowedOrigins populated by initAllowedOrigins() at startup.
 		ResolveNameToURI: func(store Datastore, name string) (string, error) {
 			album, err := store.resolveOrCreateAlbumByName(name)
 			return album.URI, err
@@ -158,4 +160,20 @@ func GetRequiresURIPredicates() []string {
 		}
 	}
 	return predicates
+}
+
+// initAllowedOrigins populates the AllowedOrigins field for predicates whose
+// valid URI origins are derived from environment variables. Must be called from
+// main() (after env vars are read) and from TestMain in tests (after setting
+// the origin package vars directly). Calling it a second time overwrites the
+// previous values — safe for test setup.
+func initAllowedOrigins() {
+	for _, pred := range []string{"language", "about", "mentions"} {
+		config := predicateRegistry[pred]
+		config.AllowedOrigins = []string{eolasOrigin}
+		predicateRegistry[pred] = config
+	}
+	albumConfig := predicateRegistry["album"]
+	albumConfig.AllowedOrigins = []string{mediaMetadataManagerOrigin}
+	predicateRegistry["album"] = albumConfig
 }

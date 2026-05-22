@@ -138,13 +138,10 @@ func TestValidateURIOriginSkipsValidationWhenNoAllowlist(test *testing.T) {
 }
 
 func TestValidateURIOriginSkipsValidationWhenAllowlistIsEmpty(test *testing.T) {
-	// When mediaMetadataManagerOrigin is empty (as in tests), album's AllowedOrigins
-	// returns [""] which filters to [] — no validation should occur.
+	// mediaMetadataManagerOrigin is "" in tests (initAllowedOrigins called with
+	// it unset), so album's AllowedOrigins is []string{""}.  The empty entry is
+	// filtered out, leaving no valid origins — validation is skipped entirely.
 	config := GetPredicateConfig("album")
-	// Temporarily clear mediaMetadataManagerOrigin to simulate unset env var.
-	orig := mediaMetadataManagerOrigin
-	mediaMetadataManagerOrigin = ""
-	defer func() { mediaMetadataManagerOrigin = orig }()
 	msg := config.validateURIOrigin("/albums/1")
 	if msg != "" {
 		test.Errorf("Expected no error for album URI when allowlist is empty, got: %q", msg)
