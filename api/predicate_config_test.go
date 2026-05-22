@@ -84,67 +84,68 @@ func TestGetRequiresURIPredicates(test *testing.T) {
 	}
 }
 
-func TestAllowedURIHostsSetForRequiresURIPredicates(test *testing.T) {
+func TestAllowedOriginsSetForRequiresURIPredicates(test *testing.T) {
 	for _, pred := range []string{"language", "about", "mentions", "album"} {
 		config := GetPredicateConfig(pred)
-		if config.AllowedURIHosts == nil {
-			test.Errorf("Expected predicate %q to have AllowedURIHosts set", pred)
+		if config.AllowedOrigins == nil {
+			test.Errorf("Expected predicate %q to have AllowedOrigins set", pred)
 		}
 	}
 }
 
-func TestAllowedURIHostsNotSetForNonURIPredicates(test *testing.T) {
+func TestAllowedOriginsNotSetForNonURIPredicates(test *testing.T) {
 	for _, pred := range []string{"composer", "producer", "offence", "title"} {
 		config := GetPredicateConfig(pred)
-		if config.AllowedURIHosts != nil {
-			test.Errorf("Expected predicate %q to have AllowedURIHosts nil", pred)
+		if config.AllowedOrigins != nil {
+			test.Errorf("Expected predicate %q to have AllowedOrigins nil", pred)
 		}
 	}
 }
 
-func TestValidateURIHostAcceptsEolasURI(test *testing.T) {
+func TestValidateURIOriginAcceptsEolasURI(test *testing.T) {
 	// eolasOrigin is set to "https://eolas.l42.eu" in TestMain.
 	config := GetPredicateConfig("language")
-	msg := config.validateURIHost("https://eolas.l42.eu/metadata/language/en/")
+	msg := config.validateURIOrigin("https://eolas.l42.eu/metadata/language/en/")
 	if msg != "" {
 		test.Errorf("Expected no error for valid eolas language URI, got: %q", msg)
 	}
 }
 
-func TestValidateURIHostRejectsWrongHostname(test *testing.T) {
+func TestValidateURIOriginRejectsWrongOrigin(test *testing.T) {
 	config := GetPredicateConfig("language")
-	msg := config.validateURIHost("https://example.com/metadata/language/en/")
+	msg := config.validateURIOrigin("https://example.com/metadata/language/en/")
 	if msg == "" {
-		test.Error("Expected error for language URI with wrong hostname, got empty string")
+		test.Error("Expected error for language URI with wrong origin, got empty string")
 	}
 }
 
-func TestValidateURIHostRejectsNonHttpsScheme(test *testing.T) {
+func TestValidateURIOriginRejectsNonHttpsScheme(test *testing.T) {
 	config := GetPredicateConfig("language")
-	msg := config.validateURIHost("http://eolas.l42.eu/metadata/language/en/")
+	// http:// does not match the https:// eolasOrigin prefix.
+	msg := config.validateURIOrigin("http://eolas.l42.eu/metadata/language/en/")
 	if msg == "" {
 		test.Error("Expected error for language URI with http (not https) scheme, got empty string")
 	}
 }
 
-func TestValidateURIHostSkipsValidationWhenNoAllowlist(test *testing.T) {
-	// Predicates without AllowedURIHosts should pass any URI.
+func TestValidateURIOriginSkipsValidationWhenNoAllowlist(test *testing.T) {
+	// Predicates without AllowedOrigins should pass any URI.
 	config := GetPredicateConfig("composer")
-	msg := config.validateURIHost("http://anything.example.com/entity/1")
+	msg := config.validateURIOrigin("http://anything.example.com/entity/1")
 	if msg != "" {
-		test.Errorf("Expected no error for predicate without AllowedURIHosts, got: %q", msg)
+		test.Errorf("Expected no error for predicate without AllowedOrigins, got: %q", msg)
 	}
 }
 
-func TestValidateURIHostSkipsValidationWhenAllowlistIsEmpty(test *testing.T) {
-	// When mediaMetadataManagerOrigin is empty (as in tests), album's AllowedURIHosts
+func TestValidateURIOriginSkipsValidationWhenAllowlistIsEmpty(test *testing.T) {
+	// When mediaMetadataManagerOrigin is empty (as in tests), album's AllowedOrigins
 	// returns [""] which filters to [] — no validation should occur.
 	config := GetPredicateConfig("album")
 	// Temporarily clear mediaMetadataManagerOrigin to simulate unset env var.
 	orig := mediaMetadataManagerOrigin
 	mediaMetadataManagerOrigin = ""
 	defer func() { mediaMetadataManagerOrigin = orig }()
-	msg := config.validateURIHost("/albums/1")
+	msg := config.validateURIOrigin("/albums/1")
 	if msg != "" {
 		test.Errorf("Expected no error for album URI when allowlist is empty, got: %q", msg)
 	}

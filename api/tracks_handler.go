@@ -14,15 +14,15 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// URIHostValidationError is returned when a tag URI fails scheme or hostname
-// validation. It carries the predicate name so that the HTTP layer can include
-// it in the structured 400 response.
-type URIHostValidationError struct {
+// URIOriginValidationError is returned when a tag URI fails origin validation.
+// It carries the predicate name so that the HTTP layer can include it in the
+// structured 400 response.
+type URIOriginValidationError struct {
 	Predicate string
 	Reason    string
 }
 
-func (e *URIHostValidationError) Error() string {
+func (e *URIOriginValidationError) Error() string {
 	return e.Reason
 }
 
@@ -93,11 +93,11 @@ func validateTagsV3(tags map[string][]TagValueV3) (predicate string, message str
 
 // writeV3Error maps common errors to structured JSON responses.
 func writeV3Error(w http.ResponseWriter, err error) {
-	// URIHostValidationError carries the predicate name, so use the structured
+	// URIOriginValidationError carries the predicate name, so use the structured
 	// tag-validation response to include it in the JSON body.
-	var uriHostErr *URIHostValidationError
-	if errors.As(err, &uriHostErr) {
-		writeV3TagValidationError(w, uriHostErr.Predicate, uriHostErr.Reason)
+	var uriOriginErr *URIOriginValidationError
+	if errors.As(err, &uriOriginErr) {
+		writeV3TagValidationError(w, uriOriginErr.Predicate, uriOriginErr.Reason)
 		return
 	}
 	msg := err.Error()
@@ -191,8 +191,8 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 					err = fmt.Errorf("predicate %q requires a URI", predicate)
 					return
 				}
-				if reason := config.validateURIHost(v.URI); reason != "" {
-					err = &URIHostValidationError{Predicate: predicate, Reason: reason}
+				if reason := config.validateURIOrigin(v.URI); reason != "" {
+					err = &URIOriginValidationError{Predicate: predicate, Reason: reason}
 					return
 				}
 			}
@@ -359,8 +359,8 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 						err = fmt.Errorf("predicate %q requires a URI", predicate)
 						return
 					}
-					if reason := config.validateURIHost(v.URI); reason != "" {
-						err = &URIHostValidationError{Predicate: predicate, Reason: reason}
+					if reason := config.validateURIOrigin(v.URI); reason != "" {
+						err = &URIOriginValidationError{Predicate: predicate, Reason: reason}
 						return
 					}
 				}

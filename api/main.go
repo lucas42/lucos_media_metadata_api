@@ -30,10 +30,7 @@ func main() {
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}
 
-	// Initialise origin env vars. EOLAS_ORIGIN is required; the service cannot
-	// function correctly without it, so we fail loudly rather than silently
-	// serving invalid data.
-	eolasOrigin = os.Getenv("EOLAS_ORIGIN")
+	// EOLAS_ORIGIN is required; the service cannot function correctly without it.
 	if eolasOrigin == "" {
 		slog.Error("EOLAS_ORIGIN environment variable is required but not set")
 		os.Exit(1)
