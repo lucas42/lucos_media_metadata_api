@@ -1,5 +1,10 @@
 package main
 
+import (
+	"fmt"
+	"net/url"
+)
+
 // PredicateConfig holds metadata about a predicate's behaviour.
 // Currently governs multi-value storage; designed to be extended
 // with RDF mapping, form rendering hints, etc.
@@ -41,6 +46,49 @@ type PredicateConfig struct {
 	// even when paired with a companion predicate (e.g. lastErrorMessage) in the
 	// same PATCH request.
 	LoganneSilent bool
+
+	// AllowedURIHosts, if non-nil, returns the set of hostnames that are valid
+	// for URI values of this predicate. Called at tag-write time (not package
+	// init) so that env-var-backed values are resolved after startup.
+	// If nil, or if the returned slice contains only empty strings, no hostname
+	// validation is performed (scheme validation is also skipped).
+	AllowedURIHosts func() []string
+}
+
+// validateURIHost checks whether the given URI satisfies the predicate's
+// AllowedURIHosts constraint. Returns an empty string if the URI is valid (or
+// if no allowlist is configured). Returns a human-readable error message if
+// validation fails.
+func (config PredicateConfig) validateURIHost(uri string) string {
+	if config.AllowedURIHosts == nil {
+		return ""
+	}
+	// Build the effective allowlist, dropping empty entries produced when the
+	// backing env var is unset (e.g. in tests that rely on relative album URIs).
+	allowed := config.AllowedURIHosts()
+	validHosts := make([]string, 0, len(allowed))
+	for _, h := range allowed {
+		if h != "" {
+			validHosts = append(validHosts, h)
+		}
+	}
+	if len(validHosts) == 0 {
+		return ""
+	}
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		return fmt.Sprintf("uri %q is not a valid URL: %s", uri, err)
+	}
+	if parsed.Scheme != "https" {
+		return fmt.Sprintf("uri %q must use https scheme, not %q", uri, parsed.Scheme)
+	}
+	host := parsed.Hostname() // strips port, if any
+	for _, a := range validHosts {
+		if host == a {
+			return ""
+		}
+	}
+	return fmt.Sprintf("uri %q: hostname %q is not in the allowed list %v", uri, host, validHosts)
 }
 
 // predicateRegistry defines per-predicate configuration.
@@ -48,12 +96,28 @@ type PredicateConfig struct {
 var predicateRegistry = map[string]PredicateConfig{
 	"composer": {MultiValue: true},
 	"producer": {MultiValue: true},
-	"language": {MultiValue: true, RequiresURI: true},
-	"offence":  {MultiValue: true},
-	"about":    {MultiValue: true, RequiresURI: true},
-	"mentions": {MultiValue: true, RequiresURI: true},
+	"language": {
+		MultiValue:      true,
+		RequiresURI:     true,
+		AllowedURIHosts: func() []string { return []string{eolasHost()} },
+	},
+	"offence": {MultiValue: true},
+	"about": {
+		MultiValue:      true,
+		RequiresURI:     true,
+		AllowedURIHosts: func() []string { return []string{eolasHost()} },
+	},
+	"mentions": {
+		MultiValue:      true,
+		RequiresURI:     true,
+		AllowedURIHosts: func() []string { return []string{eolasHost()} },
+	},
 	"album": {
 		RequiresURI: true,
+		AllowedURIHosts: func() []string {
+			u, _ := url.Parse(mediaMetadataManagerOrigin)
+			return []string{u.Host}
+		},
 		ResolveNameToURI: func(store Datastore, name string) (string, error) {
 			album, err := store.resolveOrCreateAlbumByName(name)
 			return album.URI, err

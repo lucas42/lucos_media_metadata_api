@@ -12,9 +12,20 @@ import (
 	"github.com/deiu/rdf2go"
 )
 
-const eolasOrigin = "https://eolas.l42.eu"
+// eolasOrigin is the base URL of the lucos_eolas service, read from EOLAS_ORIGIN
+// at startup. Changing this to a var (from a const) allows it to be set from an
+// environment variable at runtime rather than hardcoded.
+var eolasOrigin string
+
 const eolasDataPath = "/metadata/all/data/"
 const prefLabelURI = "http://www.w3.org/2004/02/skos/core#prefLabel"
+
+// eolasHost extracts the hostname from eolasOrigin. Used by the predicate
+// AllowedURIHosts config to validate incoming URI values at tag-write time.
+func eolasHost() string {
+	u, _ := url.Parse(eolasOrigin)
+	return u.Host
+}
 
 // fetchEolasNames fetches human-readable names (skos:prefLabel) for the given
 // URIs from the lucos_eolas bulk data endpoint. Returns a map of URI → name.
@@ -36,13 +47,13 @@ func fetchEolasNames(uris []string) map[string]string {
 	}
 
 	dataURL := eolasOrigin + eolasDataPath
-	eolasHost, _ := url.Parse(eolasOrigin)
+	eolasBaseURL, _ := url.Parse(eolasOrigin)
 
 	// Only reattach auth header when the redirect stays on the same host
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if req.URL.Host == eolasHost.Host {
+			if req.URL.Host == eolasBaseURL.Host {
 				req.Header.Set("Authorization", "Bearer "+key)
 			}
 			return nil

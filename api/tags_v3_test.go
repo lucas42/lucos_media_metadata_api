@@ -107,6 +107,72 @@ func TestV3RejectsRequiresURITagOnPatch(t *testing.T) {
 	}
 }
 
+func TestV3RejectsLanguageURIWithWrongHostname(t *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3tag/wrong-hostname"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+
+	// A language URI pointing at an unknown host should be rejected.
+	req := basicRequest(t, "PUT", v3Path, `{"fingerprint": "v3urihost1", "duration": 200, "tags": {"language": [{"name": "English", "uri": "https://example.com/metadata/language/en/"}]}}`)
+	resp, _ := doRawRequest(t, req)
+	if resp.StatusCode != 400 {
+		t.Errorf("Expected 400 for language tag with disallowed hostname, got %d", resp.StatusCode)
+	}
+	var errResp V3Error
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp.Code != "invalid_tag_value" {
+		t.Errorf("Expected error code 'invalid_tag_value', got %q", errResp.Code)
+	}
+	if errResp.Predicate != "language" {
+		t.Errorf("Expected predicate 'language' in error, got %q", errResp.Predicate)
+	}
+}
+
+func TestV3RejectsLanguageURIWithNonHttpsScheme(t *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3tag/non-https"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+
+	// A language URI using http (not https) should be rejected.
+	req := basicRequest(t, "PUT", v3Path, `{"fingerprint": "v3urihost2", "duration": 200, "tags": {"language": [{"name": "English", "uri": "http://eolas.l42.eu/metadata/language/en/"}]}}`)
+	resp, _ := doRawRequest(t, req)
+	if resp.StatusCode != 400 {
+		t.Errorf("Expected 400 for language tag with http scheme, got %d", resp.StatusCode)
+	}
+	var errResp V3Error
+	json.NewDecoder(resp.Body).Decode(&errResp)
+	if errResp.Code != "invalid_tag_value" {
+		t.Errorf("Expected error code 'invalid_tag_value', got %q", errResp.Code)
+	}
+	if errResp.Predicate != "language" {
+		t.Errorf("Expected predicate 'language' in error, got %q", errResp.Predicate)
+	}
+}
+
+func TestV3RejectsAboutAndMentionsWithWrongHostname(t *testing.T) {
+	clearData()
+	trackurl := "http://example.org/v3tag/wrong-hostname-about"
+	escapedTrackUrl := url.QueryEscape(trackurl)
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", escapedTrackUrl)
+
+	// about and mentions should also reject disallowed hostnames.
+	for i, predicate := range []string{"about", "mentions"} {
+		body := fmt.Sprintf(`{"fingerprint": "v3urihost3-%d", "duration": 200, "tags": {"%s": [{"name": "Something", "uri": "https://example.com/entity/1/"}]}}`, i, predicate)
+		req := basicRequest(t, "PUT", v3Path, body)
+		resp, _ := doRawRequest(t, req)
+		if resp.StatusCode != 400 {
+			t.Errorf("Expected 400 for %q tag with disallowed hostname, got %d", predicate, resp.StatusCode)
+		}
+		var errResp V3Error
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		if errResp.Code != "invalid_tag_value" {
+			t.Errorf("Expected 'invalid_tag_value' for predicate %q, got %q", predicate, errResp.Code)
+		}
+	}
+}
+
 func TestTagValueV3OmitsEmptyURI(t *testing.T) {
 	v := TagValueV3{Name: "Test Song"}
 	data, err := json.Marshal(v)
