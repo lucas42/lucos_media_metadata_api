@@ -14,6 +14,18 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// URIOriginValidationError is returned when a tag URI fails origin validation.
+// It carries the predicate name so that the HTTP layer can include it in the
+// structured 400 response.
+type URIOriginValidationError struct {
+	Predicate string
+	Reason    string
+}
+
+func (e *URIOriginValidationError) Error() string {
+	return e.Reason
+}
+
 // TrackV3 is the v3 wire representation of a track.
 // Tags use the structured format: each predicate maps to an array of {name, uri} objects.
 // Uses "id" instead of "trackid" per ADR §7.
@@ -81,6 +93,13 @@ func validateTagsV3(tags map[string][]TagValueV3) (predicate string, message str
 
 // writeV3Error maps common errors to structured JSON responses.
 func writeV3Error(w http.ResponseWriter, err error) {
+	// URIOriginValidationError carries the predicate name, so use the structured
+	// tag-validation response to include it in the JSON body.
+	var uriOriginErr *URIOriginValidationError
+	if errors.As(err, &uriOriginErr) {
+		writeV3TagValidationError(w, uriOriginErr.Predicate, uriOriginErr.Reason)
+		return
+	}
 	msg := err.Error()
 	if strings.HasSuffix(msg, " Not Found") {
 		writeV3ErrorResponse(w, http.StatusNotFound, msg, "not_found")
@@ -170,6 +189,10 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 			for _, v := range nonEmpty {
 				if v.URI == "" {
 					err = fmt.Errorf("predicate %q requires a URI", predicate)
+					return
+				}
+				if reason := config.validateURIOrigin(v.URI); reason != "" {
+					err = &URIOriginValidationError{Predicate: predicate, Reason: reason}
 					return
 				}
 			}
@@ -334,6 +357,10 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 				for _, v := range nonEmpty {
 					if v.URI == "" {
 						err = fmt.Errorf("predicate %q requires a URI", predicate)
+						return
+					}
+					if reason := config.validateURIOrigin(v.URI); reason != "" {
+						err = &URIOriginValidationError{Predicate: predicate, Reason: reason}
 						return
 					}
 				}

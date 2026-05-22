@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+// mediaMetadataManagerOrigin is the base URL of this service, read from
+// MEDIA_METADATA_MANAGER_ORIGIN at startup. Used by the album predicate's
+// AllowedURIHosts config to validate incoming URI values at tag-write time.
+var mediaMetadataManagerOrigin string
+
 /**
  * Listens for incoming http requests
  * and serve the appropriate response based on the front controller
@@ -24,6 +29,13 @@ func main() {
 		// Can be replaced with `slog.SetLogLoggerLevel(slog.LevelDebug)` in golang 1.22
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	}
+
+	// EOLAS_ORIGIN is required; the service cannot function correctly without it.
+	if eolasOrigin == "" {
+		slog.Error("EOLAS_ORIGIN environment variable is required but not set")
+		os.Exit(1)
+	}
+	mediaMetadataManagerOrigin = os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 
 	// Expose pprof on a localhost-only listener so it's reachable via docker exec
 	// but never from the public internet.
@@ -45,12 +57,12 @@ func main() {
 	}()
 
 	loganne := Loganne{
-		endpoint:           os.Getenv("LOGANNE_ENDPOINT"),
-		source:             "lucos_media_metadata_api",
-		mediaMetadataManagerOrigin: os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN"),
+		endpoint:                   os.Getenv("LOGANNE_ENDPOINT"),
+		source:                     "lucos_media_metadata_api",
+		mediaMetadataManagerOrigin: mediaMetadataManagerOrigin,
 	}
 	store := DBInit("/var/lib/media-metadata/media.sqlite", loganne)
-	store.ManagerOrigin = os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
+	store.ManagerOrigin = mediaMetadataManagerOrigin
 
 	// Populate the /_info metrics cache once synchronously so the endpoint is
 	// ready before the HTTP listener opens. Then refresh every 60 seconds in

@@ -1,5 +1,10 @@
 package main
 
+import (
+	"fmt"
+	"strings"
+)
+
 // PredicateConfig holds metadata about a predicate's behaviour.
 // Currently governs multi-value storage; designed to be extended
 // with RDF mapping, form rendering hints, etc.
@@ -41,6 +46,53 @@ type PredicateConfig struct {
 	// even when paired with a companion predicate (e.g. lastErrorMessage) in the
 	// same PATCH request.
 	LoganneSilent bool
+
+	// AllowedOrigins, if non-nil, holds the set of symbolic origin identifiers
+	// (see originEolas, originMediaMetadataManager) whose actual base URLs must
+	// prefix URI values of this predicate. Resolved to real URLs at validation
+	// time by validateURIOrigin. If all identifiers resolve to empty strings
+	// (env var unset), validation is skipped.
+	AllowedOrigins []string
+}
+
+// Symbolic origin identifiers for use in PredicateConfig.AllowedOrigins.
+// validateURIOrigin resolves these to actual base URLs at call time.
+const (
+	originEolas                = "eolas"
+	originMediaMetadataManager = "media_metadata_manager"
+)
+
+// validateURIOrigin checks whether the given URI starts with one of the
+// predicate's AllowedOrigins. Returns an empty string if the URI is valid (or
+// if no allowlist is configured). Returns a human-readable error message if
+// validation fails.
+func (config PredicateConfig) validateURIOrigin(uri string) string {
+	if config.AllowedOrigins == nil {
+		return ""
+	}
+	// Resolve symbolic origin identifiers to actual base URLs. Read at call
+	// time so env-var values set after package init (main(), TestMain) are
+	// picked up. Empty values (unset env var) are excluded; if all resolve to
+	// empty, validation is skipped.
+	originValues := map[string]string{
+		originEolas:                eolasOrigin,
+		originMediaMetadataManager: mediaMetadataManagerOrigin,
+	}
+	validOrigins := make([]string, 0, len(config.AllowedOrigins))
+	for _, key := range config.AllowedOrigins {
+		if val := originValues[key]; val != "" {
+			validOrigins = append(validOrigins, val)
+		}
+	}
+	if len(validOrigins) == 0 {
+		return ""
+	}
+	for _, origin := range validOrigins {
+		if uri == origin || strings.HasPrefix(uri, origin+"/") {
+			return ""
+		}
+	}
+	return fmt.Sprintf("uri %q does not start with an allowed origin %v", uri, validOrigins)
 }
 
 // predicateRegistry defines per-predicate configuration.
@@ -48,12 +100,25 @@ type PredicateConfig struct {
 var predicateRegistry = map[string]PredicateConfig{
 	"composer": {MultiValue: true},
 	"producer": {MultiValue: true},
-	"language": {MultiValue: true, RequiresURI: true},
-	"offence":  {MultiValue: true},
-	"about":    {MultiValue: true, RequiresURI: true},
-	"mentions": {MultiValue: true, RequiresURI: true},
+	"language": {
+		MultiValue:     true,
+		RequiresURI:    true,
+		AllowedOrigins: []string{originEolas},
+	},
+	"offence": {MultiValue: true},
+	"about": {
+		MultiValue:     true,
+		RequiresURI:    true,
+		AllowedOrigins: []string{originEolas},
+	},
+	"mentions": {
+		MultiValue:     true,
+		RequiresURI:    true,
+		AllowedOrigins: []string{originEolas},
+	},
 	"album": {
-		RequiresURI: true,
+		RequiresURI:    true,
+		AllowedOrigins: []string{originMediaMetadataManager},
 		ResolveNameToURI: func(store Datastore, name string) (string, error) {
 			album, err := store.resolveOrCreateAlbumByName(name)
 			return album.URI, err

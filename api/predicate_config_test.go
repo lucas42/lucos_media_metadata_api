@@ -84,3 +84,67 @@ func TestGetRequiresURIPredicates(test *testing.T) {
 	}
 }
 
+func TestAllowedOriginsSetForRequiresURIPredicates(test *testing.T) {
+	for _, pred := range []string{"language", "about", "mentions", "album"} {
+		config := GetPredicateConfig(pred)
+		if config.AllowedOrigins == nil {
+			test.Errorf("Expected predicate %q to have AllowedOrigins set", pred)
+		}
+	}
+}
+
+func TestAllowedOriginsNotSetForNonURIPredicates(test *testing.T) {
+	for _, pred := range []string{"composer", "producer", "offence", "title"} {
+		config := GetPredicateConfig(pred)
+		if config.AllowedOrigins != nil {
+			test.Errorf("Expected predicate %q to have AllowedOrigins nil", pred)
+		}
+	}
+}
+
+func TestValidateURIOriginAcceptsEolasURI(test *testing.T) {
+	// eolasOrigin is set to "https://eolas.l42.eu" in TestMain.
+	config := GetPredicateConfig("language")
+	msg := config.validateURIOrigin("https://eolas.l42.eu/metadata/language/en/")
+	if msg != "" {
+		test.Errorf("Expected no error for valid eolas language URI, got: %q", msg)
+	}
+}
+
+func TestValidateURIOriginRejectsWrongOrigin(test *testing.T) {
+	config := GetPredicateConfig("language")
+	msg := config.validateURIOrigin("https://example.com/metadata/language/en/")
+	if msg == "" {
+		test.Error("Expected error for language URI with wrong origin, got empty string")
+	}
+}
+
+func TestValidateURIOriginRejectsNonHttpsScheme(test *testing.T) {
+	config := GetPredicateConfig("language")
+	// http:// does not match the https:// eolasOrigin prefix.
+	msg := config.validateURIOrigin("http://eolas.l42.eu/metadata/language/en/")
+	if msg == "" {
+		test.Error("Expected error for language URI with http (not https) scheme, got empty string")
+	}
+}
+
+func TestValidateURIOriginSkipsValidationWhenNoAllowlist(test *testing.T) {
+	// Predicates without AllowedOrigins should pass any URI.
+	config := GetPredicateConfig("composer")
+	msg := config.validateURIOrigin("http://anything.example.com/entity/1")
+	if msg != "" {
+		test.Errorf("Expected no error for predicate without AllowedOrigins, got: %q", msg)
+	}
+}
+
+func TestValidateURIOriginSkipsValidationWhenAllowlistIsEmpty(test *testing.T) {
+	// mediaMetadataManagerOrigin is "" in tests, so the originMediaMetadataManager
+	// constant resolves to "" in validateURIOrigin and is filtered out, leaving no
+	// valid origins — validation is skipped entirely.
+	config := GetPredicateConfig("album")
+	msg := config.validateURIOrigin("/albums/1")
+	if msg != "" {
+		test.Errorf("Expected no error for album URI when allowlist is empty, got: %q", msg)
+	}
+}
+

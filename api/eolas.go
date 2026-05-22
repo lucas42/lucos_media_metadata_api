@@ -12,7 +12,11 @@ import (
 	"github.com/deiu/rdf2go"
 )
 
-const eolasOrigin = "https://eolas.l42.eu"
+// eolasOrigin is the base URL of the lucos_eolas service, read from the
+// EOLAS_ORIGIN environment variable. It is used both for fetching data and as
+// the allowed origin for URI validation of eolas predicates.
+var eolasOrigin = os.Getenv("EOLAS_ORIGIN")
+
 const eolasDataPath = "/metadata/all/data/"
 const prefLabelURI = "http://www.w3.org/2004/02/skos/core#prefLabel"
 
@@ -36,13 +40,13 @@ func fetchEolasNames(uris []string) map[string]string {
 	}
 
 	dataURL := eolasOrigin + eolasDataPath
-	eolasHost, _ := url.Parse(eolasOrigin)
+	eolasBaseURL, _ := url.Parse(eolasOrigin)
 
 	// Only reattach auth header when the redirect stays on the same host
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if req.URL.Host == eolasHost.Host {
+			if req.URL.Host == eolasBaseURL.Host {
 				req.Header.Set("Authorization", "Bearer "+key)
 			}
 			return nil
