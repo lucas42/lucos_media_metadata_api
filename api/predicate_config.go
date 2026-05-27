@@ -117,10 +117,12 @@ var predicateRegistry = map[string]PredicateConfig{
 		AllowedOrigins: []string{originEolas},
 	},
 	"theme_tune": {
+		MultiValue:     true,
 		RequiresURI:    true,
 		AllowedOrigins: []string{originEolas},
 	},
 	"soundtrack": {
+		MultiValue:     true,
 		RequiresURI:    true,
 		AllowedOrigins: []string{originEolas},
 	},

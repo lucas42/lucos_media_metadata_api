@@ -5,7 +5,7 @@ import (
 )
 
 func TestMultiValuePredicates(test *testing.T) {
-	expectedMultiValue := []string{"composer", "producer", "language", "offence", "about", "mentions"}
+	expectedMultiValue := []string{"composer", "producer", "language", "offence", "about", "mentions", "theme_tune", "soundtrack"}
 	for _, pred := range expectedMultiValue {
 		if !IsMultiValue(pred) {
 			test.Errorf("Expected predicate %q to be multi-value", pred)
@@ -43,8 +43,8 @@ func TestRegistryCount(test *testing.T) {
 			count++
 		}
 	}
-	if count != 6 {
-		test.Errorf("Expected 6 multi-value predicates, got %d (album is single-value, so count unchanged)", count)
+	if count != 8 {
+		test.Errorf("Expected 8 multi-value predicates, got %d (album is single-value, so count unchanged)", count)
 	}
 }
 
