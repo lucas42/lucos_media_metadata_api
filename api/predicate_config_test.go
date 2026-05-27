@@ -5,7 +5,7 @@ import (
 )
 
 func TestMultiValuePredicates(test *testing.T) {
-	expectedMultiValue := []string{"composer", "producer", "language", "offence", "about", "mentions"}
+	expectedMultiValue := []string{"composer", "producer", "language", "offence", "about", "mentions", "theme_tune", "soundtrack"}
 	for _, pred := range expectedMultiValue {
 		if !IsMultiValue(pred) {
 			test.Errorf("Expected predicate %q to be multi-value", pred)
@@ -43,13 +43,13 @@ func TestRegistryCount(test *testing.T) {
 			count++
 		}
 	}
-	if count != 6 {
-		test.Errorf("Expected 6 multi-value predicates, got %d (album is single-value, so count unchanged)", count)
+	if count != 8 {
+		test.Errorf("Expected 8 multi-value predicates, got %d (album is single-value, so count unchanged)", count)
 	}
 }
 
 func TestRequiresURIPredicates(test *testing.T) {
-	expectedRequiresURI := []string{"language", "about", "mentions", "album"}
+	expectedRequiresURI := []string{"language", "about", "mentions", "album", "theme_tune", "soundtrack"}
 	for _, pred := range expectedRequiresURI {
 		config := GetPredicateConfig(pred)
 		if !config.RequiresURI {
@@ -70,14 +70,14 @@ func TestNonURIPredicatesDoNotRequireURI(test *testing.T) {
 
 func TestGetRequiresURIPredicates(test *testing.T) {
 	predicates := GetRequiresURIPredicates()
-	if len(predicates) != 4 {
-		test.Errorf("Expected 4 RequiresURI predicates, got %d: %v", len(predicates), predicates)
+	if len(predicates) != 6 {
+		test.Errorf("Expected 6 RequiresURI predicates, got %d: %v", len(predicates), predicates)
 	}
 	predicateSet := make(map[string]bool)
 	for _, p := range predicates {
 		predicateSet[p] = true
 	}
-	for _, expected := range []string{"language", "about", "mentions", "album"} {
+	for _, expected := range []string{"language", "about", "mentions", "album", "theme_tune", "soundtrack"} {
 		if !predicateSet[expected] {
 			test.Errorf("Expected %q in GetRequiresURIPredicates result, got %v", expected, predicates)
 		}
@@ -85,7 +85,7 @@ func TestGetRequiresURIPredicates(test *testing.T) {
 }
 
 func TestAllowedOriginsSetForRequiresURIPredicates(test *testing.T) {
-	for _, pred := range []string{"language", "about", "mentions", "album"} {
+	for _, pred := range []string{"language", "about", "mentions", "album", "theme_tune", "soundtrack"} {
 		config := GetPredicateConfig(pred)
 		if config.AllowedOrigins == nil {
 			test.Errorf("Expected predicate %q to have AllowedOrigins set", pred)
