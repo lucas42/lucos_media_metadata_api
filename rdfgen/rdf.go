@@ -120,13 +120,19 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "soundtrack":
+		if uri == nil || *uri == "" {
+			return "", nil // skip tags with no URI — value alone is not a valid IRI
+		}
 		return appOrigin + "/ontology#soundtrack",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
+			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "theme_tune":
 		// This should be treated as a subClass of soundtrack.  But rather than adding both predicates here, best to specify that in the ontology and apply inferencing
+		if uri == nil || *uri == "" {
+			return "", nil // skip tags with no URI — value alone is not a valid IRI
+		}
 		return appOrigin + "/ontology#theme_tune",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
+			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "year":
 		return "http://purl.org/dc/terms/date",
@@ -389,11 +395,11 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		"What this song reminds Luke of.", "", "")
 
 	addProperty("soundtrack", "Soundtrack", owlObjectProperty,
-		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/CreativeWork"),
 		"Creative Work whose soundtrack this track appears in.", "", "")
 
 	addProperty("theme_tune", "Theme tune", owlObjectProperty,
-		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/CreativeWork"),
 		"Creative Work this track is the primary theme tune of.", "", "")
 
 	addProperty("availability", "Availability", owlObjectProperty,

@@ -116,6 +116,14 @@ var predicateRegistry = map[string]PredicateConfig{
 		RequiresURI:    true,
 		AllowedOrigins: []string{originEolas},
 	},
+	"theme_tune": {
+		RequiresURI:    true,
+		AllowedOrigins: []string{originEolas},
+	},
+	"soundtrack": {
+		RequiresURI:    true,
+		AllowedOrigins: []string{originEolas},
+	},
 	"album": {
 		RequiresURI:    true,
 		AllowedOrigins: []string{originMediaMetadataManager},
