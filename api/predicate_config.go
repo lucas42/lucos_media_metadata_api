@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"lucos_media_metadata_api/predicateconfig"
 )
 
 // PredicateConfig holds metadata about a predicate's behaviour.
-// Currently governs multi-value storage; designed to be extended
-// with RDF mapping, form rendering hints, etc.
+// RDF-shape fields (PredicateURI, ValueShape) mirror the canonical values in the
+// predicateconfig package, which is the single source of truth used by rdfgen.
+// Api-specific fields (MultiValue, Resolve*, Loganne*, AllowedOrigins) live here only.
 type PredicateConfig struct {
 	// MultiValue indicates this predicate can have multiple values
 	// per track. When true, the database allows multiple tag rows
@@ -15,11 +18,16 @@ type PredicateConfig struct {
 	// serialises/deserialises the values as a JSON array.
 	MultiValue bool
 
-	// RequiresURI indicates this predicate produces an IRI object in
-	// RDF output. Tags with this predicate must have a non-empty uri
-	// field to be valid; tags without a URI are skipped by the RDF
-	// exporter and rejected by write validation.
-	RequiresURI bool
+	// ValueShape indicates the RDF shape of this predicate's value.
+	// ValueShapeURIObject predicates require a non-empty uri field;
+	// tags without a URI are rejected by write validation. This mirrors
+	// the canonical value in predicateconfig and drives RequiresURI().
+	ValueShape predicateconfig.ValueShape
+
+	// PredicateURI is the full RDF predicate IRI (or a "/" prefix relative
+	// to APP_ORIGIN). Mirrors the canonical value in predicateconfig; present
+	// here for documentation and potential future use by api-layer code.
+	PredicateURI string
 
 	// ResolveNameToURI, if non-nil, enables name-to-URI resolution for this
 	// predicate. When a tag value has a name but no URI, the write path calls
@@ -53,6 +61,12 @@ type PredicateConfig struct {
 	// time by validateURIOrigin. If all identifiers resolve to empty strings
 	// (env var unset), validation is skipped.
 	AllowedOrigins []string
+}
+
+// RequiresURI reports whether this predicate produces an IRI object in RDF output and
+// requires a non-empty uri field for write validation. Derived from ValueShape.
+func (config PredicateConfig) RequiresURI() bool {
+	return config.ValueShape == predicateconfig.ValueShapeURIObject
 }
 
 // Symbolic origin identifiers for use in PredicateConfig.AllowedOrigins.
@@ -96,38 +110,53 @@ func (config PredicateConfig) validateURIOrigin(uri string) string {
 }
 
 // predicateRegistry defines per-predicate configuration.
-// Predicates not listed here use default behaviour (single-value).
+// Predicates not listed here use default behaviour (single-value, no URI required).
 var predicateRegistry = map[string]PredicateConfig{
-	"composer": {MultiValue: true},
-	"producer": {MultiValue: true},
+	"composer": {
+		MultiValue:   true,
+		PredicateURI: "http://purl.org/ontology/mo/composer",
+	},
+	"producer": {
+		MultiValue:   true,
+		PredicateURI: "http://purl.org/ontology/mo/producer",
+	},
 	"language": {
 		MultiValue:     true,
-		RequiresURI:    true,
+		ValueShape:     predicateconfig.ValueShapeURIObject,
+		PredicateURI:   "/ontology#trackLanguage",
 		AllowedOrigins: []string{originEolas},
 	},
-	"offence": {MultiValue: true},
+	"offence": {
+		MultiValue:   true,
+		PredicateURI: "/ontology#trigger",
+	},
 	"about": {
 		MultiValue:     true,
-		RequiresURI:    true,
+		ValueShape:     predicateconfig.ValueShapeURIObject,
+		PredicateURI:   "/ontology#about",
 		AllowedOrigins: []string{originEolas},
 	},
 	"mentions": {
 		MultiValue:     true,
-		RequiresURI:    true,
+		ValueShape:     predicateconfig.ValueShapeURIObject,
+		PredicateURI:   "/ontology#mentions",
 		AllowedOrigins: []string{originEolas},
 	},
 	"theme_tune": {
 		MultiValue:     true,
-		RequiresURI:    true,
+		ValueShape:     predicateconfig.ValueShapeURIObject,
+		PredicateURI:   "/ontology#theme_tune",
 		AllowedOrigins: []string{originEolas},
 	},
 	"soundtrack": {
 		MultiValue:     true,
-		RequiresURI:    true,
+		ValueShape:     predicateconfig.ValueShapeURIObject,
+		PredicateURI:   "/ontology#soundtrack",
 		AllowedOrigins: []string{originEolas},
 	},
 	"album": {
-		RequiresURI:    true,
+		ValueShape:     predicateconfig.ValueShapeURIObject,
+		PredicateURI:   "/ontology#onAlbum",
 		AllowedOrigins: []string{originMediaMetadataManager},
 		ResolveNameToURI: func(store Datastore, name string) (string, error) {
 			album, err := store.resolveOrCreateAlbumByName(name)
@@ -137,19 +166,53 @@ var predicateRegistry = map[string]PredicateConfig{
 			return store.resolveAlbumNameFromURI(uri)
 		},
 	},
+	// Literal predicates — value column → rdf:Literal.
+	"added": {
+		ValueShape:   predicateconfig.ValueShapeLiteral,
+		PredicateURI: "/ontology#dateAdded",
+	},
+	"title": {
+		ValueShape:   predicateconfig.ValueShapeLiteral,
+		PredicateURI: "http://www.w3.org/2004/02/skos/core#prefLabel",
+	},
+	"comment": {
+		ValueShape:   predicateconfig.ValueShapeLiteral,
+		PredicateURI: "http://schema.org/comment",
+	},
+	"lyrics": {
+		ValueShape:   predicateconfig.ValueShapeLiteral,
+		PredicateURI: "http://purl.org/ontology/mo/lyrics",
+	},
+	"rating": {
+		ValueShape:   predicateconfig.ValueShapeLiteral,
+		PredicateURI: "http://schema.org/ratingValue",
+	},
+	"memory": {
+		ValueShape:   predicateconfig.ValueShapeLiteral,
+		PredicateURI: "/ontology#memory",
+	},
+	"year": {
+		ValueShape:   predicateconfig.ValueShapeLiteral,
+		PredicateURI: "http://purl.org/dc/terms/date",
+	},
+	// Omit predicates — behavioural only, not emitted in RDF output.
 	"lastSuccessfulPlay": {
+		ValueShape:           predicateconfig.ValueShapeOmit,
 		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " finished playing" },
 	},
 	"lastError": {
+		ValueShape:           predicateconfig.ValueShapeOmit,
 		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " errored" },
 	},
 	"lastSkip": {
+		ValueShape:           predicateconfig.ValueShapeOmit,
 		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " skipped" },
 	},
 	// lastErrorMessage is a silent companion to lastError: it stores the error
 	// string from the client but does not affect Loganne message selection, so
 	// a PATCH carrying both tags still emits the bespoke "Track X errored" message.
 	"lastErrorMessage": {
+		ValueShape:    predicateconfig.ValueShapeOmit,
 		LoganneSilent: true,
 	},
 }
@@ -171,12 +234,7 @@ func IsMultiValue(predicateID string) bool {
 
 // GetRequiresURIPredicates returns the list of predicate IDs that require a URI.
 // Used by the RDF exporter, write validation, and audit checks.
+// Delegates to predicateconfig as the single source of truth for RDF shapes.
 func GetRequiresURIPredicates() []string {
-	var predicates []string
-	for id, config := range predicateRegistry {
-		if config.RequiresURI {
-			predicates = append(predicates, id)
-		}
-	}
-	return predicates
+	return predicateconfig.URIObjectPredicates()
 }

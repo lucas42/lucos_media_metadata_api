@@ -6,9 +6,12 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/deiu/rdf2go"
+
+	"lucos_media_metadata_api/predicateconfig"
 )
 
 /**
@@ -29,34 +32,45 @@ func getSearchUrl(predicateID string, value string, mediaMetadataManagerOrigin s
 	return rdf2go.NewResource(fmt.Sprintf("%s/search?p.%s=%s", mediaMetadataManagerOrigin, predicateID, url.QueryEscape(value)))
 }
 
+// resolvePredicateURI expands a predicate URI from the registry.
+// URIs starting with "/" are relative to APP_ORIGIN and are prefixed at runtime.
+// All other URIs are used as-is.
+func resolvePredicateURI(predicateURI string, appOrigin string) string {
+	if strings.HasPrefix(predicateURI, "/") {
+		return appOrigin + predicateURI
+	}
+	return predicateURI
+}
+
 // Map a predicate/value/uri triplet into predicate URI + list of RDF objects.
 // uri is the value from the tag's uri column (may be nil/empty for legacy data);
 // for predicates that produce IRI objects, uri takes precedence over value when set.
 // appOrigin is used for vocabulary URIs (ontology predicates);
 // mediaMetadataManagerOrigin is used for resource URIs (tracks, albums, search).
 func mapPredicate(predicateID string, value string, uri *string, mediaMetadataManagerOrigin string, appOrigin string) (string, []rdf2go.Term) {
+
+	// Dispatch on PredicateConfig for all migrated predicates (Literal, URIObject, Omit).
+	// Predicates absent from the registry fall through to the switch below.
+	if rdfConfig, ok := predicateconfig.Get(predicateID); ok {
+		predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
+		switch rdfConfig.ValueShape {
+		case predicateconfig.ValueShapeLiteral:
+			return predicateURI, []rdf2go.Term{rdf2go.NewLiteral(value)}
+		case predicateconfig.ValueShapeURIObject:
+			if uri == nil || *uri == "" {
+				return "", nil // skip tags with no URI — value alone is not a valid IRI
+			}
+			return predicateURI, []rdf2go.Term{rdf2go.NewResource(*uri)}
+		case predicateconfig.ValueShapeOmit:
+			return "", nil
+		}
+	}
+
 	switch predicateID {
-
-	case "added":
-		return appOrigin + "/ontology#dateAdded",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
-
-	case "title":
-		// Uses skos:prefLabel for consistency with other items in the triplestore
-		// But might be useful to also add a dc:title predicate too.
-		return "http://www.w3.org/2004/02/skos/core#prefLabel",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
 
 	case "artist":
 		return "http://xmlns.com/foaf/0.1/maker",
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
-
-	case "album":
-		if uri == nil || *uri == "" {
-			return "", nil // skip tags with no URI — legacy freetext values are not valid IRIs
-		}
-		return appOrigin + "/ontology#onAlbum",
-			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "genre":
 		return "http://purl.org/ontology/mo/genre",
@@ -71,13 +85,6 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 	case "producer":
 		return "http://purl.org/ontology/mo/producer",
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
-
-	case "language":
-		if uri == nil || *uri == "" {
-			return "", nil // skip tags with no URI — value alone is not a valid IRI
-		}
-		return appOrigin + "/ontology#trackLanguage",
-			[]rdf2go.Term{rdf2go.NewResource(*uri)}
 
 	case "offence":
 		return appOrigin + "/ontology#trigger",
@@ -95,67 +102,13 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 		return "http://purl.org/dc/terms/isPartOf",
 			[]rdf2go.Term{rdf2go.NewResource("https://musicbrainz.org/release/" + value)}
 
-	case "comment":
-		return "http://schema.org/comment",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
-
-	case "lyrics":
-		// Technically, the music ontology uses mo:lyrics to link to a mo:Lyrics node, which then has mo:text to the literal lyrics.
-		// But for now, just misuse the relationship straight to the literal
-		return "http://purl.org/ontology/mo/lyrics",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
-
-	case "rating":
-		// Technically, this should be an attribute of a sdo:Rating class (which can explain what the rating is out of etc)
-		// But for now, just misuse it by placing directly on the Track
-		return "http://schema.org/ratingValue",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
-
 	case "provenance":
 		return "http://purl.org/dc/terms/source",
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
-	case "memory":
-		return appOrigin + "/ontology#memory",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
-
-	case "soundtrack":
-		if uri == nil || *uri == "" {
-			return "", nil // skip tags with no URI — value alone is not a valid IRI
-		}
-		return appOrigin + "/ontology#soundtrack",
-			[]rdf2go.Term{rdf2go.NewResource(*uri)}
-
-	case "theme_tune":
-		// This should be treated as a subClass of soundtrack.  But rather than adding both predicates here, best to specify that in the ontology and apply inferencing
-		if uri == nil || *uri == "" {
-			return "", nil // skip tags with no URI — value alone is not a valid IRI
-		}
-		return appOrigin + "/ontology#theme_tune",
-			[]rdf2go.Term{rdf2go.NewResource(*uri)}
-
-	case "year":
-		return "http://purl.org/dc/terms/date",
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
-
 	case "availability":
 		return appOrigin + "/ontology#availability",
 			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
-
-	case "about":
-		if uri == nil || *uri == "" {
-			return "", nil // skip tags with no URI — value alone is not a valid IRI
-		}
-		return appOrigin + "/ontology#about",
-			[]rdf2go.Term{rdf2go.NewResource(*uri)}
-
-	case "mentions":
-		if uri == nil || *uri == "" {
-			return "", nil // skip tags with no URI — value alone is not a valid IRI
-		}
-		return appOrigin + "/ontology#mentions",
-			[]rdf2go.Term{rdf2go.NewResource(*uri)}
-
 
 	default:
 		return appOrigin + "/ontology#" + predicateID,

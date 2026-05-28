@@ -185,7 +185,7 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 				}
 			}
 		}
-		if config.RequiresURI {
+		if config.RequiresURI() {
 			for _, v := range nonEmpty {
 				if v.URI == "" {
 					err = fmt.Errorf("predicate %q requires a URI", predicate)
@@ -353,7 +353,7 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 					}
 				}
 			}
-			if config.RequiresURI {
+			if config.RequiresURI() {
 				for _, v := range nonEmpty {
 					if v.URI == "" {
 						err = fmt.Errorf("predicate %q requires a URI", predicate)
@@ -735,7 +735,7 @@ func queryMultipleTracksV3(store Datastore, r *http.Request) (tracks []Track, to
 			predicateName := key[2:]
 			if strings.HasSuffix(predicateName, ".uri") {
 				predicateName = predicateName[:len(predicateName)-4]
-				if !GetPredicateConfig(predicateName).RequiresURI {
+				if !GetPredicateConfig(predicateName).RequiresURI() {
 					err = fmt.Errorf("predicate %q does not support URI-based filtering", predicateName)
 					return
 				}

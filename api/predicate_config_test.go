@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"lucos_media_metadata_api/predicateconfig"
 )
 
 func TestMultiValuePredicates(test *testing.T) {
@@ -48,22 +50,52 @@ func TestRegistryCount(test *testing.T) {
 	}
 }
 
-func TestRequiresURIPredicates(test *testing.T) {
-	expectedRequiresURI := []string{"language", "about", "mentions", "album", "theme_tune", "soundtrack"}
-	for _, pred := range expectedRequiresURI {
+func TestURIObjectPredicatesHaveValueShapeURIObject(test *testing.T) {
+	expectedURIObject := []string{"language", "about", "mentions", "album", "theme_tune", "soundtrack"}
+	for _, pred := range expectedURIObject {
 		config := GetPredicateConfig(pred)
-		if !config.RequiresURI {
-			test.Errorf("Expected predicate %q to have RequiresURI true", pred)
+		if config.ValueShape != predicateconfig.ValueShapeURIObject {
+			test.Errorf("Expected predicate %q to have ValueShape URIObject", pred)
 		}
 	}
 }
 
-func TestNonURIPredicatesDoNotRequireURI(test *testing.T) {
-	nonURIPredicates := []string{"composer", "producer", "offence", "title", "artist"}
+func TestLiteralPredicatesHaveValueShapeLiteral(test *testing.T) {
+	expectedLiteral := []string{"added", "title", "comment", "lyrics", "rating", "memory", "year"}
+	for _, pred := range expectedLiteral {
+		config := GetPredicateConfig(pred)
+		if config.ValueShape != predicateconfig.ValueShapeLiteral {
+			test.Errorf("Expected predicate %q to have ValueShape Literal", pred)
+		}
+	}
+}
+
+func TestOmitPredicatesHaveValueShapeOmit(test *testing.T) {
+	expectedOmit := []string{"lastSuccessfulPlay", "lastError", "lastSkip", "lastErrorMessage"}
+	for _, pred := range expectedOmit {
+		config := GetPredicateConfig(pred)
+		if config.ValueShape != predicateconfig.ValueShapeOmit {
+			test.Errorf("Expected predicate %q to have ValueShape Omit", pred)
+		}
+	}
+}
+
+func TestRequiresURIHelperReturnsTrue(test *testing.T) {
+	expectedRequiresURI := []string{"language", "about", "mentions", "album", "theme_tune", "soundtrack"}
+	for _, pred := range expectedRequiresURI {
+		config := GetPredicateConfig(pred)
+		if !config.RequiresURI() {
+			test.Errorf("Expected predicate %q RequiresURI() to be true", pred)
+		}
+	}
+}
+
+func TestRequiresURIHelperReturnsFalse(test *testing.T) {
+	nonURIPredicates := []string{"composer", "producer", "offence", "title", "artist", "added"}
 	for _, pred := range nonURIPredicates {
 		config := GetPredicateConfig(pred)
-		if config.RequiresURI {
-			test.Errorf("Expected predicate %q to have RequiresURI false", pred)
+		if config.RequiresURI() {
+			test.Errorf("Expected predicate %q RequiresURI() to be false", pred)
 		}
 	}
 }
@@ -84,7 +116,7 @@ func TestGetRequiresURIPredicates(test *testing.T) {
 	}
 }
 
-func TestAllowedOriginsSetForRequiresURIPredicates(test *testing.T) {
+func TestAllowedOriginsSetForURIObjectPredicates(test *testing.T) {
 	for _, pred := range []string{"language", "about", "mentions", "album", "theme_tune", "soundtrack"} {
 		config := GetPredicateConfig(pred)
 		if config.AllowedOrigins == nil {
@@ -147,4 +179,3 @@ func TestValidateURIOriginSkipsValidationWhenAllowlistIsEmpty(test *testing.T) {
 		test.Errorf("Expected no error for album URI when allowlist is empty, got: %q", msg)
 	}
 }
-
