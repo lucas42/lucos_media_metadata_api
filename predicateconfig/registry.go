@@ -96,6 +96,7 @@ var registry = map[string]Config{
 	},
 
 	// Literal predicates — value column → rdf:Literal.
+	// Well-known predicates use external vocabulary URIs where appropriate.
 	"added": {
 		ValueShape:   ValueShapeLiteral,
 		PredicateURI: "/ontology#dateAdded",
@@ -145,10 +146,15 @@ var registry = map[string]Config{
 		ValueShape:    ValueShapeOmit,
 		LoganneSilent: true,
 	},
+	// These predicates have in-use data but are intentionally kept out of public RDF
+	// output pending long-term direction decisions (see #264, #265, #266).
+	"fingerprint_version": {ValueShape: ValueShapeOmit},
+	"dance":               {ValueShape: ValueShapeOmit},
+	"singalong":           {ValueShape: ValueShapeOmit},
 }
 
 // Get returns the Config for predicateID and whether it was found.
-// Predicates not in the registry fall through to any remaining switch logic in rdfgen.
+// Predicates not in the registry are omitted from RDF output — mapPredicate returns ("", nil) for unknown predicates.
 func Get(predicateID string) (Config, bool) {
 	c, ok := registry[predicateID]
 	return c, ok

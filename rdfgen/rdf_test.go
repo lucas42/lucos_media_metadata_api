@@ -362,6 +362,27 @@ func TestMapPredicateMBIDPrefixPredicates(t *testing.T) {
 	}
 }
 
+// TestMapPredicateUnknownOmitted verifies that predicates not in the registry are silently
+// omitted rather than emitting an orphan ${APP_ORIGIN}/ontology#X literal triple.
+func TestMapPredicateUnknownOmitted(t *testing.T) {
+	pred, terms := mapPredicate("totally_unknown_predicate_xyz", "somevalue", nil, "http://localhost:8020", "http://localhost:3002")
+	if pred != "" || len(terms) != 0 {
+		t.Errorf("expected unknown predicate to be omitted (empty pred and nil terms), got pred=%q terms=%v", pred, terms)
+	}
+}
+
+// TestMapPredicateExplicitOmitProducesNoTriples verifies that predicates registered
+// with ValueShapeOmit (fingerprint_version, dance, singalong) produce no RDF triples,
+// consistent with the unknown-default omit path.
+func TestMapPredicateExplicitOmitProducesNoTriples(t *testing.T) {
+	for _, predicateID := range []string{"fingerprint_version", "dance", "singalong"} {
+		pred, terms := mapPredicate(predicateID, "somevalue", nil, "http://localhost:8020", "http://localhost:3002")
+		if pred != "" || len(terms) != 0 {
+			t.Errorf("predicate %q: expected Omit to produce no triples, got pred=%q terms=%v", predicateID, pred, terms)
+		}
+	}
+}
+
 // TestMapPredicateAlbumUsesOnAlbum verifies that album tags now map to onAlbum, not dc:isPartOf.
 func TestMapPredicateAlbumUsesOnAlbum(t *testing.T) {
 	uri := "http://localhost:8020/albums/1"
