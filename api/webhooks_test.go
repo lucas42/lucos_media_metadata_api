@@ -11,6 +11,17 @@ import (
 // entityURI is a stable test URI that represents a deleted source entity.
 const entityURI = "https://eolas.l42.eu/metadata/person/deleted-entity/"
 
+// postLoganneEventWithBody posts a raw JSON body to /webhooks and returns the status code.
+func postLoganneEventWithBody(t *testing.T, body string) int {
+	t.Helper()
+	req := basicRequest(t, "POST", "/webhooks", body)
+	resp, err := doRawRequest(t, req)
+	if err != nil {
+		t.Fatalf("Failed to POST to /webhooks: %v", err)
+	}
+	return resp.StatusCode
+}
+
 // createTrackWithURITag creates a track via the v3 API with a language tag that
 // has the given URI, and returns the track URL used.
 func createTrackWithURITag(t *testing.T, fingerprint string, entityUri string) string {
@@ -233,4 +244,207 @@ func TestItemUpdatedIsIdempotent(t *testing.T) {
 		t.Fatal("language tag disappeared after idempotent re-delivery")
 	}
 	assertEqual(t, "idempotent: name should remain stable", "Stable Name", tagsAfter["language"][0].Name)
+}
+
+// ── contactLinked tests ──────────────────────────────────────────────────────
+
+const contactURI = "https://eolas.l42.eu/metadata/person/contact-123/"
+const eolasPersonURI = "https://eolas.l42.eu/metadata/person/alice/"
+const previousEolasURI = "https://eolas.l42.eu/metadata/person/previous-eolas/"
+
+// ── Test 11: contactLinked (initial link) rewrites contactUri → eolasUri and refreshes name
+
+func TestContactLinkedInitialLinkRewritesURIAndName(t *testing.T) {
+	clearData()
+	withMockNameFetcher(t, map[string]string{eolasPersonURI: "Alice Smith"})
+
+	trackURL := createTrackWithURITag(t, "wh-contact-linked-initial-1", contactURI)
+
+	// Verify the contact URI is stored before the event
+	tagsBefore := getTagsForTrack(t, trackURL)
+	if len(tagsBefore["language"]) == 0 || tagsBefore["language"][0].URI != contactURI {
+		t.Fatalf("expected language tag with contactURI=%q, got: %+v", contactURI, tagsBefore["language"])
+	}
+
+	// Initial link: previousEolasUri is null
+	status := postLoganneEventWithBody(t, fmt.Sprintf(
+		`{"type": "contactLinked", "contactUri": %q, "eolasUri": %q, "previousEolasUri": null}`,
+		contactURI, eolasPersonURI,
+	))
+	assertEqual(t, "contactLinked initial: expected 204", 204, status)
+
+	tagsAfter := getTagsForTrack(t, trackURL)
+	if len(tagsAfter["language"]) == 0 {
+		t.Fatal("language tag disappeared after contactLinked")
+	}
+	tagAfter := tagsAfter["language"][0]
+	assertEqual(t, "contactLinked initial: URI should be rewritten to eolasUri", eolasPersonURI, tagAfter.URI)
+	assertEqual(t, "contactLinked initial: name should be refreshed", "Alice Smith", tagAfter.Name)
+}
+
+// ── Test 12: contactLinked (relink) rewrites previousEolasUri → eolasUri and refreshes name
+
+func TestContactLinkedRelinkRewritesPreviousEolasUriAndName(t *testing.T) {
+	clearData()
+	withMockNameFetcher(t, map[string]string{eolasPersonURI: "Alice Smith (Relinked)"})
+
+	// Tag currently references the previous eolas URI (set by an earlier contactLinked event)
+	trackURL := createTrackWithURITag(t, "wh-contact-linked-relink-1", previousEolasURI)
+
+	tagsBefore := getTagsForTrack(t, trackURL)
+	if len(tagsBefore["language"]) == 0 || tagsBefore["language"][0].URI != previousEolasURI {
+		t.Fatalf("expected language tag with previousEolasURI=%q, got: %+v", previousEolasURI, tagsBefore["language"])
+	}
+
+	// Relink: previousEolasUri is the old eolas URI
+	status := postLoganneEventWithBody(t, fmt.Sprintf(
+		`{"type": "contactLinked", "contactUri": %q, "eolasUri": %q, "previousEolasUri": %q}`,
+		contactURI, eolasPersonURI, previousEolasURI,
+	))
+	assertEqual(t, "contactLinked relink: expected 204", 204, status)
+
+	tagsAfter := getTagsForTrack(t, trackURL)
+	if len(tagsAfter["language"]) == 0 {
+		t.Fatal("language tag disappeared after contactLinked relink")
+	}
+	tagAfter := tagsAfter["language"][0]
+	assertEqual(t, "contactLinked relink: URI should be rewritten to new eolasUri", eolasPersonURI, tagAfter.URI)
+	assertEqual(t, "contactLinked relink: name should be refreshed", "Alice Smith (Relinked)", tagAfter.Name)
+}
+
+// ── Test 13: contactLinked with no matching tags is a no-op ──────────────────
+
+func TestContactLinkedNoMatchingTagsIsNoop(t *testing.T) {
+	clearData()
+	withMockNameFetcher(t, map[string]string{eolasPersonURI: "Alice Smith"})
+
+	status := postLoganneEventWithBody(t, fmt.Sprintf(
+		`{"type": "contactLinked", "contactUri": %q, "eolasUri": %q, "previousEolasUri": null}`,
+		"https://eolas.l42.eu/metadata/person/nonexistent-contact/", eolasPersonURI,
+	))
+	assertEqual(t, "contactLinked no-match: expected 204", 204, status)
+}
+
+// ── Test 14: contactLinked is idempotent ─────────────────────────────────────
+
+func TestContactLinkedIsIdempotent(t *testing.T) {
+	clearData()
+	withMockNameFetcher(t, map[string]string{eolasPersonURI: "Stable Person Name"})
+
+	trackURL := createTrackWithURITag(t, "wh-contact-linked-idempotent-1", contactURI)
+
+	payload := fmt.Sprintf(
+		`{"type": "contactLinked", "contactUri": %q, "eolasUri": %q, "previousEolasUri": null}`,
+		contactURI, eolasPersonURI,
+	)
+	status1 := postLoganneEventWithBody(t, payload)
+	assertEqual(t, "contactLinked idempotent: first delivery expected 204", 204, status1)
+
+	status2 := postLoganneEventWithBody(t, payload)
+	assertEqual(t, "contactLinked idempotent: second delivery expected 204", 204, status2)
+
+	tagsAfter := getTagsForTrack(t, trackURL)
+	if len(tagsAfter["language"]) == 0 {
+		t.Fatal("language tag disappeared after idempotent contactLinked")
+	}
+	tagAfter := tagsAfter["language"][0]
+	assertEqual(t, "contactLinked idempotent: URI should be stable", eolasPersonURI, tagAfter.URI)
+	assertEqual(t, "contactLinked idempotent: name should be stable", "Stable Person Name", tagAfter.Name)
+}
+
+// ── entityMerged / itemMerged tests ──────────────────────────────────────────
+
+const sourceEntityURI = "https://eolas.l42.eu/metadata/person/source-entity/"
+const targetEntityURI = "https://eolas.l42.eu/metadata/person/target-entity/"
+
+// ── Test 15: entityMerged rewrites sourceUri → targetUri and refreshes name
+
+func TestEntityMergedRewritesURIAndName(t *testing.T) {
+	clearData()
+	withMockNameFetcher(t, map[string]string{targetEntityURI: "Target Entity Name"})
+
+	trackURL := createTrackWithURITag(t, "wh-entity-merged-1", sourceEntityURI)
+
+	tagsBefore := getTagsForTrack(t, trackURL)
+	if len(tagsBefore["language"]) == 0 || tagsBefore["language"][0].URI != sourceEntityURI {
+		t.Fatalf("expected language tag with sourceEntityURI=%q, got: %+v", sourceEntityURI, tagsBefore["language"])
+	}
+
+	status := postLoganneEventWithBody(t, fmt.Sprintf(
+		`{"type": "entityMerged", "sourceUri": %q, "targetUri": %q}`,
+		sourceEntityURI, targetEntityURI,
+	))
+	assertEqual(t, "entityMerged: expected 204", 204, status)
+
+	tagsAfter := getTagsForTrack(t, trackURL)
+	if len(tagsAfter["language"]) == 0 {
+		t.Fatal("language tag disappeared after entityMerged")
+	}
+	tagAfter := tagsAfter["language"][0]
+	assertEqual(t, "entityMerged: URI should be rewritten to targetUri", targetEntityURI, tagAfter.URI)
+	assertEqual(t, "entityMerged: name should be refreshed", "Target Entity Name", tagAfter.Name)
+}
+
+// ── Test 16: itemMerged (post-rename alias) rewrites sourceUri → targetUri and refreshes name
+
+func TestItemMergedRewritesURIAndName(t *testing.T) {
+	clearData()
+	withMockNameFetcher(t, map[string]string{targetEntityURI: "Target Entity Name (itemMerged)"})
+
+	trackURL := createTrackWithURITag(t, "wh-item-merged-1", sourceEntityURI)
+
+	status := postLoganneEventWithBody(t, fmt.Sprintf(
+		`{"type": "itemMerged", "sourceUri": %q, "targetUri": %q}`,
+		sourceEntityURI, targetEntityURI,
+	))
+	assertEqual(t, "itemMerged: expected 204", 204, status)
+
+	tagsAfter := getTagsForTrack(t, trackURL)
+	if len(tagsAfter["language"]) == 0 {
+		t.Fatal("language tag disappeared after itemMerged")
+	}
+	tagAfter := tagsAfter["language"][0]
+	assertEqual(t, "itemMerged: URI should be rewritten to targetUri", targetEntityURI, tagAfter.URI)
+	assertEqual(t, "itemMerged: name should be refreshed", "Target Entity Name (itemMerged)", tagAfter.Name)
+}
+
+// ── Test 17: entityMerged with no matching tags is a no-op ───────────────────
+
+func TestEntityMergedNoMatchingTagsIsNoop(t *testing.T) {
+	clearData()
+	withMockNameFetcher(t, map[string]string{targetEntityURI: "Target Entity Name"})
+
+	status := postLoganneEventWithBody(t, fmt.Sprintf(
+		`{"type": "entityMerged", "sourceUri": %q, "targetUri": %q}`,
+		"https://eolas.l42.eu/metadata/person/nonexistent-source/", targetEntityURI,
+	))
+	assertEqual(t, "entityMerged no-match: expected 204", 204, status)
+}
+
+// ── Test 18: entityMerged is idempotent ──────────────────────────────────────
+
+func TestEntityMergedIsIdempotent(t *testing.T) {
+	clearData()
+	withMockNameFetcher(t, map[string]string{targetEntityURI: "Stable Target Name"})
+
+	trackURL := createTrackWithURITag(t, "wh-entity-merged-idempotent-1", sourceEntityURI)
+
+	payload := fmt.Sprintf(
+		`{"type": "entityMerged", "sourceUri": %q, "targetUri": %q}`,
+		sourceEntityURI, targetEntityURI,
+	)
+
+	status1 := postLoganneEventWithBody(t, payload)
+	assertEqual(t, "entityMerged idempotent: first delivery expected 204", 204, status1)
+
+	status2 := postLoganneEventWithBody(t, payload)
+	assertEqual(t, "entityMerged idempotent: second delivery expected 204", 204, status2)
+
+	tagsAfter := getTagsForTrack(t, trackURL)
+	if len(tagsAfter["language"]) == 0 {
+		t.Fatal("language tag disappeared after idempotent entityMerged")
+	}
+	tagAfter := tagsAfter["language"][0]
+	assertEqual(t, "entityMerged idempotent: URI should be stable", targetEntityURI, tagAfter.URI)
+	assertEqual(t, "entityMerged idempotent: name should be stable", "Stable Target Name", tagAfter.Name)
 }

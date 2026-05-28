@@ -215,6 +215,20 @@ func (store Datastore) updateTagNamesByUri(entityUri string, name string) (int64
 	return result.RowsAffected()
 }
 
+// rewriteTagUrisByUri atomically rewrites the uri field from oldUri to newUri
+// and refreshes the value (stored name) to newName for all matching rows.
+// Returns the number of rows affected (zero if no tags reference oldUri).
+func (store Datastore) rewriteTagUrisByUri(oldUri, newUri, newName string) (int64, error) {
+	result, err := store.DB.Exec(
+		`UPDATE tag SET uri = ?, value = ? WHERE uri = ?`,
+		newUri, newName, oldUri,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 /**
  * Deletes a given tag
  *

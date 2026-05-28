@@ -13,6 +13,15 @@ import (
 type LoganneEvent struct {
 	Type string `json:"type"`
 	URL  string `json:"url"`
+
+	// contactLinked (from lucos_contacts) fields
+	ContactUri       string  `json:"contactUri"`
+	EolasUri         string  `json:"eolasUri"`
+	PreviousEolasUri *string `json:"previousEolasUri"` // nil = initial link
+
+	// entityMerged / itemMerged (from lucos_eolas) fields
+	SourceUri string `json:"sourceUri"`
+	TargetUri string `json:"targetUri"`
 }
 
 // entityNameFetcher resolves an entity URI to its current canonical name.
@@ -61,6 +70,8 @@ func (store Datastore) clearTagUrisByUri(entityUri string) (int64, error) {
 // Currently handled event types:
 //   - itemDeleted (from lucos_eolas) — clears tag URIs matching the deleted entity's URL
 //   - itemUpdated (from lucos_eolas) — refreshes the stored name for matching tag rows
+//   - contactLinked (from lucos_contacts) — rewrites tag URIs when a contact is linked to an eolas Person
+//   - entityMerged / itemMerged (from lucos_eolas) — rewrites tag URIs when an entity is merged into another
 //
 // All other event types are acknowledged with 204 and ignored.
 func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +122,58 @@ func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request
 			return
 		}
 		slog.Info("Refreshed tag names on entity update", "type", event.Type, "entityUri", event.URL, "updatedCount", count)
+
+	case "contactLinked":
+		// Determine the old URI:
+		//   - Initial link (previousEolasUri == null): the contact URI was the primary; eolas URI takes over.
+		//   - Relink (previousEolasUri != null): the previous eolas URI was the primary; new eolas URI takes over.
+		var oldUri string
+		if event.PreviousEolasUri != nil && *event.PreviousEolasUri != "" {
+			oldUri = *event.PreviousEolasUri
+		} else {
+			oldUri = event.ContactUri
+		}
+		newUri := event.EolasUri
+		if oldUri == "" || newUri == "" {
+			slog.Warn("Loganne webhook: missing uri fields for contactLinked", "type", event.Type, "contactUri", event.ContactUri, "eolasUri", event.EolasUri)
+			http.Error(w, "Bad Request: contactUri and eolasUri fields are required", http.StatusBadRequest)
+			return
+		}
+		name, err := entityNameFetcher(newUri)
+		if err != nil {
+			slog.Warn("Failed to fetch entity name for tag URI rewrite", slog.Any("error", err), "type", event.Type, "entityUri", newUri)
+			break
+		}
+		count, err := store.rewriteTagUrisByUri(oldUri, newUri, name)
+		if err != nil {
+			slog.Error("Failed to rewrite tag URIs", slog.Any("error", err), "oldUri", oldUri, "newUri", newUri)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		slog.Info("Rewrote tag URIs on contactLinked", "type", event.Type, "oldUri", oldUri, "newUri", newUri, "count", count)
+
+	case "entityMerged", "itemMerged":
+		// entityMerged is the current lucos_eolas event name; itemMerged is the planned rename (lucos_eolas#254).
+		// Both are handled identically: rewrite sourceUri → targetUri and refresh the stored name.
+		oldUri := event.SourceUri
+		newUri := event.TargetUri
+		if oldUri == "" || newUri == "" {
+			slog.Warn("Loganne webhook: missing uri fields for entity merge", "type", event.Type, "sourceUri", event.SourceUri, "targetUri", event.TargetUri)
+			http.Error(w, "Bad Request: sourceUri and targetUri fields are required", http.StatusBadRequest)
+			return
+		}
+		name, err := entityNameFetcher(newUri)
+		if err != nil {
+			slog.Warn("Failed to fetch entity name for tag URI rewrite", slog.Any("error", err), "type", event.Type, "entityUri", newUri)
+			break
+		}
+		count, err := store.rewriteTagUrisByUri(oldUri, newUri, name)
+		if err != nil {
+			slog.Error("Failed to rewrite tag URIs", slog.Any("error", err), "oldUri", oldUri, "newUri", newUri)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		slog.Info("Rewrote tag URIs on entity merge", "type", event.Type, "oldUri", oldUri, "newUri", newUri, "count", count)
 
 	default:
 		slog.Debug("Ignoring unrecognised Loganne event type", "type", event.Type)
