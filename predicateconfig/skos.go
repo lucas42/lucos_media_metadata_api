@@ -3,14 +3,8 @@ package predicateconfig
 // Package-level SKOS concept definitions for provenance, availability, singalong, and dance.
 //
 // Concept URIs follow the pattern: {APP_ORIGIN}/vocab/{predicate}/{slug}.
-// The slug is the canonical identifier for each concept — it is deterministic (kebab-case ASCII
-// derived from the prefLabel) and is preserved if a predicate migrates to a first-class eolas
-// entity type in future.
-//
-// For dance: a future migration to eolas:Dance entities would create eolas entities with the same
-// slug, flip the registry's AllowedOrigins from OriginMediaMetadataAPI to OriginEolas, and backfill
-// tag.uri values by slug lookup. The slug is the load-bearing identifier, not the URI string.
-// See also: issue #265 (consolidated into #258).
+// For ordinal predicates (availability, singalong) the slug is the integer level number.
+// For categorical predicates (provenance, dance) the slug is kebab-case ASCII derived from the prefLabel.
 
 import (
 	"fmt"
@@ -50,40 +44,32 @@ var provenanceConcepts = []SKOSConcept{
 // availabilityConcepts defines all concepts in the availability SKOS scheme.
 // The Level field is the ordinal value (0 = hardest to replace / most unique, 4 = easiest to replace / ubiquitous).
 // Legacy DB rows store the integer level as a string (e.g. "0", "1", "2"...).
-// Slugs are derived from the prefLabels using kebab-case ASCII.
+// Slugs are the integer level numbers; URIs follow the pattern {APP_ORIGIN}/vocab/availability/{level}.
 var availabilityConcepts = []SKOSConcept{
-	{Slug: "canonical-copy", PrefLabel: "I have the canonical copy", Level: 0},
-	{Slug: "unlikely-elsewhere", PrefLabel: "Likely can't find elsewhere", Level: 1},
-	{Slug: "research-required", PrefLabel: "Would need research to find", Level: 2},
-	{Slug: "nontrivial-search", PrefLabel: "Could find after nontrivial searching", Level: 3},
-	{Slug: "ubiquitous", PrefLabel: "Ubiquitous", Level: 4},
+	{Slug: "0", PrefLabel: "I have the canonical copy", Level: 0},
+	{Slug: "1", PrefLabel: "Likely can't find elsewhere", Level: 1},
+	{Slug: "2", PrefLabel: "Would need research to find", Level: 2},
+	{Slug: "3", PrefLabel: "Could find after nontrivial searching", Level: 3},
+	{Slug: "4", PrefLabel: "Ubiquitous", Level: 4},
 }
 
 // singalongConcepts defines all concepts in the singalong SKOS scheme.
 // The Level field is the ordinal value (0 = can't sing along, 5 = fully a cappella).
 // Legacy DB rows store the integer level as a string (e.g. "0", "1", "2"...).
-// Slugs are derived from the prefLabels using kebab-case ASCII.
+// Slugs are the integer level numbers; URIs follow the pattern {APP_ORIGIN}/vocab/singalong/{level}.
 var singalongConcepts = []SKOSConcept{
-	{Slug: "no-chance", PrefLabel: "No chance", Level: 0},
-	{Slug: "hum-a-bit", PrefLabel: "Hum a Bit", Level: 1},
-	{Slug: "join-in-with-chorus", PrefLabel: "Join in with the chorus in a club", Level: 2},
-	{Slug: "give-it-a-go-at-karaoke", PrefLabel: "Give it a go at karaoke", Level: 3},
-	{Slug: "karaoke-without-screen", PrefLabel: "Karaoke without looking at the screen", Level: 4},
-	{Slug: "acappella-without-lyric-sheet", PrefLabel: "Do it accapella without lyric sheet", Level: 5},
+	{Slug: "0", PrefLabel: "No chance", Level: 0},
+	{Slug: "1", PrefLabel: "Hum a Bit", Level: 1},
+	{Slug: "2", PrefLabel: "Join in with the chorus in a club", Level: 2},
+	{Slug: "3", PrefLabel: "Give it a go at karaoke", Level: 3},
+	{Slug: "4", PrefLabel: "Karaoke without looking at the screen", Level: 4},
+	{Slug: "5", PrefLabel: "Do it accapella without lyric sheet", Level: 5},
 }
 
 // danceConcepts defines all concepts in the dance SKOS scheme.
 // Slugs are kebab-case ASCII derived from the prefLabels.
 // Legacy DB rows store the display name as the value (e.g. "Lindy Hop", "Charleston").
 // The "bespoke" concept is a special case: its slug and prefLabel differ.
-//
-// Dance eolas-future migration path:
-//   - Create eolas:Dance entities, one per concept, using the same slug as the canonical lookup key.
-//   - Flip registry AllowedOrigins from OriginMediaMetadataAPI to OriginEolas.
-//   - Backfill tag.uri: for each tag where predicateid = 'dance', look up the new eolas URI
-//     by slug and update the uri column. The slug is preserved across the migration, so
-//     ResolveSlugToConceptURI("dance", ..., slug) → slug → eolas URI is a one-pass rewrite.
-//   - Retire or archive this SKOS concept scheme for dance (optional at migration time).
 var danceConcepts = []SKOSConcept{
 	{Slug: "lindy-hop", PrefLabel: "Lindy Hop"},
 	{Slug: "charleston", PrefLabel: "Charleston"},

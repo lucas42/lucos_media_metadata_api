@@ -357,7 +357,7 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 	// singalong and dance properties (newly promoted from Omit to URIObject).
 	addProperty("singalong", "Singalong", owlObjectProperty,
 		rdf2go.NewResource(fmt.Sprintf("%s#singalongScheme", ontologyURI)),
-		"How singable this track is — an ordinal scale from 0 (can't sing along) to 5 (fully a cappella).", "", "")
+		"How well Luke can sing along to this track — an ordinal scale from 0 (no chance) to 5 (can do it a cappella without a lyric sheet).", "", "")
 
 	addProperty("dance", "Dance", owlObjectProperty,
 		rdf2go.NewResource(fmt.Sprintf("%s#danceScheme", ontologyURI)),
@@ -421,16 +421,9 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		"Ordinal scheme for track availability. Use the ontology#availabilityLevel property on each concept to retrieve the ordinal integer.",
 		fmt.Sprintf("%s#availabilityLevel", ontologyURI))
 	addSKOSScheme("singalong", "singalongScheme", "Singalong Scheme",
-		"Ordinal scheme for how singable a track is. Use the ontology#singalongLevel property on each concept to retrieve the ordinal integer.",
+		"Ordinal scheme for how well Luke can sing along to a track. Use the ontology#singalongLevel property on each concept to retrieve the ordinal integer.",
 		fmt.Sprintf("%s#singalongLevel", ontologyURI))
-	addSKOSScheme("dance", "danceScheme", "Dance Scheme",
-		// Dance eolas-future migration path (rdfs:comment on the scheme):
-		// When eolas:Dance entities are ready, create one per concept using the same slug as
-		// canonical key. Flip registry AllowedOrigins to OriginEolas. Backfill tag.uri by slug
-		// lookup. The slug is the load-bearing identifier — not the URI string — so the
-		// migration is mechanical: one lookup per tag row, no churn.
-		"Dance style vocabulary. Slug-based URIs are intentional: a future migration to first-class eolas:Dance entities shares the same slug as canonical lookup key, making the URI rewrite mechanical. See issue #265 (consolidated into #258).",
-		"")
+	addSKOSScheme("dance", "danceScheme", "Dance Scheme", "", "")
 
 	g.AddTriple(
 		rdf2go.NewResource(appOrigin + "/ontology#about"),

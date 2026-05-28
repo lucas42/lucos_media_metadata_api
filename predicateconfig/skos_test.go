@@ -144,7 +144,7 @@ func TestResolveSlugToConceptURIUnknownReturnsError(t *testing.T) {
 	}
 }
 
-// TestResolveConceptURIToNameRoundTrip verifies that URI → prefLabel → URI round-trip works.
+// TestResolveConceptURIToNameRoundTrip verifies that slug → URI → name → slug round-trip works.
 func TestResolveConceptURIToNameRoundTrip(t *testing.T) {
 	appOrigin := "https://media.l42.eu"
 	for _, predicate := range []string{"provenance", "availability", "singalong", "dance"} {
@@ -159,10 +159,10 @@ func TestResolveConceptURIToNameRoundTrip(t *testing.T) {
 			if name != c.PrefLabel {
 				t.Errorf("predicate %q slug %q: expected prefLabel %q, got %q", predicate, c.Slug, c.PrefLabel, name)
 			}
-			// name → URI (by slug)
+			// name/slug → URI: try slug first (exact), then prefLabel fallback
 			uri2, err := ResolveSlugToConceptURI(predicate, appOrigin, c.Slug)
 			if err != nil {
-				t.Errorf("predicate %q slug %q: ResolveSlugToConceptURI error: %v", predicate, c.Slug, err)
+				t.Errorf("predicate %q slug %q: ResolveSlugToConceptURI (by slug) error: %v", predicate, c.Slug, err)
 				continue
 			}
 			if uri2 != uri {

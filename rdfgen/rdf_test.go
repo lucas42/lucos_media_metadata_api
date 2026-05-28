@@ -316,11 +316,8 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 	}
 }
 
-// TestMapPredicateSearchURLPredicates verifies that the remaining 3 SearchURL predicates
+// TestMapPredicateSearchURLPredicates verifies that the remaining SearchURL predicates
 // (artist, composer, producer) produce search-URL IRI objects.
-// Note: offence was migrated to URIObject in #238; provenance and availability were migrated
-// to URIObject (SKOS) in #258; genre was dropped to Omit in #258.
-// TODO(#237): remove this test once composer/producer are also migrated.
 func TestMapPredicateSearchURLPredicates(t *testing.T) {
 	cases := []struct {
 		predicateID  string
@@ -410,8 +407,8 @@ func TestMapPredicateSKOSPredicatesWithUri(t *testing.T) {
 		expectedPred string
 	}{
 		{"provenance", "http://localhost:3002/vocab/provenance/bandcamp", "http://purl.org/dc/terms/source"},
-		{"availability", "http://localhost:3002/vocab/availability/ubiquitous", "http://localhost:3002/ontology#availability"},
-		{"singalong", "http://localhost:3002/vocab/singalong/no-chance", "http://localhost:3002/ontology#singalong"},
+		{"availability", "http://localhost:3002/vocab/availability/4", "http://localhost:3002/ontology#availability"},
+		{"singalong", "http://localhost:3002/vocab/singalong/0", "http://localhost:3002/ontology#singalong"},
 		{"dance", "http://localhost:3002/vocab/dance/lindy-hop", "http://localhost:3002/ontology#dance"},
 	}
 	for _, tc := range cases {
@@ -816,8 +813,8 @@ func TestOntologyToRdfIncludesSKOSSchemes(t *testing.T) {
 	// Sample concept URIs from each predicate
 	samples := []string{
 		"vocab/provenance/bandcamp",
-		"vocab/availability/ubiquitous",
-		"vocab/singalong/no-chance",
+		"vocab/availability/4",
+		"vocab/singalong/0",
 		"vocab/dance/lindy-hop",
 	}
 	for _, sample := range samples {
@@ -826,9 +823,9 @@ func TestOntologyToRdfIncludesSKOSSchemes(t *testing.T) {
 		}
 	}
 
-	// Dance eolas migration path comment
-	if !strings.Contains(output, "eolas:Dance") {
-		t.Error("expected dance eolas migration path documentation in ontology output")
+	// Dance concepts should be present
+	if !strings.Contains(output, "vocab/dance/lindy-hop") {
+		t.Error("expected dance concept URIs in ontology output")
 	}
 }
 
@@ -885,8 +882,8 @@ func TestExportRDFSKOSConceptEmission(t *testing.T) {
 	_, err = db.Exec(`
 	INSERT INTO tag (trackid, predicateid, value, uri) VALUES
 	(1, 'provenance', 'Bandcamp', 'http://localhost:3002/vocab/provenance/bandcamp'),
-	(1, 'availability', 'Ubiquitous', 'http://localhost:3002/vocab/availability/ubiquitous'),
-	(1, 'singalong', 'No chance', 'http://localhost:3002/vocab/singalong/no-chance'),
+	(1, 'availability', 'Ubiquitous', 'http://localhost:3002/vocab/availability/4'),
+	(1, 'singalong', 'No chance', 'http://localhost:3002/vocab/singalong/0'),
 	(1, 'dance', 'Lindy Hop', 'http://localhost:3002/vocab/dance/lindy-hop')
 	`)
 	if err != nil {
@@ -909,8 +906,8 @@ func TestExportRDFSKOSConceptEmission(t *testing.T) {
 	// Each concept URI should appear as an IRI object in the output
 	expectedURIs := []string{
 		"vocab/provenance/bandcamp",
-		"vocab/availability/ubiquitous",
-		"vocab/singalong/no-chance",
+		"vocab/availability/4",
+		"vocab/singalong/0",
 		"vocab/dance/lindy-hop",
 	}
 	for _, uri := range expectedURIs {

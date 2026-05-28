@@ -40,7 +40,6 @@ var registry = map[string]Config{
 	},
 	// genre: no consumers, no vocabulary; dormant data left in place.
 	// When a genuine use case arrives, file a fresh design ticket.
-	// Same pattern as fingerprint_version's Omit registration.
 	"genre": {ValueShape: ValueShapeOmit},
 	"language": {
 		MultiValue:     true,
