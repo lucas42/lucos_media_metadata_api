@@ -25,7 +25,7 @@ func TestMapPredicate(t *testing.T) {
 
 // Test multi-value predicates: each DB row produces one term per call,
 // and multiple calls with the same predicate return distinct terms.
-// Note: language/about/mentions are excluded here because they require a uri column value
+// Note: language/about/mentions/offence are excluded here because they require a uri column value
 // to produce output — without one they are silently skipped (see TestMapPredicateSkipsWhenNoUri).
 func TestMapPredicateMultiValue(t *testing.T) {
 	cases := []struct {
@@ -37,7 +37,6 @@ func TestMapPredicateMultiValue(t *testing.T) {
 		{"composer", "Bob", "http://purl.org/ontology/mo/composer"},
 		{"producer", "Charlie", "http://purl.org/ontology/mo/producer"},
 		{"producer", "Dave", "http://purl.org/ontology/mo/producer"},
-		{"offence", "violence", "http://localhost:3002/ontology#trigger"},
 	}
 	// Track terms by predicate to verify distinct values
 	termsByPredicate := make(map[string][]string)
@@ -218,10 +217,32 @@ func TestMapPredicateLanguageUri(t *testing.T) {
 	}
 }
 
-// TestMapPredicateSkipsWhenNoUri verifies that language/about/mentions tags without
+// TestMapPredicateOffenceUri verifies that offence tags use the uri field (URI-object pattern),
+// skip when no uri is set, and emit the correct trigger predicate.
+func TestMapPredicateOffenceUri(t *testing.T) {
+	offenceURI := "https://eolas.l42.eu/metadata/offence/3/"
+	pred, terms := mapPredicate("offence", "violence", &offenceURI, "http://localhost:8020", "http://localhost:3002")
+	if pred != "http://localhost:3002/ontology#trigger" {
+		t.Errorf("expected trigger predicate, got %q", pred)
+	}
+	if len(terms) != 1 {
+		t.Fatalf("expected 1 term, got %d", len(terms))
+	}
+	if !strings.Contains(terms[0].String(), "eolas.l42.eu/metadata/offence/3/") {
+		t.Errorf("expected term to contain eolas offence URI, got %q", terms[0].String())
+	}
+
+	// Without a URI, offence tags are silently skipped (legacy data).
+	pred2, terms2 := mapPredicate("offence", "violence", nil, "http://localhost:8020", "http://localhost:3002")
+	if pred2 != "" || len(terms2) != 0 {
+		t.Errorf("expected offence with nil uri to be skipped, got pred=%q terms=%v", pred2, terms2)
+	}
+}
+
+// TestMapPredicateSkipsWhenNoUri verifies that language/about/mentions/offence tags without
 // a uri value are silently skipped rather than using value as a fallback IRI.
 func TestMapPredicateSkipsWhenNoUri(t *testing.T) {
-	for _, predicateID := range []string{"language", "about", "mentions"} {
+	for _, predicateID := range []string{"language", "about", "mentions", "offence"} {
 		pred, terms := mapPredicate(predicateID, "some label", nil, "http://localhost:8020", "http://localhost:3002")
 		if pred != "" || len(terms) != 0 {
 			t.Errorf("predicate %q with nil uri: expected skip (empty pred and terms), got pred=%q terms=%v", predicateID, pred, terms)
@@ -295,10 +316,11 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 	}
 }
 
-// TestMapPredicateSearchURLPredicates verifies that all 7 SearchURL predicates are routed
+// TestMapPredicateSearchURLPredicates verifies that all 6 SearchURL predicates are routed
 // via the registry (ValueShapeSearchURL) and produce search-URL IRI objects.
 // This covers both the predicates newly added to the registry in #255 and the existing
-// multi-value ones (composer/producer/offence) whose entries were extended.
+// multi-value ones (composer/producer) whose entries were extended.
+// Note: offence was migrated to ValueShapeURIObject in #238 — see TestMapPredicateOffenceUri.
 func TestMapPredicateSearchURLPredicates(t *testing.T) {
 	cases := []struct {
 		predicateID  string
@@ -308,7 +330,6 @@ func TestMapPredicateSearchURLPredicates(t *testing.T) {
 		{"genre", "http://purl.org/ontology/mo/genre"},
 		{"composer", "http://purl.org/ontology/mo/composer"},
 		{"producer", "http://purl.org/ontology/mo/producer"},
-		{"offence", "http://localhost:3002/ontology#trigger"},
 		{"provenance", "http://purl.org/dc/terms/source"},
 		{"availability", "http://localhost:3002/ontology#availability"},
 	}

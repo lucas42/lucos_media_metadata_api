@@ -305,7 +305,7 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		"The date the track was added to the collection.", "", "")
 
 	addProperty("trigger", "Trigger (offence)", owlObjectProperty,
-		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Offence"),
 		"Any potential triggers or offence covered by the track's subject matter.", "", "")
 
 	addProperty("memory", "Memory", owlObjectProperty,

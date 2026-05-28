@@ -46,9 +46,10 @@ var registry = map[string]Config{
 		AllowedOrigins: []string{OriginEolas},
 	},
 	"offence": {
-		MultiValue:   true,
-		ValueShape:   ValueShapeSearchURL,
-		PredicateURI: "/ontology#trigger",
+		MultiValue:     true,
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "/ontology#trigger",
+		AllowedOrigins: []string{OriginEolas},
 	},
 	"about": {
 		MultiValue:     true,
