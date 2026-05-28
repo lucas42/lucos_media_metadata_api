@@ -21,13 +21,12 @@ var registry = map[string]Config{
 	},
 
 	// SearchURL predicates — transitional; see ValueShapeSearchURL for context.
+	// TODO(#237): composer and producer are the last remaining SearchURL predicates.
+	// Once #237 (migrate Person-typed tags to eolas URIs) is done, ValueShapeSearchURL
+	// and getSearchUrl can be removed entirely.
 	"artist": {
 		ValueShape:   ValueShapeSearchURL,
 		PredicateURI: "http://xmlns.com/foaf/0.1/maker",
-	},
-	"genre": {
-		ValueShape:   ValueShapeSearchURL,
-		PredicateURI: "http://purl.org/ontology/mo/genre",
 	},
 	"composer": {
 		MultiValue:   true,
@@ -39,6 +38,9 @@ var registry = map[string]Config{
 		ValueShape:   ValueShapeSearchURL,
 		PredicateURI: "http://purl.org/ontology/mo/producer",
 	},
+	// genre: no consumers, no vocabulary; dormant data left in place.
+	// When a genuine use case arrives, file a fresh design ticket.
+	"genre": {ValueShape: ValueShapeOmit},
 	"language": {
 		MultiValue:     true,
 		ValueShape:     ValueShapeURIObject,
@@ -76,12 +78,18 @@ var registry = map[string]Config{
 		AllowedOrigins: []string{OriginEolas},
 	},
 	"provenance": {
-		ValueShape:   ValueShapeSearchURL,
-		PredicateURI: "http://purl.org/dc/terms/source",
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "http://purl.org/dc/terms/source",
+		AllowedOrigins: []string{OriginMediaMetadataAPI},
+		ResolveNameToURI: SKOSResolveNameToURI("provenance"),
+		ResolveURIToName: SKOSResolveURIToName("provenance"),
 	},
 	"availability": {
-		ValueShape:   ValueShapeSearchURL,
-		PredicateURI: "/ontology#availability",
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "/ontology#availability",
+		AllowedOrigins: []string{OriginMediaMetadataAPI},
+		ResolveNameToURI: SKOSResolveNameToURI("availability"),
+		ResolveURIToName: SKOSResolveURIToName("availability"),
 	},
 
 	"album": {
@@ -147,11 +155,23 @@ var registry = map[string]Config{
 		ValueShape:    ValueShapeOmit,
 		LoganneSilent: true,
 	},
-	// These predicates have in-use data but are intentionally kept out of public RDF
-	// output pending long-term direction decisions (see #264, #265, #266).
+	// fingerprint_version: pending DROP decision (see #264). Dormant data.
 	"fingerprint_version": {ValueShape: ValueShapeOmit},
-	"dance":               {ValueShape: ValueShapeOmit},
-	"singalong":           {ValueShape: ValueShapeOmit},
+
+	"singalong": {
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "/ontology#singalong",
+		AllowedOrigins: []string{OriginMediaMetadataAPI},
+		ResolveNameToURI: SKOSResolveNameToURI("singalong"),
+		ResolveURIToName: SKOSResolveURIToName("singalong"),
+	},
+	"dance": {
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "/ontology#dance",
+		AllowedOrigins: []string{OriginMediaMetadataAPI},
+		ResolveNameToURI: SKOSResolveNameToURI("dance"),
+		ResolveURIToName: SKOSResolveURIToName("dance"),
+	},
 }
 
 // Get returns the Config for predicateID and whether it was found.

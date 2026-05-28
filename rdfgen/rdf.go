@@ -14,6 +14,18 @@ import (
 	"lucos_media_metadata_api/predicateconfig"
 )
 
+// SKOS and XSD URIs used in the SKOS concept scheme declarations.
+const (
+	skosConceptScheme = "http://www.w3.org/2004/02/skos/core#ConceptScheme"
+	skosConcept       = "http://www.w3.org/2004/02/skos/core#Concept"
+	skosInScheme      = "http://www.w3.org/2004/02/skos/core#inScheme"
+	skosNotation      = "http://www.w3.org/2004/02/skos/core#notation"
+	skosPrefLabel     = "http://www.w3.org/2004/02/skos/core#prefLabel"
+	rdfType           = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+	rdfsComment       = "http://www.w3.org/2000/01/rdf-schema#comment"
+	xsdInteger        = "http://www.w3.org/2001/XMLSchema#integer"
+)
+
 /**
  * A struct for holding data about a given track
  */
@@ -321,7 +333,7 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		"Creative Work this track is the primary theme tune of.", "", "")
 
 	addProperty("availability", "Availability", owlObjectProperty,
-		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#Resource"),
+		rdf2go.NewResource(fmt.Sprintf("%s#availabilityScheme", ontologyURI)),
 		"How easy it would be to replace this track if something happened to my collection.", "", "")
 
 	addProperty("about", "About", owlObjectProperty,
@@ -341,6 +353,77 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 		rdf2go.NewResource("https://eolas.l42.eu/metadata/language/"),
 		"The language a track is performed in.",
 		"trackInLanguage", "Tracks in this language")
+
+	// singalong and dance properties (newly promoted from Omit to URIObject).
+	addProperty("singalong", "Singalong", owlObjectProperty,
+		rdf2go.NewResource(fmt.Sprintf("%s#singalongScheme", ontologyURI)),
+		"How well Luke can sing along to this track — an ordinal scale from 0 (no chance) to 5 (can do it a cappella without a lyric sheet).", "", "")
+
+	addProperty("dance", "Dance", owlObjectProperty,
+		rdf2go.NewResource(fmt.Sprintf("%s#danceScheme", ontologyURI)),
+		"The style of dance which goes with this track.", "", "")
+
+	// Ordinal level properties for availability and singalong.
+	// Each skos:Concept in these schemes carries an integer level via these properties,
+	// enabling consumers to derive the ordinal ordering without SKOS traversal.
+	availabilityLevelProp := rdf2go.NewResource(fmt.Sprintf("%s#availabilityLevel", ontologyURI))
+	g.AddTriple(availabilityLevelProp, rdf2go.NewResource(rdfType), owlDatatypeProperty)
+	g.AddTriple(availabilityLevelProp,
+		rdf2go.NewResource(skosPrefLabel),
+		rdf2go.NewLiteralWithLanguage("Availability Level", "en"))
+	g.AddTriple(availabilityLevelProp,
+		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#range"),
+		rdf2go.NewResource(xsdInteger))
+	g.AddTriple(availabilityLevelProp,
+		rdf2go.NewResource(rdfsComment),
+		rdf2go.NewLiteral("Ordinal level for availability concepts. 0 = I have the canonical copy (hardest to replace); 4 = Ubiquitous (easiest to replace). Lower level = more unique."))
+
+	singalongLevelProp := rdf2go.NewResource(fmt.Sprintf("%s#singalongLevel", ontologyURI))
+	g.AddTriple(singalongLevelProp, rdf2go.NewResource(rdfType), owlDatatypeProperty)
+	g.AddTriple(singalongLevelProp,
+		rdf2go.NewResource(skosPrefLabel),
+		rdf2go.NewLiteralWithLanguage("Singalong Level", "en"))
+	g.AddTriple(singalongLevelProp,
+		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#range"),
+		rdf2go.NewResource(xsdInteger))
+	g.AddTriple(singalongLevelProp,
+		rdf2go.NewResource(rdfsComment),
+		rdf2go.NewLiteral("Ordinal level for singalong concepts. 0 = No chance; 5 = Can do it a cappella without a lyric sheet."))
+
+	// Helper for adding a SKOS concept scheme with its concepts.
+	// schemeName is the fragment identifier (e.g. "provenanceScheme").
+	// schemeLabel is the human-readable English label.
+	// levelPropURI is the URI of the ordinal level property, or "" if not ordinal.
+	addSKOSScheme := func(predicate, schemeName, schemeLabel, schemeComment, levelPropURI string) {
+		schemeURI := rdf2go.NewResource(fmt.Sprintf("%s#%s", ontologyURI, schemeName))
+		g.AddTriple(schemeURI, rdf2go.NewResource(rdfType), rdf2go.NewResource(skosConceptScheme))
+		g.AddTriple(schemeURI, rdf2go.NewResource(skosPrefLabel), rdf2go.NewLiteralWithLanguage(schemeLabel, "en"))
+		if schemeComment != "" {
+			g.AddTriple(schemeURI, rdf2go.NewResource(rdfsComment), rdf2go.NewLiteral(schemeComment))
+		}
+
+		for _, c := range predicateconfig.GetSKOSConcepts(predicate) {
+			conceptURI := rdf2go.NewResource(predicateconfig.ConceptURI(appOrigin, predicate, c.Slug))
+			g.AddTriple(conceptURI, rdf2go.NewResource(rdfType), rdf2go.NewResource(skosConcept))
+			g.AddTriple(conceptURI, rdf2go.NewResource(skosPrefLabel), rdf2go.NewLiteralWithLanguage(c.PrefLabel, "en"))
+			g.AddTriple(conceptURI, rdf2go.NewResource(skosNotation), rdf2go.NewLiteral(c.Slug))
+			g.AddTriple(conceptURI, rdf2go.NewResource(skosInScheme), schemeURI)
+			if levelPropURI != "" {
+				g.AddTriple(conceptURI,
+					rdf2go.NewResource(levelPropURI),
+					rdf2go.NewLiteralWithDatatype(strconv.Itoa(c.Level), rdf2go.NewResource(xsdInteger)))
+			}
+		}
+	}
+
+	addSKOSScheme("provenance", "provenanceScheme", "Provenance Scheme", "", "")
+	addSKOSScheme("availability", "availabilityScheme", "Availability Scheme",
+		"Ordinal scheme for track availability. Use the ontology#availabilityLevel property on each concept to retrieve the ordinal integer.",
+		fmt.Sprintf("%s#availabilityLevel", ontologyURI))
+	addSKOSScheme("singalong", "singalongScheme", "Singalong Scheme",
+		"Ordinal scheme for how well Luke can sing along to a track. Use the ontology#singalongLevel property on each concept to retrieve the ordinal integer.",
+		fmt.Sprintf("%s#singalongLevel", ontologyURI))
+	addSKOSScheme("dance", "danceScheme", "Dance Scheme", "", "")
 
 	g.AddTriple(
 		rdf2go.NewResource(appOrigin + "/ontology#about"),
