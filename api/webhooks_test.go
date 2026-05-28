@@ -448,3 +448,72 @@ func TestEntityMergedIsIdempotent(t *testing.T) {
 	assertEqual(t, "entityMerged idempotent: URI should be stable", targetEntityURI, tagAfter.URI)
 	assertEqual(t, "entityMerged idempotent: name should be stable", "Stable Target Name", tagAfter.Name)
 }
+
+// ── Name-fetch-failure tests ─────────────────────────────────────────────────
+//
+// When the entity name fetcher fails, the URI rewrite must still happen — the
+// stale URI is no longer valid regardless of eolas availability. The stored
+// name is left as-is and will be corrected by the daily reconciler.
+
+// ── Test 19: contactLinked rewrites URI even when name fetch fails ────────────
+
+func TestContactLinkedRewritesURIEvenWhenNameFetchFails(t *testing.T) {
+	clearData()
+	// Mock returns an error for every URI — simulates eolas being unavailable.
+	orig := entityNameFetcher
+	entityNameFetcher = func(uri string) (string, error) {
+		return "", fmt.Errorf("eolas unavailable (mock)")
+	}
+	t.Cleanup(func() { entityNameFetcher = orig })
+
+	trackURL := createTrackWithURITag(t, "wh-cl-name-fail-1", contactURI)
+	originalTags := getTagsForTrack(t, trackURL)
+	originalName := originalTags["language"][0].Name
+
+	status := postLoganneEventWithBody(t, fmt.Sprintf(
+		`{"type": "contactLinked", "contactUri": %q, "eolasUri": %q, "previousEolasUri": null}`,
+		contactURI, eolasPersonURI,
+	))
+	assertEqual(t, "contactLinked name-fetch-fail: expected 204", 204, status)
+
+	tagsAfter := getTagsForTrack(t, trackURL)
+	if len(tagsAfter["language"]) == 0 {
+		t.Fatal("language tag disappeared after contactLinked with name-fetch failure")
+	}
+	tagAfter := tagsAfter["language"][0]
+	// URI must be rewritten even though name fetch failed
+	assertEqual(t, "contactLinked name-fetch-fail: URI must be rewritten", eolasPersonURI, tagAfter.URI)
+	// Name should be unchanged (preserved from before the event)
+	assertEqual(t, "contactLinked name-fetch-fail: name should be unchanged", originalName, tagAfter.Name)
+}
+
+// ── Test 20: entityMerged rewrites URI even when name fetch fails ─────────────
+
+func TestEntityMergedRewritesURIEvenWhenNameFetchFails(t *testing.T) {
+	clearData()
+	orig := entityNameFetcher
+	entityNameFetcher = func(uri string) (string, error) {
+		return "", fmt.Errorf("eolas unavailable (mock)")
+	}
+	t.Cleanup(func() { entityNameFetcher = orig })
+
+	trackURL := createTrackWithURITag(t, "wh-em-name-fail-1", sourceEntityURI)
+	originalTags := getTagsForTrack(t, trackURL)
+	originalName := originalTags["language"][0].Name
+
+	status := postLoganneEventWithBody(t, fmt.Sprintf(
+		`{"type": "entityMerged", "sourceUri": %q, "targetUri": %q}`,
+		sourceEntityURI, targetEntityURI,
+	))
+	assertEqual(t, "entityMerged name-fetch-fail: expected 204", 204, status)
+
+	tagsAfter := getTagsForTrack(t, trackURL)
+	if len(tagsAfter["language"]) == 0 {
+		t.Fatal("language tag disappeared after entityMerged with name-fetch failure")
+	}
+	tagAfter := tagsAfter["language"][0]
+	// URI must be rewritten even though name fetch failed
+	assertEqual(t, "entityMerged name-fetch-fail: URI must be rewritten", targetEntityURI, tagAfter.URI)
+	// Name should be unchanged (preserved from before the event)
+	assertEqual(t, "entityMerged name-fetch-fail: name should be unchanged", originalName, tagAfter.Name)
+}

@@ -139,18 +139,26 @@ func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request
 			http.Error(w, "Bad Request: contactUri and eolasUri fields are required", http.StatusBadRequest)
 			return
 		}
-		name, err := entityNameFetcher(newUri)
-		if err != nil {
-			slog.Warn("Failed to fetch entity name for tag URI rewrite", slog.Any("error", err), "type", event.Type, "entityUri", newUri)
-			break
-		}
-		count, err := store.rewriteTagUrisByUri(oldUri, newUri, name)
+		// URI rewrite is unconditional — the old URI is no longer valid regardless of name-fetch outcome.
+		count, err := store.rewriteTagUriOnlyByUri(oldUri, newUri)
 		if err != nil {
 			slog.Error("Failed to rewrite tag URIs", slog.Any("error", err), "oldUri", oldUri, "newUri", newUri)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 		slog.Info("Rewrote tag URIs on contactLinked", "type", event.Type, "oldUri", oldUri, "newUri", newUri, "count", count)
+		// Best-effort: refresh the stored name from the new entity. The daily reconciler
+		// (reconcileTagNames) will correct any drift if this fetch fails.
+		if count > 0 {
+			name, err := entityNameFetcher(newUri)
+			if err != nil {
+				slog.Warn("Failed to fetch entity name after URI rewrite; name will be corrected by daily reconciler", slog.Any("error", err), "type", event.Type, "entityUri", newUri)
+				break
+			}
+			if _, err := store.updateTagNamesByUri(newUri, name); err != nil {
+				slog.Warn("Failed to refresh tag name after URI rewrite", slog.Any("error", err), "entityUri", newUri)
+			}
+		}
 
 	case "entityMerged", "itemMerged":
 		// entityMerged is the current lucos_eolas event name; itemMerged is the planned rename (lucos_eolas#254).
@@ -162,18 +170,26 @@ func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request
 			http.Error(w, "Bad Request: sourceUri and targetUri fields are required", http.StatusBadRequest)
 			return
 		}
-		name, err := entityNameFetcher(newUri)
-		if err != nil {
-			slog.Warn("Failed to fetch entity name for tag URI rewrite", slog.Any("error", err), "type", event.Type, "entityUri", newUri)
-			break
-		}
-		count, err := store.rewriteTagUrisByUri(oldUri, newUri, name)
+		// URI rewrite is unconditional — the source entity has been merged and the URI is no longer valid.
+		count, err := store.rewriteTagUriOnlyByUri(oldUri, newUri)
 		if err != nil {
 			slog.Error("Failed to rewrite tag URIs", slog.Any("error", err), "oldUri", oldUri, "newUri", newUri)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 		slog.Info("Rewrote tag URIs on entity merge", "type", event.Type, "oldUri", oldUri, "newUri", newUri, "count", count)
+		// Best-effort: refresh the stored name from the new entity. The daily reconciler
+		// (reconcileTagNames) will correct any drift if this fetch fails.
+		if count > 0 {
+			name, err := entityNameFetcher(newUri)
+			if err != nil {
+				slog.Warn("Failed to fetch entity name after URI rewrite; name will be corrected by daily reconciler", slog.Any("error", err), "type", event.Type, "entityUri", newUri)
+				break
+			}
+			if _, err := store.updateTagNamesByUri(newUri, name); err != nil {
+				slog.Warn("Failed to refresh tag name after URI rewrite", slog.Any("error", err), "entityUri", newUri)
+			}
+		}
 
 	default:
 		slog.Debug("Ignoring unrecognised Loganne event type", "type", event.Type)
