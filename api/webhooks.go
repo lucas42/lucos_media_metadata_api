@@ -19,7 +19,7 @@ type LoganneEvent struct {
 	EolasUri         string  `json:"eolasUri"`
 	PreviousEolasUri *string `json:"previousEolasUri"` // nil = initial link
 
-	// entityMerged / itemMerged (from lucos_eolas) fields
+	// itemMerged (from lucos_eolas) fields
 	SourceUri string `json:"sourceUri"`
 	TargetUri string `json:"targetUri"`
 }
@@ -71,7 +71,7 @@ func (store Datastore) clearTagUrisByUri(entityUri string) (int64, error) {
 //   - itemDeleted (from lucos_eolas) — clears tag URIs matching the deleted entity's URL
 //   - itemUpdated (from lucos_eolas) — refreshes the stored name for matching tag rows
 //   - contactLinked (from lucos_contacts) — rewrites tag URIs when a contact is linked to an eolas Person
-//   - entityMerged / itemMerged (from lucos_eolas) — rewrites tag URIs when an entity is merged into another
+//   - itemMerged (from lucos_eolas) — rewrites tag URIs when an entity is merged into another
 //
 // All other event types are acknowledged with 204 and ignored.
 func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request) {
@@ -160,9 +160,8 @@ func (store Datastore) WebhooksController(w http.ResponseWriter, r *http.Request
 			}
 		}
 
-	case "entityMerged", "itemMerged":
-		// entityMerged is the current lucos_eolas event name; itemMerged is the planned rename (lucos_eolas#254).
-		// Both are handled identically: rewrite sourceUri → targetUri and refresh the stored name.
+	case "itemMerged":
+		// Rewrite sourceUri → targetUri and refresh the stored name.
 		oldUri := event.SourceUri
 		newUri := event.TargetUri
 		if oldUri == "" || newUri == "" {

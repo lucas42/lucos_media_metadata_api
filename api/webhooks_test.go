@@ -352,46 +352,23 @@ func TestContactLinkedIsIdempotent(t *testing.T) {
 	assertEqual(t, "contactLinked idempotent: name should be stable", "Stable Person Name", tagAfter.Name)
 }
 
-// ── entityMerged / itemMerged tests ──────────────────────────────────────────
+// ── itemMerged tests ──────────────────────────────────────────────────────────
 
 const sourceEntityURI = "https://eolas.l42.eu/metadata/person/source-entity/"
 const targetEntityURI = "https://eolas.l42.eu/metadata/person/target-entity/"
 
-// ── Test 15: entityMerged rewrites sourceUri → targetUri and refreshes name
+// ── Test 15: itemMerged rewrites sourceUri → targetUri and refreshes name
 
-func TestEntityMergedRewritesURIAndName(t *testing.T) {
+func TestItemMergedRewritesURIAndName(t *testing.T) {
 	clearData()
 	withMockNameFetcher(t, map[string]string{targetEntityURI: "Target Entity Name"})
 
-	trackURL := createTrackWithURITag(t, "wh-entity-merged-1", sourceEntityURI)
+	trackURL := createTrackWithURITag(t, "wh-item-merged-1", sourceEntityURI)
 
 	tagsBefore := getTagsForTrack(t, trackURL)
 	if len(tagsBefore["language"]) == 0 || tagsBefore["language"][0].URI != sourceEntityURI {
 		t.Fatalf("expected language tag with sourceEntityURI=%q, got: %+v", sourceEntityURI, tagsBefore["language"])
 	}
-
-	status := postLoganneEventWithBody(t, fmt.Sprintf(
-		`{"type": "entityMerged", "sourceUri": %q, "targetUri": %q}`,
-		sourceEntityURI, targetEntityURI,
-	))
-	assertEqual(t, "entityMerged: expected 204", 204, status)
-
-	tagsAfter := getTagsForTrack(t, trackURL)
-	if len(tagsAfter["language"]) == 0 {
-		t.Fatal("language tag disappeared after entityMerged")
-	}
-	tagAfter := tagsAfter["language"][0]
-	assertEqual(t, "entityMerged: URI should be rewritten to targetUri", targetEntityURI, tagAfter.URI)
-	assertEqual(t, "entityMerged: name should be refreshed", "Target Entity Name", tagAfter.Name)
-}
-
-// ── Test 16: itemMerged (post-rename alias) rewrites sourceUri → targetUri and refreshes name
-
-func TestItemMergedRewritesURIAndName(t *testing.T) {
-	clearData()
-	withMockNameFetcher(t, map[string]string{targetEntityURI: "Target Entity Name (itemMerged)"})
-
-	trackURL := createTrackWithURITag(t, "wh-item-merged-1", sourceEntityURI)
 
 	status := postLoganneEventWithBody(t, fmt.Sprintf(
 		`{"type": "itemMerged", "sourceUri": %q, "targetUri": %q}`,
@@ -405,48 +382,48 @@ func TestItemMergedRewritesURIAndName(t *testing.T) {
 	}
 	tagAfter := tagsAfter["language"][0]
 	assertEqual(t, "itemMerged: URI should be rewritten to targetUri", targetEntityURI, tagAfter.URI)
-	assertEqual(t, "itemMerged: name should be refreshed", "Target Entity Name (itemMerged)", tagAfter.Name)
+	assertEqual(t, "itemMerged: name should be refreshed", "Target Entity Name", tagAfter.Name)
 }
 
-// ── Test 17: entityMerged with no matching tags is a no-op ───────────────────
+// ── Test 16: itemMerged with no matching tags is a no-op ─────────────────────
 
-func TestEntityMergedNoMatchingTagsIsNoop(t *testing.T) {
+func TestItemMergedNoMatchingTagsIsNoop(t *testing.T) {
 	clearData()
 	withMockNameFetcher(t, map[string]string{targetEntityURI: "Target Entity Name"})
 
 	status := postLoganneEventWithBody(t, fmt.Sprintf(
-		`{"type": "entityMerged", "sourceUri": %q, "targetUri": %q}`,
+		`{"type": "itemMerged", "sourceUri": %q, "targetUri": %q}`,
 		"https://eolas.l42.eu/metadata/person/nonexistent-source/", targetEntityURI,
 	))
-	assertEqual(t, "entityMerged no-match: expected 204", 204, status)
+	assertEqual(t, "itemMerged no-match: expected 204", 204, status)
 }
 
-// ── Test 18: entityMerged is idempotent ──────────────────────────────────────
+// ── Test 17: itemMerged is idempotent ────────────────────────────────────────
 
-func TestEntityMergedIsIdempotent(t *testing.T) {
+func TestItemMergedIsIdempotent(t *testing.T) {
 	clearData()
 	withMockNameFetcher(t, map[string]string{targetEntityURI: "Stable Target Name"})
 
-	trackURL := createTrackWithURITag(t, "wh-entity-merged-idempotent-1", sourceEntityURI)
+	trackURL := createTrackWithURITag(t, "wh-item-merged-idempotent-1", sourceEntityURI)
 
 	payload := fmt.Sprintf(
-		`{"type": "entityMerged", "sourceUri": %q, "targetUri": %q}`,
+		`{"type": "itemMerged", "sourceUri": %q, "targetUri": %q}`,
 		sourceEntityURI, targetEntityURI,
 	)
 
 	status1 := postLoganneEventWithBody(t, payload)
-	assertEqual(t, "entityMerged idempotent: first delivery expected 204", 204, status1)
+	assertEqual(t, "itemMerged idempotent: first delivery expected 204", 204, status1)
 
 	status2 := postLoganneEventWithBody(t, payload)
-	assertEqual(t, "entityMerged idempotent: second delivery expected 204", 204, status2)
+	assertEqual(t, "itemMerged idempotent: second delivery expected 204", 204, status2)
 
 	tagsAfter := getTagsForTrack(t, trackURL)
 	if len(tagsAfter["language"]) == 0 {
-		t.Fatal("language tag disappeared after idempotent entityMerged")
+		t.Fatal("language tag disappeared after idempotent itemMerged")
 	}
 	tagAfter := tagsAfter["language"][0]
-	assertEqual(t, "entityMerged idempotent: URI should be stable", targetEntityURI, tagAfter.URI)
-	assertEqual(t, "entityMerged idempotent: name should be stable", "Stable Target Name", tagAfter.Name)
+	assertEqual(t, "itemMerged idempotent: URI should be stable", targetEntityURI, tagAfter.URI)
+	assertEqual(t, "itemMerged idempotent: name should be stable", "Stable Target Name", tagAfter.Name)
 }
 
 // ── Name-fetch-failure tests ─────────────────────────────────────────────────
@@ -455,7 +432,7 @@ func TestEntityMergedIsIdempotent(t *testing.T) {
 // stale URI is no longer valid regardless of eolas availability. The stored
 // name is left as-is and will be corrected by the daily reconciler.
 
-// ── Test 19: contactLinked rewrites URI even when name fetch fails ────────────
+// ── Test 18: contactLinked rewrites URI even when name fetch fails ────────────
 
 func TestContactLinkedRewritesURIEvenWhenNameFetchFails(t *testing.T) {
 	clearData()
@@ -487,9 +464,9 @@ func TestContactLinkedRewritesURIEvenWhenNameFetchFails(t *testing.T) {
 	assertEqual(t, "contactLinked name-fetch-fail: name should be unchanged", originalName, tagAfter.Name)
 }
 
-// ── Test 20: entityMerged rewrites URI even when name fetch fails ─────────────
+// ── Test 19: itemMerged rewrites URI even when name fetch fails ───────────────
 
-func TestEntityMergedRewritesURIEvenWhenNameFetchFails(t *testing.T) {
+func TestItemMergedRewritesURIEvenWhenNameFetchFails(t *testing.T) {
 	clearData()
 	orig := entityNameFetcher
 	entityNameFetcher = func(uri string) (string, error) {
@@ -497,23 +474,23 @@ func TestEntityMergedRewritesURIEvenWhenNameFetchFails(t *testing.T) {
 	}
 	t.Cleanup(func() { entityNameFetcher = orig })
 
-	trackURL := createTrackWithURITag(t, "wh-em-name-fail-1", sourceEntityURI)
+	trackURL := createTrackWithURITag(t, "wh-im-name-fail-1", sourceEntityURI)
 	originalTags := getTagsForTrack(t, trackURL)
 	originalName := originalTags["language"][0].Name
 
 	status := postLoganneEventWithBody(t, fmt.Sprintf(
-		`{"type": "entityMerged", "sourceUri": %q, "targetUri": %q}`,
+		`{"type": "itemMerged", "sourceUri": %q, "targetUri": %q}`,
 		sourceEntityURI, targetEntityURI,
 	))
-	assertEqual(t, "entityMerged name-fetch-fail: expected 204", 204, status)
+	assertEqual(t, "itemMerged name-fetch-fail: expected 204", 204, status)
 
 	tagsAfter := getTagsForTrack(t, trackURL)
 	if len(tagsAfter["language"]) == 0 {
-		t.Fatal("language tag disappeared after entityMerged with name-fetch failure")
+		t.Fatal("language tag disappeared after itemMerged with name-fetch failure")
 	}
 	tagAfter := tagsAfter["language"][0]
 	// URI must be rewritten even though name fetch failed
-	assertEqual(t, "entityMerged name-fetch-fail: URI must be rewritten", targetEntityURI, tagAfter.URI)
+	assertEqual(t, "itemMerged name-fetch-fail: URI must be rewritten", targetEntityURI, tagAfter.URI)
 	// Name should be unchanged (preserved from before the event)
-	assertEqual(t, "entityMerged name-fetch-fail: name should be unchanged", originalName, tagAfter.Name)
+	assertEqual(t, "itemMerged name-fetch-fail: name should be unchanged", originalName, tagAfter.Name)
 }
