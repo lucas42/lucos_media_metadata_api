@@ -50,7 +50,7 @@ func resolvePredicateURI(predicateURI string, appOrigin string) string {
 func mapPredicate(predicateID string, value string, uri *string, mediaMetadataManagerOrigin string, appOrigin string) (string, []rdf2go.Term) {
 
 	// Dispatch on PredicateConfig for all explicitly registered predicates
-	// (Literal, URIObject, SearchURL, and explicitly-omitted ones like lastSuccessfulPlay).
+	// (Literal, URIObject, SearchURL, MBIDPrefix, and explicitly-omitted ones like lastSuccessfulPlay).
 	if rdfConfig, ok := predicateconfig.Get(predicateID); ok {
 		switch rdfConfig.ValueShape {
 		case predicateconfig.ValueShapeLiteral:
@@ -76,12 +76,8 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 		}
 	}
 
-	switch predicateID {
-
-	default:
-		return appOrigin + "/ontology#" + predicateID,
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
-	}
+	return appOrigin + "/ontology#" + predicateID,
+		[]rdf2go.Term{rdf2go.NewLiteral(value)}
 }
 
 
