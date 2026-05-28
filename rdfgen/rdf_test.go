@@ -316,22 +316,19 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 	}
 }
 
-// TestMapPredicateSearchURLPredicates verifies that all 6 SearchURL predicates are routed
-// via the registry (ValueShapeSearchURL) and produce search-URL IRI objects.
-// This covers both the predicates newly added to the registry in #255 and the existing
-// multi-value ones (composer/producer) whose entries were extended.
-// Note: offence was migrated to ValueShapeURIObject in #238 — see TestMapPredicateOffenceUri.
+// TestMapPredicateSearchURLPredicates verifies that the remaining 3 SearchURL predicates
+// (artist, composer, producer) produce search-URL IRI objects.
+// Note: offence was migrated to URIObject in #238; provenance and availability were migrated
+// to URIObject (SKOS) in #258; genre was dropped to Omit in #258.
+// TODO(#237): remove this test once composer/producer are also migrated.
 func TestMapPredicateSearchURLPredicates(t *testing.T) {
 	cases := []struct {
 		predicateID  string
 		expectedPred string
 	}{
 		{"artist", "http://xmlns.com/foaf/0.1/maker"},
-		{"genre", "http://purl.org/ontology/mo/genre"},
 		{"composer", "http://purl.org/ontology/mo/composer"},
 		{"producer", "http://purl.org/ontology/mo/producer"},
-		{"provenance", "http://purl.org/dc/terms/source"},
-		{"availability", "http://localhost:3002/ontology#availability"},
 	}
 	for _, tc := range cases {
 		pred, terms := mapPredicate(tc.predicateID, "somevalue", nil, "http://localhost:8020", "http://localhost:3002")
@@ -393,14 +390,62 @@ func TestMapPredicateUnknownOmitted(t *testing.T) {
 }
 
 // TestMapPredicateExplicitOmitProducesNoTriples verifies that predicates registered
-// with ValueShapeOmit (fingerprint_version, dance, singalong) produce no RDF triples,
-// consistent with the unknown-default omit path.
+// with ValueShapeOmit (fingerprint_version, genre) produce no RDF triples.
+// Note: dance and singalong were migrated from Omit to URIObject in #258.
 func TestMapPredicateExplicitOmitProducesNoTriples(t *testing.T) {
-	for _, predicateID := range []string{"fingerprint_version", "dance", "singalong"} {
+	for _, predicateID := range []string{"fingerprint_version", "genre"} {
 		pred, terms := mapPredicate(predicateID, "somevalue", nil, "http://localhost:8020", "http://localhost:3002")
 		if pred != "" || len(terms) != 0 {
 			t.Errorf("predicate %q: expected Omit to produce no triples, got pred=%q terms=%v", predicateID, pred, terms)
 		}
+	}
+}
+
+// TestMapPredicateSKOSPredicatesWithUri verifies that provenance, availability, singalong, and dance
+// emit correct IRI triples when a concept URI is provided (ValueShapeURIObject).
+func TestMapPredicateSKOSPredicatesWithUri(t *testing.T) {
+	cases := []struct {
+		predicateID  string
+		uri          string
+		expectedPred string
+	}{
+		{"provenance", "http://localhost:3002/vocab/provenance/bandcamp", "http://purl.org/dc/terms/source"},
+		{"availability", "http://localhost:3002/vocab/availability/ubiquitous", "http://localhost:3002/ontology#availability"},
+		{"singalong", "http://localhost:3002/vocab/singalong/no-chance", "http://localhost:3002/ontology#singalong"},
+		{"dance", "http://localhost:3002/vocab/dance/lindy-hop", "http://localhost:3002/ontology#dance"},
+	}
+	for _, tc := range cases {
+		uri := tc.uri
+		pred, terms := mapPredicate(tc.predicateID, "some label", &uri, "http://localhost:8020", "http://localhost:3002")
+		if pred != tc.expectedPred {
+			t.Errorf("predicate %q: expected predicate URI %q, got %q", tc.predicateID, tc.expectedPred, pred)
+		}
+		if len(terms) != 1 {
+			t.Errorf("predicate %q: expected 1 term, got %d", tc.predicateID, len(terms))
+			continue
+		}
+		if !strings.Contains(terms[0].String(), tc.uri) {
+			t.Errorf("predicate %q: expected term to contain URI %q, got %q", tc.predicateID, tc.uri, terms[0].String())
+		}
+	}
+}
+
+// TestMapPredicateSKOSPredicatesSkipWhenNoUri verifies that SKOS predicates without a URI
+// are silently skipped (matching the general URIObject behaviour).
+func TestMapPredicateSKOSPredicatesSkipWhenNoUri(t *testing.T) {
+	for _, predicateID := range []string{"provenance", "availability", "singalong", "dance"} {
+		pred, terms := mapPredicate(predicateID, "some label", nil, "http://localhost:8020", "http://localhost:3002")
+		if pred != "" || len(terms) != 0 {
+			t.Errorf("predicate %q with nil uri: expected skip, got pred=%q terms=%v", predicateID, pred, terms)
+		}
+	}
+}
+
+// TestGenreOmitProducesNoTriples verifies that genre is now Omit (not SearchURL).
+func TestGenreOmitProducesNoTriples(t *testing.T) {
+	pred, terms := mapPredicate("genre", "rock", nil, "http://localhost:8020", "http://localhost:3002")
+	if pred != "" || len(terms) != 0 {
+		t.Errorf("genre: expected Omit to produce no triples, got pred=%q terms=%v", pred, terms)
 	}
 }
 
@@ -733,6 +778,145 @@ func TestOntologyToRdfIncludesTrackLanguage(t *testing.T) {
 	}
 	if !strings.Contains(output, "eolas.l42.eu/metadata/language/") {
 		t.Error("expected range URI 'eolas.l42.eu/metadata/language/' in ontology output")
+	}
+}
+
+// TestOntologyToRdfIncludesSKOSSchemes verifies that OntologyToRdf includes the SKOS
+// concept schemes for provenance, availability, singalong, and dance.
+func TestOntologyToRdfIncludesSKOSSchemes(t *testing.T) {
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
+	t.Cleanup(func() { os.Unsetenv("APP_ORIGIN") })
+
+	g, err := OntologyToRdf()
+	if err != nil {
+		t.Fatalf("OntologyToRdf failed: %v", err)
+	}
+
+	var buf strings.Builder
+	if err := g.Serialize(&buf, "text/turtle"); err != nil {
+		t.Fatalf("serialize failed: %v", err)
+	}
+	output := buf.String()
+
+	// Concept scheme declarations
+	for _, scheme := range []string{"provenanceScheme", "availabilityScheme", "singalongScheme", "danceScheme"} {
+		if !strings.Contains(output, scheme) {
+			t.Errorf("expected %q in ontology output", scheme)
+		}
+	}
+
+	// Ordinal level properties
+	if !strings.Contains(output, "availabilityLevel") {
+		t.Error("expected availabilityLevel property in ontology output")
+	}
+	if !strings.Contains(output, "singalongLevel") {
+		t.Error("expected singalongLevel property in ontology output")
+	}
+
+	// Sample concept URIs from each predicate
+	samples := []string{
+		"vocab/provenance/bandcamp",
+		"vocab/availability/ubiquitous",
+		"vocab/singalong/no-chance",
+		"vocab/dance/lindy-hop",
+	}
+	for _, sample := range samples {
+		if !strings.Contains(output, sample) {
+			t.Errorf("expected %q in ontology output", sample)
+		}
+	}
+
+	// Dance eolas migration path comment
+	if !strings.Contains(output, "eolas:Dance") {
+		t.Error("expected dance eolas migration path documentation in ontology output")
+	}
+}
+
+// TestOntologyToRdfSingalongAndDanceProperties verifies the new singalong and dance
+// property declarations appear in the ontology output.
+func TestOntologyToRdfSingalongAndDanceProperties(t *testing.T) {
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
+	t.Cleanup(func() { os.Unsetenv("APP_ORIGIN") })
+
+	g, err := OntologyToRdf()
+	if err != nil {
+		t.Fatalf("OntologyToRdf failed: %v", err)
+	}
+
+	var buf strings.Builder
+	if err := g.Serialize(&buf, "text/turtle"); err != nil {
+		t.Fatalf("serialize failed: %v", err)
+	}
+	output := buf.String()
+
+	if !strings.Contains(output, "ontology#singalong") {
+		t.Error("expected singalong property definition in ontology output")
+	}
+	if !strings.Contains(output, "ontology#dance") {
+		t.Error("expected dance property definition in ontology output")
+	}
+}
+
+// TestExportRDFSKOSConceptEmission verifies that track tags with SKOS concept URIs are
+// correctly emitted as IRI triples in the RDF export.
+func TestExportRDFSKOSConceptEmission(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := tmpDir + "/test.db"
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 180)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Insert post-migration SKOS tags: value = prefLabel, uri = concept URI
+	_, err = db.Exec(`
+	INSERT INTO tag (trackid, predicateid, value, uri) VALUES
+	(1, 'provenance', 'Bandcamp', 'http://localhost:3002/vocab/provenance/bandcamp'),
+	(1, 'availability', 'Ubiquitous', 'http://localhost:3002/vocab/availability/ubiquitous'),
+	(1, 'singalong', 'No chance', 'http://localhost:3002/vocab/singalong/no-chance'),
+	(1, 'dance', 'Lindy Hop', 'http://localhost:3002/vocab/dance/lindy-hop')
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpFile := tmpDir + "/output.ttl"
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
+	if err := ExportRDF(dbPath, tmpFile); err != nil {
+		t.Fatalf("ExportRDF failed: %v", err)
+	}
+
+	content, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("could not read RDF output file: %v", err)
+	}
+	output := string(content)
+
+	// Each concept URI should appear as an IRI object in the output
+	expectedURIs := []string{
+		"vocab/provenance/bandcamp",
+		"vocab/availability/ubiquitous",
+		"vocab/singalong/no-chance",
+		"vocab/dance/lindy-hop",
+	}
+	for _, uri := range expectedURIs {
+		if !strings.Contains(output, uri) {
+			t.Errorf("expected concept URI %q in RDF output", uri)
+		}
 	}
 }
 

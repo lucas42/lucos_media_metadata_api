@@ -54,6 +54,9 @@ type NameURIResolver interface {
 const (
 	OriginEolas                = "eolas"
 	OriginMediaMetadataManager = "media_metadata_manager"
+	// OriginMediaMetadataAPI is used for predicates whose concept URIs are served by this service
+	// (e.g. SKOS concept schemes at {APP_ORIGIN}/vocab/{predicate}/{slug}).
+	OriginMediaMetadataAPI = "media_metadata_api"
 )
 
 // Config holds the full configuration for a predicate, covering both its RDF shape
@@ -132,6 +135,7 @@ func (c Config) ValidateURIOrigin(uri string) string {
 	originValues := map[string]string{
 		OriginEolas:                os.Getenv("EOLAS_ORIGIN"),
 		OriginMediaMetadataManager: os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN"),
+		OriginMediaMetadataAPI:     os.Getenv("APP_ORIGIN"),
 	}
 	validOrigins := make([]string, 0, len(c.AllowedOrigins))
 	for _, key := range c.AllowedOrigins {
