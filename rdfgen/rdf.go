@@ -49,10 +49,8 @@ func resolvePredicateURI(predicateURI string, appOrigin string) string {
 // mediaMetadataManagerOrigin is used for resource URIs (tracks, albums, search).
 func mapPredicate(predicateID string, value string, uri *string, mediaMetadataManagerOrigin string, appOrigin string) (string, []rdf2go.Term) {
 
-	// Dispatch on PredicateConfig for all explicitly mapped predicates (Literal, URIObject,
-	// and explicitly-omitted ones like lastSuccessfulPlay).
-	// Predicates with ValueShapeOmit AND a non-empty PredicateURI are in the registry for
-	// API reasons (e.g. MultiValue) but their RDF is handled by the switch below.
+	// Dispatch on PredicateConfig for all explicitly registered predicates
+	// (Literal, URIObject, SearchURL, and explicitly-omitted ones like lastSuccessfulPlay).
 	if rdfConfig, ok := predicateconfig.Get(predicateID); ok {
 		switch rdfConfig.ValueShape {
 		case predicateconfig.ValueShapeLiteral:
