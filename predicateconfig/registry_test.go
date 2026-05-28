@@ -69,8 +69,8 @@ func TestMultiValueCount(t *testing.T) {
 // TestURIObjectCount checks the expected number of URIObject predicates.
 func TestURIObjectCount(t *testing.T) {
 	count := len(URIObjectPredicates())
-	if count != 6 {
-		t.Errorf("expected 6 URIObject predicates, got %d", count)
+	if count != 7 {
+		t.Errorf("expected 7 URIObject predicates, got %d", count)
 	}
 }
 
@@ -83,8 +83,8 @@ func TestSearchURLPredicateCount(t *testing.T) {
 			count++
 		}
 	}
-	if count != 7 {
-		t.Errorf("expected 7 SearchURL predicates, got %d", count)
+	if count != 6 {
+		t.Errorf("expected 6 SearchURL predicates, got %d", count)
 	}
 }
 
