@@ -63,6 +63,8 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 			return predicateURI, []rdf2go.Term{rdf2go.NewResource(*uri)}
 		case predicateconfig.ValueShapeOmit:
 			return "", nil
+		default:
+			return "", nil // unknown shape — omit rather than emitting a potentially wrong triple
 		}
 	}
 
