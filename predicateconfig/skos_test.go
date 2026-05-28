@@ -144,16 +144,16 @@ func TestResolveSlugToConceptURIUnknownReturnsError(t *testing.T) {
 	}
 }
 
-// TestResolveConceptURIToSlugRoundTrip verifies that URI → prefLabel → URI round-trip works.
-func TestResolveConceptURIToSlugRoundTrip(t *testing.T) {
+// TestResolveConceptURIToNameRoundTrip verifies that URI → prefLabel → URI round-trip works.
+func TestResolveConceptURIToNameRoundTrip(t *testing.T) {
 	appOrigin := "https://media.l42.eu"
 	for _, predicate := range []string{"provenance", "availability", "singalong", "dance"} {
 		for _, c := range GetSKOSConcepts(predicate) {
 			uri := ConceptURI(appOrigin, predicate, c.Slug)
 			// URI → name
-			name, err := ResolveConceptURIToSlug(predicate, appOrigin, uri)
+			name, err := ResolveConceptURIToName(predicate, appOrigin, uri)
 			if err != nil {
-				t.Errorf("predicate %q slug %q: ResolveConceptURIToSlug error: %v", predicate, c.Slug, err)
+				t.Errorf("predicate %q slug %q: ResolveConceptURIToName error: %v", predicate, c.Slug, err)
 				continue
 			}
 			if name != c.PrefLabel {

@@ -48,7 +48,7 @@ var provenanceConcepts = []SKOSConcept{
 }
 
 // availabilityConcepts defines all concepts in the availability SKOS scheme.
-// The Level field is the ordinal value (0 = easiest to replace, 4 = hardest).
+// The Level field is the ordinal value (0 = hardest to replace / most unique, 4 = easiest to replace / ubiquitous).
 // Legacy DB rows store the integer level as a string (e.g. "0", "1", "2"...).
 // Slugs are derived from the prefLabels using kebab-case ASCII.
 var availabilityConcepts = []SKOSConcept{
@@ -160,9 +160,9 @@ func ResolveSlugToConceptURI(predicate, appOrigin, nameOrSlug string) (string, e
 	return "", fmt.Errorf("no concept found for predicate %q with name or slug %q", predicate, nameOrSlug)
 }
 
-// ResolveConceptURIToSlug resolves a concept URI back to its prefLabel (the human-readable name
+// ResolveConceptURIToName resolves a concept URI back to its prefLabel (the human-readable name
 // stored in the tag's value column). Returns an error if the URI doesn't match any known concept.
-func ResolveConceptURIToSlug(predicate, appOrigin, uri string) (string, error) {
+func ResolveConceptURIToName(predicate, appOrigin, uri string) (string, error) {
 	concepts, ok := conceptsByPredicate[predicate]
 	if !ok {
 		return "", fmt.Errorf("predicate %q is not a SKOS concept scheme predicate", predicate)
@@ -195,6 +195,6 @@ func SKOSResolveNameToURI(predicate string) func(NameURIResolver, string) (strin
 func SKOSResolveURIToName(predicate string) func(NameURIResolver, string) (string, error) {
 	return func(_ NameURIResolver, uri string) (string, error) {
 		appOrigin := os.Getenv("APP_ORIGIN")
-		return ResolveConceptURIToSlug(predicate, appOrigin, uri)
+		return ResolveConceptURIToName(predicate, appOrigin, uri)
 	}
 }
