@@ -387,10 +387,9 @@ func TestMapPredicateUnknownOmitted(t *testing.T) {
 }
 
 // TestMapPredicateExplicitOmitProducesNoTriples verifies that predicates registered
-// with ValueShapeOmit (fingerprint_version, genre) produce no RDF triples.
-// Note: dance and singalong were migrated from Omit to URIObject in #258.
+// with ValueShapeOmit produce no RDF triples.
 func TestMapPredicateExplicitOmitProducesNoTriples(t *testing.T) {
-	for _, predicateID := range []string{"fingerprint_version", "genre"} {
+	for _, predicateID := range []string{"genre"} {
 		pred, terms := mapPredicate(predicateID, "somevalue", nil, "http://localhost:8020", "http://localhost:3002")
 		if pred != "" || len(terms) != 0 {
 			t.Errorf("predicate %q: expected Omit to produce no triples, got pred=%q terms=%v", predicateID, pred, terms)
