@@ -31,6 +31,13 @@ const (
 	//
 	// Deprecated: SearchURL is a transitional shape.
 	ValueShapeSearchURL
+	// ValueShapeMBIDPrefix — the tag's value column is appended to Config.URIPrefix
+	// to produce a full IRI resource (e.g. "https://musicbrainz.org/artist/" + value).
+	// Used for MusicBrainz ID predicates where the value is a bare UUID and the
+	// full URI is mechanically derivable. See per-predicate migration notes in #252
+	// for the possible long-term trajectory (D2: materialise the URI into tag.uri
+	// at write time and fold into ValueShapeURIObject).
+	ValueShapeMBIDPrefix
 )
 
 // NameURIResolver resolves names to URIs and vice versa for URI-object predicates
@@ -59,6 +66,11 @@ const (
 type Config struct {
 	// PredicateURI is the full RDF predicate IRI, or a "/" prefix relative to APP_ORIGIN.
 	PredicateURI string
+
+	// URIPrefix, when non-empty, is prepended to the tag's value column to produce the
+	// full object IRI. Only used by ValueShapeMBIDPrefix predicates.
+	// Example: URIPrefix="https://musicbrainz.org/artist/" + value="abc123" → IRI.
+	URIPrefix string
 
 	// ValueShape indicates the RDF shape of this predicate's value.
 	// ValueShapeURIObject predicates require a non-empty uri field;

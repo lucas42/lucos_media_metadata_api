@@ -3,6 +3,23 @@ package predicateconfig
 // registry holds the configuration for all known predicates.
 // Predicates not listed here use zero-value Config (single-value, Omit shape, default behaviour).
 var registry = map[string]Config{
+	// MBIDPrefix predicates — MusicBrainz IDs; full IRI = URIPrefix + value.
+	"mbid_artist": {
+		ValueShape:   ValueShapeMBIDPrefix,
+		PredicateURI: "http://purl.org/dc/terms/creator",
+		URIPrefix:    "https://musicbrainz.org/artist/",
+	},
+	"mbid_recording": {
+		ValueShape:   ValueShapeMBIDPrefix,
+		PredicateURI: "http://purl.org/dc/terms/identifier",
+		URIPrefix:    "https://musicbrainz.org/recording/",
+	},
+	"mbid_release": {
+		ValueShape:   ValueShapeMBIDPrefix,
+		PredicateURI: "http://purl.org/dc/terms/isPartOf",
+		URIPrefix:    "https://musicbrainz.org/release/",
+	},
+
 	// SearchURL predicates — transitional; see ValueShapeSearchURL for context.
 	"artist": {
 		ValueShape:   ValueShapeSearchURL,

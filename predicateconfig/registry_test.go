@@ -17,9 +17,17 @@ func TestRegistryValidity(t *testing.T) {
 		if c.ValueShape != ValueShapeURIObject && c.AllowedOrigins != nil {
 			t.Errorf("predicate %q: non-URIObject predicate must not have AllowedOrigins set", id)
 		}
-		// Literal, URIObject and SearchURL predicates must have a PredicateURI.
-		if (c.ValueShape == ValueShapeLiteral || c.ValueShape == ValueShapeURIObject || c.ValueShape == ValueShapeSearchURL) && c.PredicateURI == "" {
-			t.Errorf("predicate %q: Literal/URIObject/SearchURL predicate must have a PredicateURI", id)
+		// Literal, URIObject, SearchURL and MBIDPrefix predicates must have a PredicateURI.
+		if (c.ValueShape == ValueShapeLiteral || c.ValueShape == ValueShapeURIObject || c.ValueShape == ValueShapeSearchURL || c.ValueShape == ValueShapeMBIDPrefix) && c.PredicateURI == "" {
+			t.Errorf("predicate %q: Literal/URIObject/SearchURL/MBIDPrefix predicate must have a PredicateURI", id)
+		}
+		// MBIDPrefix predicates must have a URIPrefix.
+		if c.ValueShape == ValueShapeMBIDPrefix && c.URIPrefix == "" {
+			t.Errorf("predicate %q: MBIDPrefix predicate must have a URIPrefix", id)
+		}
+		// Only MBIDPrefix predicates may have a URIPrefix.
+		if c.ValueShape != ValueShapeMBIDPrefix && c.URIPrefix != "" {
+			t.Errorf("predicate %q: non-MBIDPrefix predicate must not have a URIPrefix", id)
 		}
 		// ValueShapeOmit predicates must not have a PredicateURI — they are explicitly
 		// suppressed from RDF output (e.g. lastSuccessfulPlay, lastError, lastSkip).
@@ -77,6 +85,19 @@ func TestSearchURLPredicateCount(t *testing.T) {
 	}
 	if count != 7 {
 		t.Errorf("expected 7 SearchURL predicates, got %d", count)
+	}
+}
+
+// TestMBIDPrefixPredicateCount checks the expected number of MBIDPrefix predicates.
+func TestMBIDPrefixPredicateCount(t *testing.T) {
+	count := 0
+	for _, c := range registry {
+		if c.ValueShape == ValueShapeMBIDPrefix {
+			count++
+		}
+	}
+	if count != 3 {
+		t.Errorf("expected 3 MBIDPrefix predicates, got %d", count)
 	}
 }
 

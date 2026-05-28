@@ -65,6 +65,9 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 		case predicateconfig.ValueShapeSearchURL:
 			predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
 			return predicateURI, []rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
+		case predicateconfig.ValueShapeMBIDPrefix:
+			predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
+			return predicateURI, []rdf2go.Term{rdf2go.NewResource(rdfConfig.URIPrefix + value)}
 		case predicateconfig.ValueShapeOmit:
 			// Explicitly suppressed from RDF output (e.g. lastSuccessfulPlay).
 			return "", nil
@@ -74,18 +77,6 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 	}
 
 	switch predicateID {
-
-	case "mbid_artist":
-		return "http://purl.org/dc/terms/creator",
-			[]rdf2go.Term{rdf2go.NewResource("https://musicbrainz.org/artist/" + value)}
-
-	case "mbid_recording":
-		return "http://purl.org/dc/terms/identifier",
-			[]rdf2go.Term{rdf2go.NewResource("https://musicbrainz.org/recording/" + value)}
-
-	case "mbid_release":
-		return "http://purl.org/dc/terms/isPartOf",
-			[]rdf2go.Term{rdf2go.NewResource("https://musicbrainz.org/release/" + value)}
 
 	default:
 		return appOrigin + "/ontology#" + predicateID,
