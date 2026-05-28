@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+
+	"lucos_media_metadata_api/predicateconfig"
 )
 
 // reconcileTagNames walks every distinct non-empty URI stored in tags with
@@ -46,7 +48,7 @@ func (store Datastore) reconcileTagNamesWithFetchers(
 	slog.Info("reconcileTagNames: starting")
 
 	// Collect all distinct non-empty URIs that appear in RequiresURI predicate tags.
-	predicates := GetRequiresURIPredicates()
+	predicates := predicateconfig.URIObjectPredicates()
 	if len(predicates) == 0 {
 		slog.Info("reconcileTagNames: no RequiresURI predicates configured, nothing to do")
 		return nil

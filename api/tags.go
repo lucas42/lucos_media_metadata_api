@@ -4,6 +4,8 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+
+	"lucos_media_metadata_api/predicateconfig"
 )
 
 type Tag struct {
@@ -106,7 +108,7 @@ func (store Datastore) updateTag(trackid int, predicate string, value string) (e
 
 	// Split comma-separated values for multi-value predicates.
 	values := []string{value}
-	if IsMultiValue(predicate) && strings.Contains(value, ",") {
+	if predicateconfig.IsMultiValue(predicate) && strings.Contains(value, ",") {
 		values = splitCSV(value)
 	}
 

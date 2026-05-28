@@ -7,6 +7,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"log/slog"
 	"strings"
+
+	"lucos_media_metadata_api/predicateconfig"
 )
 
 /**
@@ -195,7 +197,7 @@ func (store Datastore) migrateTagTableDropUnique() {
 	tx.MustExec(`ALTER TABLE tag_new RENAME TO tag;`)
 
 	// Split comma-separated values for multi-value predicates
-	for predicate, config := range predicateRegistry {
+	for predicate, config := range predicateconfig.All() {
 		if !config.MultiValue {
 			continue
 		}

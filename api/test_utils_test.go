@@ -79,11 +79,13 @@ func clearData() {
 }
 func TestMain(m *testing.M) {
 	log.SetOutput(ioutil.Discard)
-	// Set eolasOrigin so that URI origin validation works in tests.
-	// validateURIOrigin resolves the originEolas constant to this value at
-	// call time. mediaMetadataManagerOrigin is left as "" so album URIs like
-	// "/albums/1" pass validation (empty value → origin filtered out → skip).
+	// Set eolasOrigin (package var) for eolasLanguageURI, fetchEolasNames, etc.
+	// Also set EOLAS_ORIGIN (env var) for predicateconfig.ValidateURIOrigin, which
+	// reads os.Getenv at call time rather than the package-level var.
+	// MEDIA_METADATA_MANAGER_ORIGIN is left unset so album URIs like "/albums/1"
+	// pass validation (empty value → origin filtered out → validation skipped).
 	eolasOrigin = "https://eolas.l42.eu"
+	os.Setenv("EOLAS_ORIGIN", "https://eolas.l42.eu")
 	clearData()
 	result := m.Run()
 	os.Remove("testrouting.sqlite")

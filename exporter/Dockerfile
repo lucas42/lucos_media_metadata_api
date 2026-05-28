@@ -10,6 +10,7 @@ COPY go.* .
 RUN go mod download
 
 # Copy source
+COPY predicateconfig/ ./predicateconfig/
 COPY rdfgen/ ./rdfgen/
 COPY exporter/main.go ./main.go
 ENV CGO_ENABLED=1
