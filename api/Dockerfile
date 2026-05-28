@@ -7,6 +7,7 @@ WORKDIR /go/src/lucos_media_metadata_api
 COPY go.* .
 RUN go mod download
 
+COPY predicateconfig/ ./predicateconfig/
 COPY rdfgen/ ./rdfgen/
 COPY api .
 COPY scripts/ ./scripts/
