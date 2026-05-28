@@ -126,67 +126,6 @@ var registry = map[string]Config{
 		PredicateURI: "http://purl.org/dc/terms/date",
 	},
 
-	// These predicates were previously emitted via the rdfgen default fallback
-	// (${APP_ORIGIN}/ontology#predicateID as rdf:Literal). They are explicitly
-	// registered here to preserve that behaviour after the fallback is removed.
-	// Each may warrant a more specific predicate URI or ValueShape in future.
-	"badmetadata": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#badmetadata",
-	},
-	"breaksplayer": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#breaksplayer",
-	},
-	"dance": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#dance",
-	},
-	"event": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#event",
-	},
-	"fingerprint_version": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#fingerprint_version",
-	},
-	"format": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#format",
-	},
-	"karaoke": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#karaoke",
-	},
-	"keywords": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#keywords",
-	},
-	"lang": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#lang",
-	},
-	"location": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#location",
-	},
-	"relax": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#relax",
-	},
-	"singalong": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#singalong",
-	},
-	"test": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#test",
-	},
-	"weather": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#weather",
-	},
-
 	// Omit predicates — behavioural only, not emitted in RDF output.
 	"lastSuccessfulPlay": {
 		ValueShape:           ValueShapeOmit,
@@ -207,6 +146,11 @@ var registry = map[string]Config{
 		ValueShape:    ValueShapeOmit,
 		LoganneSilent: true,
 	},
+	// These predicates have in-use data but are intentionally kept out of public RDF
+	// output pending long-term direction decisions (see #264, #265, #266).
+	"fingerprint_version": {ValueShape: ValueShapeOmit},
+	"dance":               {ValueShape: ValueShapeOmit},
+	"singalong":           {ValueShape: ValueShapeOmit},
 }
 
 // Get returns the Config for predicateID and whether it was found.

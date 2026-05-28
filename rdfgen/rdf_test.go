@@ -371,6 +371,18 @@ func TestMapPredicateUnknownOmitted(t *testing.T) {
 	}
 }
 
+// TestMapPredicateExplicitOmitProducesNoTriples verifies that predicates registered
+// with ValueShapeOmit (fingerprint_version, dance, singalong) produce no RDF triples,
+// consistent with the unknown-default omit path.
+func TestMapPredicateExplicitOmitProducesNoTriples(t *testing.T) {
+	for _, predicateID := range []string{"fingerprint_version", "dance", "singalong"} {
+		pred, terms := mapPredicate(predicateID, "somevalue", nil, "http://localhost:8020", "http://localhost:3002")
+		if pred != "" || len(terms) != 0 {
+			t.Errorf("predicate %q: expected Omit to produce no triples, got pred=%q terms=%v", predicateID, pred, terms)
+		}
+	}
+}
+
 // TestMapPredicateAlbumUsesOnAlbum verifies that album tags now map to onAlbum, not dc:isPartOf.
 func TestMapPredicateAlbumUsesOnAlbum(t *testing.T) {
 	uri := "http://localhost:8020/albums/1"
