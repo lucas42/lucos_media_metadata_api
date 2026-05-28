@@ -140,6 +140,14 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 	if database.needsEolasDataMigration() {
 		database.migrateEolasData()
 	}
+
+	// Drop fingerprint_version tags — no readers, no writers, all 10,802 rows are a
+	// frozen "2.0" snapshot from a one-off migration. The predicate no longer exists in
+	// the registry. Idempotent: rows already deleted produce zero rows affected.
+	if _, err := database.DB.Exec(`DELETE FROM tag WHERE predicateid = 'fingerprint_version'`); err != nil {
+		slog.Warn("Failed to drop fingerprint_version tags", slog.Any("error", err))
+	}
+
 	return
 }
 

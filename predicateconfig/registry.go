@@ -155,9 +155,6 @@ var registry = map[string]Config{
 		ValueShape:    ValueShapeOmit,
 		LoganneSilent: true,
 	},
-	// fingerprint_version: pending DROP decision (see #264). Dormant data.
-	"fingerprint_version": {ValueShape: ValueShapeOmit},
-
 	"singalong": {
 		ValueShape:     ValueShapeURIObject,
 		PredicateURI:   "/ontology#singalong",
