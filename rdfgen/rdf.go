@@ -49,10 +49,8 @@ func resolvePredicateURI(predicateURI string, appOrigin string) string {
 // mediaMetadataManagerOrigin is used for resource URIs (tracks, albums, search).
 func mapPredicate(predicateID string, value string, uri *string, mediaMetadataManagerOrigin string, appOrigin string) (string, []rdf2go.Term) {
 
-	// Dispatch on PredicateConfig for all explicitly mapped predicates (Literal, URIObject,
-	// and explicitly-omitted ones like lastSuccessfulPlay).
-	// Predicates with ValueShapeOmit AND a non-empty PredicateURI are in the registry for
-	// API reasons (e.g. MultiValue) but their RDF is handled by the switch below.
+	// Dispatch on PredicateConfig for all explicitly registered predicates
+	// (Literal, URIObject, SearchURL, and explicitly-omitted ones like lastSuccessfulPlay).
 	if rdfConfig, ok := predicateconfig.Get(predicateID); ok {
 		switch rdfConfig.ValueShape {
 		case predicateconfig.ValueShapeLiteral:
@@ -64,40 +62,18 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 				return "", nil // skip tags with no URI — value alone is not a valid IRI
 			}
 			return predicateURI, []rdf2go.Term{rdf2go.NewResource(*uri)}
+		case predicateconfig.ValueShapeSearchURL:
+			predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
+			return predicateURI, []rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 		case predicateconfig.ValueShapeOmit:
-			if rdfConfig.PredicateURI == "" {
-				// Explicitly suppressed from RDF output (e.g. lastSuccessfulPlay).
-				return "", nil
-			}
-			// PredicateURI is set but no explicit RDF shape: fall through to outer switch.
+			// Explicitly suppressed from RDF output (e.g. lastSuccessfulPlay).
+			return "", nil
 		default:
 			return "", nil // unknown shape — omit rather than emitting a potentially wrong triple
 		}
 	}
 
 	switch predicateID {
-
-	case "artist":
-		return "http://xmlns.com/foaf/0.1/maker",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
-
-	case "genre":
-		return "http://purl.org/ontology/mo/genre",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
-
-	case "composer":
-		// Technically the music ontology says a composer is of a composition, rather than the track.
-		// But trying to model all that is a faff.  Here we misuse the composer predicate for simplicity.
-		return "http://purl.org/ontology/mo/composer",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
-
-	case "producer":
-		return "http://purl.org/ontology/mo/producer",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
-
-	case "offence":
-		return appOrigin + "/ontology#trigger",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	case "mbid_artist":
 		return "http://purl.org/dc/terms/creator",
@@ -110,14 +86,6 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 	case "mbid_release":
 		return "http://purl.org/dc/terms/isPartOf",
 			[]rdf2go.Term{rdf2go.NewResource("https://musicbrainz.org/release/" + value)}
-
-	case "provenance":
-		return "http://purl.org/dc/terms/source",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
-
-	case "availability":
-		return appOrigin + "/ontology#availability",
-			[]rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 
 	default:
 		return appOrigin + "/ontology#" + predicateID,

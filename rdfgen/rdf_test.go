@@ -295,6 +295,43 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 	}
 }
 
+// TestMapPredicateSearchURLPredicates verifies that all 7 SearchURL predicates are routed
+// via the registry (ValueShapeSearchURL) and produce search-URL IRI objects.
+// This covers both the predicates newly added to the registry in #255 and the existing
+// multi-value ones (composer/producer/offence) whose entries were extended.
+func TestMapPredicateSearchURLPredicates(t *testing.T) {
+	cases := []struct {
+		predicateID  string
+		expectedPred string
+	}{
+		{"artist", "http://xmlns.com/foaf/0.1/maker"},
+		{"genre", "http://purl.org/ontology/mo/genre"},
+		{"composer", "http://purl.org/ontology/mo/composer"},
+		{"producer", "http://purl.org/ontology/mo/producer"},
+		{"offence", "http://localhost:3002/ontology#trigger"},
+		{"provenance", "http://purl.org/dc/terms/source"},
+		{"availability", "http://localhost:3002/ontology#availability"},
+	}
+	for _, tc := range cases {
+		pred, terms := mapPredicate(tc.predicateID, "somevalue", nil, "http://localhost:8020", "http://localhost:3002")
+		if pred != tc.expectedPred {
+			t.Errorf("predicate %q: expected URI %q, got %q", tc.predicateID, tc.expectedPred, pred)
+		}
+		if len(terms) != 1 {
+			t.Errorf("predicate %q: expected 1 term, got %d", tc.predicateID, len(terms))
+			continue
+		}
+		// Each term should be a search URL, not a literal.
+		termStr := terms[0].String()
+		if !strings.Contains(termStr, "search?p."+tc.predicateID) {
+			t.Errorf("predicate %q: expected search URL in term, got %q", tc.predicateID, termStr)
+		}
+		if !strings.Contains(termStr, "somevalue") {
+			t.Errorf("predicate %q: expected value in search URL term, got %q", tc.predicateID, termStr)
+		}
+	}
+}
+
 // TestMapPredicateAlbumUsesOnAlbum verifies that album tags now map to onAlbum, not dc:isPartOf.
 func TestMapPredicateAlbumUsesOnAlbum(t *testing.T) {
 	uri := "http://localhost:8020/albums/1"

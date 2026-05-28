@@ -21,6 +21,16 @@ const (
 	// resource. Tags with an empty or nil URI are silently skipped in RDF output.
 	// Write validation rejects tags without a URI for these predicates.
 	ValueShapeURIObject
+	// ValueShapeSearchURL is a transitional shape — synthetic IRIs constructed
+	// from ${MEDIA_METADATA_MANAGER_ORIGIN}/search?p.{predicate}={value}. These
+	// IRIs aren't real resources (they're search queries dressed as URIs) and
+	// can't be merged, sameAs'd, or resolved against any vocabulary. Long-term,
+	// each SearchURL predicate should migrate to ValueShape: URIObject with a
+	// proper URI scheme. See per-predicate migration tickets in the comment
+	// thread of #252.
+	//
+	// Deprecated: SearchURL is a transitional shape.
+	ValueShapeSearchURL
 )
 
 // NameURIResolver resolves names to URIs and vice versa for URI-object predicates

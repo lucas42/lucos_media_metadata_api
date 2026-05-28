@@ -17,13 +17,15 @@ func TestRegistryValidity(t *testing.T) {
 		if c.ValueShape != ValueShapeURIObject && c.AllowedOrigins != nil {
 			t.Errorf("predicate %q: non-URIObject predicate must not have AllowedOrigins set", id)
 		}
-		// Literal and URIObject predicates must have a PredicateURI.
-		if (c.ValueShape == ValueShapeLiteral || c.ValueShape == ValueShapeURIObject) && c.PredicateURI == "" {
-			t.Errorf("predicate %q: Literal/URIObject predicate must have a PredicateURI", id)
+		// Literal, URIObject and SearchURL predicates must have a PredicateURI.
+		if (c.ValueShape == ValueShapeLiteral || c.ValueShape == ValueShapeURIObject || c.ValueShape == ValueShapeSearchURL) && c.PredicateURI == "" {
+			t.Errorf("predicate %q: Literal/URIObject/SearchURL predicate must have a PredicateURI", id)
 		}
-		// ValueShapeOmit predicates may or may not have a PredicateURI:
-		// - PredicateURI=="" → explicitly suppressed from RDF output (e.g. lastSuccessfulPlay)
-		// - PredicateURI!="" → in registry for API reasons (e.g. MultiValue); RDF is handled by rdfgen switch
+		// ValueShapeOmit predicates must not have a PredicateURI — they are explicitly
+		// suppressed from RDF output (e.g. lastSuccessfulPlay, lastError, lastSkip).
+		if c.ValueShape == ValueShapeOmit && c.PredicateURI != "" {
+			t.Errorf("predicate %q: Omit predicate must not have a PredicateURI — use ValueShapeSearchURL for predicates that need one but aren't yet URIObjects", id)
+		}
 		// ResolveNameToURI and ResolveURIToName must be set together or both nil.
 		if (c.ResolveNameToURI == nil) != (c.ResolveURIToName == nil) {
 			t.Errorf("predicate %q: ResolveNameToURI and ResolveURIToName must both be set or both nil", id)
@@ -61,6 +63,20 @@ func TestURIObjectCount(t *testing.T) {
 	count := len(URIObjectPredicates())
 	if count != 6 {
 		t.Errorf("expected 6 URIObject predicates, got %d", count)
+	}
+}
+
+// TestSearchURLPredicateCount checks the expected number of SearchURL predicates.
+// These are transitional; see ValueShapeSearchURL for the long-term migration plan.
+func TestSearchURLPredicateCount(t *testing.T) {
+	count := 0
+	for _, c := range registry {
+		if c.ValueShape == ValueShapeSearchURL {
+			count++
+		}
+	}
+	if count != 7 {
+		t.Errorf("expected 7 SearchURL predicates, got %d", count)
 	}
 }
 

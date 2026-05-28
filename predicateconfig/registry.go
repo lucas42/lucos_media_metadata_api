@@ -3,12 +3,23 @@ package predicateconfig
 // registry holds the configuration for all known predicates.
 // Predicates not listed here use zero-value Config (single-value, Omit shape, default behaviour).
 var registry = map[string]Config{
+	// SearchURL predicates — transitional; see ValueShapeSearchURL for context.
+	"artist": {
+		ValueShape:   ValueShapeSearchURL,
+		PredicateURI: "http://xmlns.com/foaf/0.1/maker",
+	},
+	"genre": {
+		ValueShape:   ValueShapeSearchURL,
+		PredicateURI: "http://purl.org/ontology/mo/genre",
+	},
 	"composer": {
 		MultiValue:   true,
+		ValueShape:   ValueShapeSearchURL,
 		PredicateURI: "http://purl.org/ontology/mo/composer",
 	},
 	"producer": {
 		MultiValue:   true,
+		ValueShape:   ValueShapeSearchURL,
 		PredicateURI: "http://purl.org/ontology/mo/producer",
 	},
 	"language": {
@@ -19,6 +30,7 @@ var registry = map[string]Config{
 	},
 	"offence": {
 		MultiValue:   true,
+		ValueShape:   ValueShapeSearchURL,
 		PredicateURI: "/ontology#trigger",
 	},
 	"about": {
@@ -45,6 +57,15 @@ var registry = map[string]Config{
 		PredicateURI:   "/ontology#soundtrack",
 		AllowedOrigins: []string{OriginEolas},
 	},
+	"provenance": {
+		ValueShape:   ValueShapeSearchURL,
+		PredicateURI: "http://purl.org/dc/terms/source",
+	},
+	"availability": {
+		ValueShape:   ValueShapeSearchURL,
+		PredicateURI: "/ontology#availability",
+	},
+
 	"album": {
 		ValueShape:     ValueShapeURIObject,
 		PredicateURI:   "/ontology#onAlbum",
