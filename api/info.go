@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/jmoiron/sqlx"
+
+	"lucos_media_metadata_api/predicateconfig"
 )
 
 type InfoStruct struct {
@@ -134,7 +136,7 @@ func WeightingCheck(store Datastore) (weightingCheck Check, weightingDrift Metri
 func URIIntegrityCheck(store Datastore) (uriCheck Check, missingCount Metric) {
 	uriCheck = Check{TechDetail: "Tags with URI-dependent predicates all have a URI set"}
 	missingCount = Metric{TechDetail: "Number of tags with a URI-dependent predicate but no URI"}
-	predicates := GetRequiresURIPredicates()
+	predicates := predicateconfig.URIObjectPredicates()
 	if len(predicates) == 0 {
 		uriCheck.OK = true
 		return

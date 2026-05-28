@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+
+	"lucos_media_metadata_api/predicateconfig"
 )
 
 // URIOriginValidationError is returned when a tag URI fails origin validation.
@@ -166,11 +168,11 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 				nonEmpty = append(nonEmpty, v)
 			}
 		}
-		if !IsMultiValue(predicate) && len(nonEmpty) > 1 {
+		if !predicateconfig.IsMultiValue(predicate) && len(nonEmpty) > 1 {
 			err = fmt.Errorf("multiple values for single-value predicate %q not allowed", predicate)
 			return
 		}
-		config := GetPredicateConfig(predicate)
+		config := predicateconfig.GetConfig(predicate)
 		// Resolve name to URI before RequiresURI validation so the resolved
 		// URI satisfies that constraint.
 		if config.ResolveNameToURI != nil {
@@ -191,7 +193,7 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 					err = fmt.Errorf("predicate %q requires a URI", predicate)
 					return
 				}
-				if reason := config.validateURIOrigin(v.URI); reason != "" {
+				if reason := config.ValidateURIOrigin(v.URI); reason != "" {
 					err = &URIOriginValidationError{Predicate: predicate, Reason: reason}
 					return
 				}
@@ -229,7 +231,7 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 
 	// Populate the Name field for URI-only tag values.
 	for i, u := range updates {
-		config := GetPredicateConfig(u.predicate)
+		config := predicateconfig.GetConfig(u.predicate)
 		if config.ResolveURIToName != nil {
 			for j, v := range u.values {
 				if v.Name == "" && v.URI != "" {
@@ -325,7 +327,7 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 			if len(nonEmpty) == 0 {
 				continue
 			}
-			config := GetPredicateConfig(predicate)
+			config := predicateconfig.GetConfig(predicate)
 			// Resolve name to URI before RequiresURI validation. Only fires
 			// here because the predicate is missing (tag will be written).
 			if config.ResolveNameToURI != nil {
@@ -359,7 +361,7 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 						err = fmt.Errorf("predicate %q requires a URI", predicate)
 						return
 					}
-					if reason := config.validateURIOrigin(v.URI); reason != "" {
+					if reason := config.ValidateURIOrigin(v.URI); reason != "" {
 						err = &URIOriginValidationError{Predicate: predicate, Reason: reason}
 						return
 					}
@@ -735,7 +737,7 @@ func queryMultipleTracksV3(store Datastore, r *http.Request) (tracks []Track, to
 			predicateName := key[2:]
 			if strings.HasSuffix(predicateName, ".uri") {
 				predicateName = predicateName[:len(predicateName)-4]
-				if !GetPredicateConfig(predicateName).RequiresURI() {
+				if !predicateconfig.GetConfig(predicateName).RequiresURI() {
 					err = fmt.Errorf("predicate %q does not support URI-based filtering", predicateName)
 					return
 				}

@@ -315,9 +315,25 @@ func (store Datastore) mergeAlbums(targetID int, sourceIDs []int) (album AlbumV3
 	return
 }
 
+// ResolveOrCreateByName satisfies the predicateconfig.NameURIResolver interface.
+// It looks up an album by name (creating it if absent) and returns its URI.
+func (store Datastore) ResolveOrCreateByName(name string) (string, error) {
+	album, err := store.resolveOrCreateAlbumByName(name)
+	if err != nil {
+		return "", err
+	}
+	return album.URI, nil
+}
+
+// ResolveNameFromURI satisfies the predicateconfig.NameURIResolver interface.
+// It extracts the album id from a URI and returns the album's name.
+func (store Datastore) ResolveNameFromURI(uri string) (string, error) {
+	return store.resolveAlbumNameFromURI(uri)
+}
+
 // resolveOrCreateAlbumByName looks up an album by name. If no album with that
-// name exists, one is created. Wired up as the ResolveNameToURI function for
-// the album predicate in predicateRegistry.
+// name exists, one is created. Wired up via ResolveOrCreateByName as the
+// ResolveNameToURI function for the album predicate in the predicateconfig registry.
 func (store Datastore) resolveOrCreateAlbumByName(name string) (album AlbumV3, err error) {
 	type albumRow struct {
 		ID   int    `db:"id"`

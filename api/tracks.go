@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"lucos_media_metadata_api/predicateconfig"
 	"lucos_media_metadata_api/rdfgen"
 )
 
@@ -63,7 +64,7 @@ func (original Track) updateNeeded(changeSet TrackV3, onlyMissing bool) bool {
 				newNames = append(newNames, v.Name)
 			}
 		}
-		if IsMultiValue(pred) {
+		if predicateconfig.IsMultiValue(pred) {
 			origVals := original.Tags.GetValues(pred)
 			if !stringSlicesEqual(origVals, newNames) {
 				slog.Debug("updateNeeded: tag values changed",
@@ -175,7 +176,7 @@ func getBespokeLoganneMessage(changeSet TrackV3, existingTrack Track, trackName 
 	}
 	var bespokeMsg string
 	for predicateID := range changeSet.Tags {
-		config := GetPredicateConfig(predicateID)
+		config := predicateconfig.GetConfig(predicateID)
 		if config.LoganneSilent {
 			continue
 		}

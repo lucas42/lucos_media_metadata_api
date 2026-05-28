@@ -1,7 +1,13 @@
-// Package predicateconfig is the single source of truth for predicate RDF shapes.
-// It is imported by both api/ and rdfgen/ so that a single registry drives both
-// write-validation logic (RequiresURI) and RDF generation (PredicateURI + ValueShape).
+// Package predicateconfig is the single source of truth for predicate configuration.
+// It defines types, interfaces, and utility functions shared by the api and rdfgen
+// packages. The concrete per-predicate data lives in registry.go.
 package predicateconfig
+
+import (
+	"fmt"
+	"os"
+	"strings"
+)
 
 // ValueShape represents the RDF shape of a predicate's value.
 type ValueShape int
@@ -17,65 +23,107 @@ const (
 	ValueShapeURIObject
 )
 
-// Config holds the RDF-specific configuration for a predicate.
+// NameURIResolver resolves names to URIs and vice versa for URI-object predicates
+// that support name-based lookup (e.g. album). The api.Datastore type implements
+// this interface, allowing the registry closures to call back into the database
+// without importing the api package.
+type NameURIResolver interface {
+	ResolveOrCreateByName(name string) (string, error)
+	ResolveNameFromURI(uri string) (string, error)
+}
+
+// Symbolic origin identifiers for use in Config.AllowedOrigins.
+// ValidateURIOrigin resolves these to actual base URLs at call time via os.Getenv.
+const (
+	OriginEolas                = "eolas"
+	OriginMediaMetadataManager = "media_metadata_manager"
+)
+
+// Config holds the full configuration for a predicate, covering both its RDF shape
+// (used by rdfgen) and its runtime behaviour (used by the api write path, Loganne
+// event generation, and URI validation).
 //
 // PredicateURI is the full RDF predicate IRI. For predicates whose IRI is relative
 // to the service's APP_ORIGIN (e.g. custom ontology predicates), the URI starts
 // with "/" and must be prefixed with APP_ORIGIN at runtime.
 type Config struct {
+	// PredicateURI is the full RDF predicate IRI, or a "/" prefix relative to APP_ORIGIN.
 	PredicateURI string
-	ValueShape   ValueShape
+
+	// ValueShape indicates the RDF shape of this predicate's value.
+	// ValueShapeURIObject predicates require a non-empty uri field;
+	// tags without a URI are rejected by write validation. This drives RequiresURI().
+	ValueShape ValueShape
+
+	// MultiValue indicates this predicate can have multiple values per track.
+	// When true, the database allows multiple tag rows for the same (trackid,
+	// predicateid) pair, and the v3 API serialises/deserialises the values as a
+	// JSON array.
+	MultiValue bool
+
+	// ResolveNameToURI, if non-nil, enables name-to-URI resolution for this predicate.
+	// When a tag value has a name but no URI, the write path calls this to resolve
+	// (or create) the entity and populate the URI. Resolution happens before
+	// RequiresURI validation.
+	ResolveNameToURI func(NameURIResolver, string) (string, error)
+
+	// ResolveURIToName, if non-nil, enables URI-to-name resolution. When a tag value
+	// has a URI but no name, the write path calls this to populate the name field
+	// before storing.
+	ResolveURIToName func(NameURIResolver, string) (string, error)
+
+	// LoganneHumanReadable, if non-nil, returns a bespoke humanReadable message
+	// for Loganne events when this predicate is the only non-silent tag changed in
+	// an update and no scalar track fields are being modified.
+	// Receives the track name as returned by track.getName().
+	LoganneHumanReadable func(trackName string) string
+
+	// LoganneSilent marks a predicate as a silent companion that does not affect
+	// which Loganne message is emitted. When true, this predicate is ignored when
+	// deciding whether to emit a bespoke or generic message.
+	LoganneSilent bool
+
+	// AllowedOrigins, if non-nil, holds symbolic origin identifiers (OriginEolas,
+	// OriginMediaMetadataManager) whose actual base URLs must prefix URI values of
+	// this predicate. Resolved to real URLs at validation time by ValidateURIOrigin.
+	// If all identifiers resolve to empty strings (env var unset), validation is skipped.
+	AllowedOrigins []string
 }
 
-// registry holds RDF configuration for all predicates handled by PredicateConfig lookup.
-// Predicates absent from this map fall through to the remaining switch cases in rdfgen.
-var registry = map[string]Config{
-	// Literal predicates — value column → rdf:Literal.
-	"added":   {PredicateURI: "/ontology#dateAdded", ValueShape: ValueShapeLiteral},
-	"title":   {PredicateURI: "http://www.w3.org/2004/02/skos/core#prefLabel", ValueShape: ValueShapeLiteral},
-	"comment": {PredicateURI: "http://schema.org/comment", ValueShape: ValueShapeLiteral},
-	"lyrics":  {PredicateURI: "http://purl.org/ontology/mo/lyrics", ValueShape: ValueShapeLiteral},
-	"rating":  {PredicateURI: "http://schema.org/ratingValue", ValueShape: ValueShapeLiteral},
-	"memory":  {PredicateURI: "/ontology#memory", ValueShape: ValueShapeLiteral},
-	"year":    {PredicateURI: "http://purl.org/dc/terms/date", ValueShape: ValueShapeLiteral},
-
-	// URIObject predicates — tag.uri (when non-empty) → rdf:Resource; tags without URI are skipped.
-	"album":      {PredicateURI: "/ontology#onAlbum", ValueShape: ValueShapeURIObject},
-	"language":   {PredicateURI: "/ontology#trackLanguage", ValueShape: ValueShapeURIObject},
-	"about":      {PredicateURI: "/ontology#about", ValueShape: ValueShapeURIObject},
-	"mentions":   {PredicateURI: "/ontology#mentions", ValueShape: ValueShapeURIObject},
-	"soundtrack": {PredicateURI: "/ontology#soundtrack", ValueShape: ValueShapeURIObject},
-	"theme_tune": {PredicateURI: "/ontology#theme_tune", ValueShape: ValueShapeURIObject},
-
-	// Omit predicates — behavioural only, not emitted in RDF output.
-	"lastSuccessfulPlay": {ValueShape: ValueShapeOmit},
-	"lastError":          {ValueShape: ValueShapeOmit},
-	"lastSkip":           {ValueShape: ValueShapeOmit},
-	"lastErrorMessage":   {ValueShape: ValueShapeOmit},
+// RequiresURI reports whether this predicate produces an IRI object in RDF output
+// and requires a non-empty URI for write validation. Derived from ValueShape.
+func (c Config) RequiresURI() bool {
+	return c.ValueShape == ValueShapeURIObject
 }
 
-// Get returns the Config for predicateID and whether it was found.
-// Predicates not in the registry fall through to any remaining switch logic in rdfgen.
-func Get(predicateID string) (Config, bool) {
-	c, ok := registry[predicateID]
-	return c, ok
-}
-
-// RequiresURI reports whether predicateID is a URIObject predicate that requires a
-// non-empty URI for write validation and RDF emission.
-func RequiresURI(predicateID string) bool {
-	c, ok := registry[predicateID]
-	return ok && c.ValueShape == ValueShapeURIObject
-}
-
-// URIObjectPredicates returns all predicate IDs with ValueShape == ValueShapeURIObject.
-// Used by write-validation and integrity-check logic.
-func URIObjectPredicates() []string {
-	predicates := make([]string, 0)
-	for id, c := range registry {
-		if c.ValueShape == ValueShapeURIObject {
-			predicates = append(predicates, id)
+// ValidateURIOrigin checks whether the given URI starts with one of the predicate's
+// AllowedOrigins. Returns an empty string if the URI is valid (or if no allowlist is
+// configured). Returns a human-readable error message if validation fails.
+//
+// Origin env vars are read at call time so values set after package init (e.g. in
+// TestMain or main()) are picked up. Empty values (unset env vars) are excluded;
+// if all resolve to empty, validation is skipped entirely.
+func (c Config) ValidateURIOrigin(uri string) string {
+	if c.AllowedOrigins == nil {
+		return ""
+	}
+	originValues := map[string]string{
+		OriginEolas:                os.Getenv("EOLAS_ORIGIN"),
+		OriginMediaMetadataManager: os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN"),
+	}
+	validOrigins := make([]string, 0, len(c.AllowedOrigins))
+	for _, key := range c.AllowedOrigins {
+		if val := originValues[key]; val != "" {
+			validOrigins = append(validOrigins, val)
 		}
 	}
-	return predicates
+	if len(validOrigins) == 0 {
+		return ""
+	}
+	for _, origin := range validOrigins {
+		if uri == origin || strings.HasPrefix(uri, origin+"/") {
+			return ""
+		}
+	}
+	return fmt.Sprintf("uri %q does not start with an allowed origin %v", uri, validOrigins)
 }

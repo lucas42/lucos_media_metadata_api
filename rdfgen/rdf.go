@@ -49,20 +49,27 @@ func resolvePredicateURI(predicateURI string, appOrigin string) string {
 // mediaMetadataManagerOrigin is used for resource URIs (tracks, albums, search).
 func mapPredicate(predicateID string, value string, uri *string, mediaMetadataManagerOrigin string, appOrigin string) (string, []rdf2go.Term) {
 
-	// Dispatch on PredicateConfig for all migrated predicates (Literal, URIObject, Omit).
-	// Predicates absent from the registry fall through to the switch below.
+	// Dispatch on PredicateConfig for all explicitly mapped predicates (Literal, URIObject,
+	// and explicitly-omitted ones like lastSuccessfulPlay).
+	// Predicates with ValueShapeOmit AND a non-empty PredicateURI are in the registry for
+	// API reasons (e.g. MultiValue) but their RDF is handled by the switch below.
 	if rdfConfig, ok := predicateconfig.Get(predicateID); ok {
-		predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
 		switch rdfConfig.ValueShape {
 		case predicateconfig.ValueShapeLiteral:
+			predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
 			return predicateURI, []rdf2go.Term{rdf2go.NewLiteral(value)}
 		case predicateconfig.ValueShapeURIObject:
+			predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
 			if uri == nil || *uri == "" {
 				return "", nil // skip tags with no URI — value alone is not a valid IRI
 			}
 			return predicateURI, []rdf2go.Term{rdf2go.NewResource(*uri)}
 		case predicateconfig.ValueShapeOmit:
-			return "", nil
+			if rdfConfig.PredicateURI == "" {
+				// Explicitly suppressed from RDF output (e.g. lastSuccessfulPlay).
+				return "", nil
+			}
+			// PredicateURI is set but no explicit RDF shape: fall through to outer switch.
 		default:
 			return "", nil // unknown shape — omit rather than emitting a potentially wrong triple
 		}
