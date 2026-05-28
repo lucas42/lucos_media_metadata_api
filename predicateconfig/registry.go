@@ -96,6 +96,7 @@ var registry = map[string]Config{
 	},
 
 	// Literal predicates — value column → rdf:Literal.
+	// Well-known predicates use external vocabulary URIs where appropriate.
 	"added": {
 		ValueShape:   ValueShapeLiteral,
 		PredicateURI: "/ontology#dateAdded",
@@ -123,6 +124,67 @@ var registry = map[string]Config{
 	"year": {
 		ValueShape:   ValueShapeLiteral,
 		PredicateURI: "http://purl.org/dc/terms/date",
+	},
+
+	// These predicates were previously emitted via the rdfgen default fallback
+	// (${APP_ORIGIN}/ontology#predicateID as rdf:Literal). They are explicitly
+	// registered here to preserve that behaviour after the fallback is removed.
+	// Each may warrant a more specific predicate URI or ValueShape in future.
+	"badmetadata": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#badmetadata",
+	},
+	"breaksplayer": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#breaksplayer",
+	},
+	"dance": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#dance",
+	},
+	"event": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#event",
+	},
+	"fingerprint_version": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#fingerprint_version",
+	},
+	"format": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#format",
+	},
+	"karaoke": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#karaoke",
+	},
+	"keywords": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#keywords",
+	},
+	"lang": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#lang",
+	},
+	"location": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#location",
+	},
+	"relax": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#relax",
+	},
+	"singalong": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#singalong",
+	},
+	"test": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#test",
+	},
+	"weather": {
+		ValueShape:   ValueShapeLiteral,
+		PredicateURI: "/ontology#weather",
 	},
 
 	// Omit predicates — behavioural only, not emitted in RDF output.

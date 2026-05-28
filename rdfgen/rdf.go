@@ -76,8 +76,9 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 		}
 	}
 
-	return appOrigin + "/ontology#" + predicateID,
-		[]rdf2go.Term{rdf2go.NewLiteral(value)}
+	// Predicate not in registry — omit rather than emitting an orphan triple.
+	// All predicates with in-use data must be explicitly registered above.
+	return "", nil
 }
 
 
