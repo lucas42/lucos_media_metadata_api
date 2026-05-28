@@ -1,6 +1,11 @@
 // migrate_offence_tags converts existing freetext offence tag values to Offence
 // entity references in lucos_eolas.
 //
+// The media metadata DB stores offence tags as slugs (e.g. "domestic-abuse"),
+// while lucos_eolas stores Offence entities by their display name
+// (e.g. "Domestic Abuse"). This script bridges that gap using the canonical
+// slug→name mapping from lucos_media_metadata_manager's formfields.php.
+//
 // Run this script as part of the coordinated release window:
 //
 //  1. Ask users to pause edits to offence tags.
@@ -18,11 +23,12 @@
 //
 // What the script does:
 //   - Reads all distinct freetext offence tag values (rows where uri is empty).
-//   - For each distinct value, looks for an existing Offence entity in eolas
-//     by exact case-insensitive name match.
-//   - Unmatched values: creates a new Offence entity in eolas so the migration
-//     is self-contained. The issue body expects single-digit unmatched values
-//     at most (formfields.php has been the controlled select for some time).
+//   - For each distinct value, translates the slug to a canonical name using the
+//     slugToName table below (sourced from formfields.php). Then looks up the
+//     matching Offence entity in eolas by that name.
+//   - Unmatched slugs (values not in the table): warns loudly and creates a new
+//     Offence entity in eolas using the raw slug as the name. This should not
+//     happen in practice — formfields.php has been a controlled select.
 //   - Rewrites each tag row: sets the uri to the eolas Offence URI.
 //
 // The script is idempotent: tag rows that already have a non-empty uri are
@@ -45,6 +51,38 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+// slugToName maps the formfields.php slug keys (stored in the DB as tag values)
+// to the canonical display names used by the lucos_eolas Offence entities.
+// Sourced from lucos_media_metadata_manager/src/formfields.php, "offence" block.
+var slugToName = map[string]string{
+	"swearing":                 "Swearing",
+	"slurs":                    "Slurs",
+	"sacrilege":                "Sacrilege",
+	"violence":                 "Violence",
+	"war":                      "War",
+	"lèse-majesté":             "Lèse-majesté",
+	"jingoism":                 "Jingoism",
+	"smut":                     "Smut",
+	"alcohol":                  "Alcohol",
+	"drugs":                    "Drugs",
+	"kink":                     "Kink",
+	"arson":                    "Arson",
+	"domestic-abuse":           "Domestic Abuse",
+	"colonialism":              "Colonialism",
+	"sexual-assault":           "Sexual Assault",
+	"sex-work":                 "Sex Work",
+	"animal-cruelty":           "Animal Cruelty",
+	"fascism":                  "Fascism",
+	"self-harm":                "Self Harm (including suicide)",
+	"gambling":                 "Gambling",
+	"racism":                   "Racism",
+	"religious-discrimination": "Religious Discrimination",
+	"sexism":                   "Sexism",
+	"ableism":                  "Ableism",
+	"homophobia":               "Homophobia",
+	"transphobia":              "Transphobia",
+}
 
 // eolasEntity represents one item from an eolas type_list response.
 type eolasEntity struct {
@@ -133,7 +171,7 @@ func (c *eolasClient) post(path string, payload interface{}) (*eolasEntity, erro
 }
 
 // listOffences fetches all existing Offence entities from eolas.
-// Returns a map keyed by lower-cased name for O(1) lookup.
+// Returns a map keyed by lower-cased display name for O(1) lookup.
 func (c *eolasClient) listOffences() (map[string]*eolasEntity, error) {
 	var items []eolasEntity
 	if err := c.get("/metadata/offence/list/", &items); err != nil {
@@ -149,20 +187,48 @@ func (c *eolasClient) listOffences() (map[string]*eolasEntity, error) {
 	return byName, nil
 }
 
-// findOrCreate looks up an Offence entity by name; creates it in eolas if absent.
-func (c *eolasClient) findOrCreate(name string, existing map[string]*eolasEntity) (*eolasEntity, error) {
-	if e, ok := existing[strings.ToLower(name)]; ok {
+// resolveSlug translates a DB slug value to a canonical display name using the
+// slugToName table, then looks up the matching eolas entity.
+// If the slug is not in the table, falls through to a direct name lookup
+// (handling any legacy values stored as display names) and creates a new entity
+// if still not found.
+func (c *eolasClient) resolveSlug(slug string, existing map[string]*eolasEntity) (*eolasEntity, error) {
+	// Translate slug → canonical name.
+	canonicalName, inTable := slugToName[slug]
+	if !inTable {
+		// Unknown slug — not in the formfields.php controlled vocab.
+		// Try a direct case-insensitive lookup in case someone entered a display name.
+		if e, ok := existing[strings.ToLower(slug)]; ok {
+			log.Printf("WARNING: slug %q not in slugToName table but matched eolas entity %q by name — possible legacy display-name value", slug, e.Name)
+			return e, nil
+		}
+		// Still not found — create a new entity and warn loudly.
+		log.Printf("WARNING: slug %q not in slugToName table and no matching eolas entity — creating new Offence entity", slug)
+		entity, err := c.post("/api/metadata/offence/", map[string]interface{}{
+			"name": slug,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating offence for unknown slug %q: %w", slug, err)
+		}
+		existing[strings.ToLower(slug)] = entity
+		return entity, nil
+	}
+
+	// Look up the canonical name in the existing eolas entities.
+	if e, ok := existing[strings.ToLower(canonicalName)]; ok {
 		return e, nil
 	}
-	// Not found in the pre-populated vocab — create it so the migration is complete.
+
+	// Entity not in eolas — shouldn't happen since eolas#263 pre-populated the
+	// full vocab, but create it rather than failing the migration.
+	log.Printf("WARNING: slug %q maps to name %q but no matching eolas entity found — creating", slug, canonicalName)
 	entity, err := c.post("/api/metadata/offence/", map[string]interface{}{
-		"name": name,
+		"name": canonicalName,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating offence %q: %w", name, err)
+		return nil, fmt.Errorf("creating offence %q (from slug %q): %w", canonicalName, slug, err)
 	}
-	existing[strings.ToLower(name)] = entity
-	log.Printf("WARNING: %q was not in the eolas Offence vocab — created new entity %s", name, entity.URI)
+	existing[strings.ToLower(canonicalName)] = entity
 	return entity, nil
 }
 
@@ -198,9 +264,9 @@ func main() {
 	db.MustExec("PRAGMA journal_mode=WAL;")
 	db.MustExec("PRAGMA foreign_keys = ON;")
 
-	// Collect distinct freetext values (no uri set yet).
-	var freeValues []string
-	err = db.Select(&freeValues, `
+	// Collect distinct freetext slug values (no uri set yet).
+	var freeSlugs []string
+	err = db.Select(&freeSlugs, `
 		SELECT DISTINCT value FROM tag
 		WHERE predicateid = 'offence' AND (uri IS NULL OR uri = '')
 		ORDER BY value
@@ -209,14 +275,19 @@ func main() {
 		log.Fatalf("query freetext values: %v", err)
 	}
 
-	if len(freeValues) == 0 {
+	if len(freeSlugs) == 0 {
 		fmt.Println("No freetext offence tags found; nothing to migrate.")
 		return
 	}
 
-	fmt.Printf("Found %d distinct freetext offence value(s):\n", len(freeValues))
-	for _, v := range freeValues {
-		fmt.Printf("  %q\n", v)
+	fmt.Printf("Found %d distinct freetext offence slug(s):\n", len(freeSlugs))
+	for _, v := range freeSlugs {
+		name, ok := slugToName[v]
+		if ok {
+			fmt.Printf("  %q → %q\n", v, name)
+		} else {
+			fmt.Printf("  %q → (unknown slug — will warn at migration time)\n", v)
+		}
 	}
 
 	if *dryRun {
@@ -235,15 +306,15 @@ func main() {
 	}
 	fmt.Printf("Found %d existing Offence entity/entities.\n", len(existing))
 
-	// Resolve URIs for all distinct values.
-	valueToURI := make(map[string]string, len(freeValues))
-	for _, name := range freeValues {
-		entity, err := client.findOrCreate(name, existing)
+	// Resolve each slug to an eolas entity URI.
+	slugToURI := make(map[string]string, len(freeSlugs))
+	for _, slug := range freeSlugs {
+		entity, err := client.resolveSlug(slug, existing)
 		if err != nil {
-			log.Fatalf("resolve %q: %v", name, err)
+			log.Fatalf("resolve slug %q: %v", slug, err)
 		}
-		valueToURI[name] = entity.URI
-		fmt.Printf("  %q → %s\n", name, entity.URI)
+		slugToURI[slug] = entity.URI
+		fmt.Printf("  %q → %s\n", slug, entity.URI)
 	}
 
 	// Update tag rows in a single transaction.
@@ -253,16 +324,16 @@ func main() {
 	}
 
 	totalUpdated := int64(0)
-	for name, uri := range valueToURI {
+	for slug, uri := range slugToURI {
 		res, err := tx.Exec(`
 			UPDATE tag SET uri = ?
 			WHERE predicateid = 'offence'
 			  AND value = ?
 			  AND (uri IS NULL OR uri = '')
-		`, uri, name)
+		`, uri, slug)
 		if err != nil {
 			_ = tx.Rollback()
-			log.Fatalf("update tags for %q: %v", name, err)
+			log.Fatalf("update tags for slug %q: %v", slug, err)
 		}
 		rows, _ := res.RowsAffected()
 		totalUpdated += rows
@@ -272,6 +343,6 @@ func main() {
 		log.Fatalf("commit: %v", err)
 	}
 
-	fmt.Printf("\nMigration complete. %d tag row(s) updated across %d distinct value(s).\n",
-		totalUpdated, len(freeValues))
+	fmt.Printf("\nMigration complete. %d tag row(s) updated across %d distinct slug(s).\n",
+		totalUpdated, len(freeSlugs))
 }
