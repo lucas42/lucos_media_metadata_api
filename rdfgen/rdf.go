@@ -50,7 +50,7 @@ func resolvePredicateURI(predicateURI string, appOrigin string) string {
 func mapPredicate(predicateID string, value string, uri *string, mediaMetadataManagerOrigin string, appOrigin string) (string, []rdf2go.Term) {
 
 	// Dispatch on PredicateConfig for all explicitly registered predicates
-	// (Literal, URIObject, SearchURL, and explicitly-omitted ones like lastSuccessfulPlay).
+	// (Literal, URIObject, SearchURL, MBIDPrefix, and explicitly-omitted ones like lastSuccessfulPlay).
 	if rdfConfig, ok := predicateconfig.Get(predicateID); ok {
 		switch rdfConfig.ValueShape {
 		case predicateconfig.ValueShapeLiteral:
@@ -65,6 +65,9 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 		case predicateconfig.ValueShapeSearchURL:
 			predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
 			return predicateURI, []rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
+		case predicateconfig.ValueShapeMBIDPrefix:
+			predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
+			return predicateURI, []rdf2go.Term{rdf2go.NewResource(rdfConfig.URIPrefix + value)}
 		case predicateconfig.ValueShapeOmit:
 			// Explicitly suppressed from RDF output (e.g. lastSuccessfulPlay).
 			return "", nil
@@ -73,24 +76,8 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 		}
 	}
 
-	switch predicateID {
-
-	case "mbid_artist":
-		return "http://purl.org/dc/terms/creator",
-			[]rdf2go.Term{rdf2go.NewResource("https://musicbrainz.org/artist/" + value)}
-
-	case "mbid_recording":
-		return "http://purl.org/dc/terms/identifier",
-			[]rdf2go.Term{rdf2go.NewResource("https://musicbrainz.org/recording/" + value)}
-
-	case "mbid_release":
-		return "http://purl.org/dc/terms/isPartOf",
-			[]rdf2go.Term{rdf2go.NewResource("https://musicbrainz.org/release/" + value)}
-
-	default:
-		return appOrigin + "/ontology#" + predicateID,
-			[]rdf2go.Term{rdf2go.NewLiteral(value)}
-	}
+	return appOrigin + "/ontology#" + predicateID,
+		[]rdf2go.Term{rdf2go.NewLiteral(value)}
 }
 
 

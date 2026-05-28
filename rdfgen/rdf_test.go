@@ -332,6 +332,36 @@ func TestMapPredicateSearchURLPredicates(t *testing.T) {
 	}
 }
 
+// TestMapPredicateMBIDPrefixPredicates verifies that all 3 MBID predicates are routed
+// via the registry (ValueShapeMBIDPrefix) and produce IRI objects with the correct prefix.
+func TestMapPredicateMBIDPrefixPredicates(t *testing.T) {
+	mbid := "550e8400-e29b-41d4-a716-446655440000"
+	cases := []struct {
+		predicateID  string
+		expectedPred string
+		expectedBase string
+	}{
+		{"mbid_artist", "http://purl.org/dc/terms/creator", "https://musicbrainz.org/artist/"},
+		{"mbid_recording", "http://purl.org/dc/terms/identifier", "https://musicbrainz.org/recording/"},
+		{"mbid_release", "http://purl.org/dc/terms/isPartOf", "https://musicbrainz.org/release/"},
+	}
+	for _, tc := range cases {
+		pred, terms := mapPredicate(tc.predicateID, mbid, nil, "http://localhost:8020", "http://localhost:3002")
+		if pred != tc.expectedPred {
+			t.Errorf("predicate %q: expected predicate URI %q, got %q", tc.predicateID, tc.expectedPred, pred)
+		}
+		if len(terms) != 1 {
+			t.Errorf("predicate %q: expected 1 term, got %d", tc.predicateID, len(terms))
+			continue
+		}
+		termStr := terms[0].String()
+		expectedIRI := tc.expectedBase + mbid
+		if !strings.Contains(termStr, expectedIRI) {
+			t.Errorf("predicate %q: expected term to contain %q, got %q", tc.predicateID, expectedIRI, termStr)
+		}
+	}
+}
+
 // TestMapPredicateAlbumUsesOnAlbum verifies that album tags now map to onAlbum, not dc:isPartOf.
 func TestMapPredicateAlbumUsesOnAlbum(t *testing.T) {
 	uri := "http://localhost:8020/albums/1"
