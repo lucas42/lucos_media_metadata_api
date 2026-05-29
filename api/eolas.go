@@ -208,20 +208,21 @@ func resolveOrCreateEolasPersonHTTP(name string) (string, error) {
 		return "", fmt.Errorf("reading create-person response: %w", err)
 	}
 
-	var created eolasPersonEntity
-	if err := json.Unmarshal(createBody, &created); err != nil {
-		return "", fmt.Errorf("parsing create-person response: %w (body: %s)", err, string(createBody))
-	}
-
+	// Check status before attempting to unmarshal — non-JSON bodies (proxied 503,
+	// plain-text error pages) would otherwise produce a misleading parse error.
 	switch createResp.StatusCode {
-	case http.StatusCreated:
-		slog.Info("Created eolas Person entity", "name", name, "uri", created.URI)
-		return created.URI, nil
-	case http.StatusConflict: // already_exists — race between list and create
-		if created.URI != "" {
-			return created.URI, nil
+	case http.StatusCreated, http.StatusConflict: // 409 = already_exists (race between list and create)
+		var created eolasPersonEntity
+		if err := json.Unmarshal(createBody, &created); err != nil {
+			return "", fmt.Errorf("parsing create-person response (HTTP %d): %w (body: %s)", createResp.StatusCode, err, string(createBody))
 		}
-		return "", fmt.Errorf("eolas returned 409 for Person %q but response had no URI: %s", name, string(createBody))
+		if created.URI == "" {
+			return "", fmt.Errorf("eolas returned HTTP %d for Person %q but response had no URI: %s", createResp.StatusCode, name, string(createBody))
+		}
+		if createResp.StatusCode == http.StatusCreated {
+			slog.Info("Created eolas Person entity", "name", name, "uri", created.URI)
+		}
+		return created.URI, nil
 	default:
 		return "", fmt.Errorf("eolas returned HTTP %d creating Person %q: %s", createResp.StatusCode, name, string(createBody))
 	}
