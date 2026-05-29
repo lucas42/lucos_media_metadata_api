@@ -94,9 +94,12 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 }
 
 
-// exportRDF runs the query and writes Turtle output to a file
+// exportRDF runs the query and writes Turtle output to a file.
+// It opens the live database directly with a busy timeout so that SQLite can read
+// through the WAL and provide a consistent snapshot view. The docker-compose volume
+// mount must be read-write (not :ro) so SQLite can manage the WAL shared-memory file.
 func ExportRDF(dbPath, outFile string) error {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=5000")
 	if err != nil {
 		return err
 	}
@@ -123,9 +126,12 @@ func ExportRDF(dbPath, outFile string) error {
 	if err != nil {
 		return err
 	}
-	g, err := TrackToRdf(rows)
+	g, trackCount, err := TrackToRdf(rows)
 	if err != nil {
 		return err
+	}
+	if trackCount == 0 {
+		return fmt.Errorf("sanity check failed: export produced 0 tracks; refusing to overwrite output file")
 	}
 	albumGraph, err := AlbumToRdf(albumRows)
 	if err != nil {
@@ -142,7 +148,10 @@ func ExportRDF(dbPath, outFile string) error {
 
 	return g.Serialize(f, "turtle")
 }
-func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
+// TrackToRdf converts a query result over the track+tag join into an RDF graph.
+// It returns the graph, the number of distinct tracks emitted, and any error.
+// The caller should treat trackCount == 0 as a sign something went wrong.
+func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, int, error) {
 	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	appOrigin := os.Getenv("APP_ORIGIN")
 	g := rdf2go.NewGraph("")
@@ -167,6 +176,7 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 	)
 	var lastTrackID int
 	var subject rdf2go.Term
+	trackCount := 0
 
 	for rows.Next() {
 		var urlStr string
@@ -175,10 +185,11 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		var predicateID, value, uri *string
 
 		if err := rows.Scan(&trackID, &urlStr, &duration, &predicateID, &value, &uri); err != nil {
-			return g, err
+			return g, trackCount, err
 		}
 
 		if trackID != lastTrackID {
+			trackCount++
 			subject = rdf2go.NewResource(fmt.Sprintf("%s/tracks/%d", mediaMetadataManagerOrigin, trackID))
 			g.AddTriple(subject,
 				rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
@@ -206,7 +217,10 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		}
 	}
 
-	return g, nil
+	if err := rows.Err(); err != nil {
+		return g, trackCount, err
+	}
+	return g, trackCount, nil
 }
 // AlbumToRdf converts rows from the album table into an RDF graph.
 // Each row must have columns: id (int), name (string).
@@ -250,6 +264,9 @@ func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 			rdf2go.NewLiteral(name))
 	}
 
+	if err := rows.Err(); err != nil {
+		return g, err
+	}
 	return g, nil
 }
 

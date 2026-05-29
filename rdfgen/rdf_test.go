@@ -129,6 +129,39 @@ func TestExportRDF(t *testing.T) {
 	}
 }
 
+// TestExportRDFRejectsEmptyTrackTable verifies that ExportRDF returns an error rather than
+// writing an empty file when the track table contains no rows (sanity floor check).
+func TestExportRDFRejectsEmptyTrackTable(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Intentionally empty track table — exporter must refuse to write output.
+
+	outFile := filepath.Join(tmpDir, "output.ttl")
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
+	err = ExportRDF(dbPath, outFile)
+	if err == nil {
+		t.Fatal("expected ExportRDF to return an error for an empty track table, but it returned nil")
+	}
+	if _, statErr := os.Stat(outFile); !os.IsNotExist(statErr) {
+		t.Error("expected output file NOT to be written when the sanity check fails")
+	}
+}
+
 // TestExportRDFUsesTagUriForAboutMentions verifies that when a tag has a uri column value,
 // that URI is used in the RDF output instead of the display name in value.
 // After migrateEolasData, about/mentions tags store the display name in value and
@@ -728,7 +761,7 @@ func TestTrackLanguageNoUriNoTrackLanguageTriple(t *testing.T) {
 	}
 	defer rows.Close()
 
-	g, err := TrackToRdf(rows)
+	g, _, err := TrackToRdf(rows)
 	if err != nil {
 		t.Fatalf("TrackToRdf failed: %v", err)
 	}
