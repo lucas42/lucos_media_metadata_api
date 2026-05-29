@@ -3,11 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"lucos_media_metadata_api/rdfgen"
 )
 
@@ -27,13 +25,7 @@ func main() {
 		log.Fatal("SCHEDULE_TRACKER_ENDPOINT must be set")
 	}
 
-	tmpDB, cleanup, err := copySQLiteDB(dbPath)
-	if err != nil {
-		log.Fatalf("failed to copy db: %v", err)
-	}
-	defer cleanup()
-
-	if err := rdfgen.ExportRDF(tmpDB, outFile); err != nil {
+	if err := rdfgen.ExportRDF(dbPath, outFile); err != nil {
 		scheduleTrackerData, _ := json.Marshal(map[string]interface{}{
 			"system":    "lucos_media_metadata_api",
 			"job_name":  "exporter",
@@ -67,32 +59,4 @@ func postToScheduleTracker(endpoint string, data []byte) {
 	if _, err := http.DefaultClient.Do(req); err != nil {
 		log.Printf("Failed to post to schedule tracker: %v", err)
 	}
-}
-
-// copySQLiteDB creates a temp copy of the SQLite DB file and returns its path
-func copySQLiteDB(src string) (string, func(), error) {
-	tmpDir, err := os.MkdirTemp("", "sqlite-export")
-	if err != nil {
-		return "", nil, err
-	}
-	dst := filepath.Join(tmpDir, "data-export.sqlite")
-
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return "", nil, err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return "", nil, err
-	}
-	defer dstFile.Close()
-
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		return "", nil, err
-	}
-
-	cleanup := func() { os.RemoveAll(tmpDir) }
-	return dst, cleanup, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -94,9 +95,19 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 }
 
 
-// exportRDF runs the query and writes Turtle output to a file
+// ExportRDF queries the live database and atomically publishes a Turtle export file.
+//
+// Database access: the DB is opened directly (no file copy) with snapshot isolation
+// provided by SQLite WAL mode. The volume mount must be read-write (not :ro) so SQLite
+// can manage the WAL shared-memory (-shm) file; _query_only=true then restores the
+// defence-in-depth that :ro previously provided by making the connection structurally
+// incapable of writing. _busy_timeout=10000 aligns with the api's setting.
+//
+// Atomic publish: output is serialized to a temp file in the same directory as outFile
+// then renamed into place, so the api's http.ServeFile always sees either the old
+// complete file or the new one — never a partial write.
 func ExportRDF(dbPath, outFile string) error {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=10000&_query_only=true")
 	if err != nil {
 		return err
 	}
@@ -123,9 +134,12 @@ func ExportRDF(dbPath, outFile string) error {
 	if err != nil {
 		return err
 	}
-	g, err := TrackToRdf(rows)
+	g, trackCount, err := TrackToRdf(rows)
 	if err != nil {
 		return err
+	}
+	if trackCount == 0 {
+		return fmt.Errorf("sanity check failed: export produced 0 tracks; refusing to overwrite output file")
 	}
 	albumGraph, err := AlbumToRdf(albumRows)
 	if err != nil {
@@ -134,15 +148,32 @@ func ExportRDF(dbPath, outFile string) error {
 	g.Merge(albumGraph)
 	g.Merge(ontologyGraph)
 
-	f, err := os.Create(outFile)
+	// Serialize to a temp file on the same filesystem, then rename atomically.
+	// Consumers only ever see a complete file; a mid-serialize failure never
+	// corrupts the previously-good export.
+	tmp, err := os.CreateTemp(filepath.Dir(outFile), "*.ttl.tmp")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create temp output file: %w", err)
 	}
-	defer f.Close()
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath) // no-op if rename succeeds; cleans up on any error path
 
-	return g.Serialize(f, "turtle")
+	if err := g.Serialize(tmp, "turtle"); err != nil {
+		tmp.Close()
+		return fmt.Errorf("failed to serialize RDF: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close temp output file: %w", err)
+	}
+	if err := os.Rename(tmpPath, outFile); err != nil {
+		return fmt.Errorf("failed to atomically publish output file: %w", err)
+	}
+	return nil
 }
-func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
+// TrackToRdf converts a query result over the track+tag join into an RDF graph.
+// It returns the graph, the number of distinct tracks emitted, and any error.
+// The caller should treat trackCount == 0 as a sign something went wrong.
+func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, int, error) {
 	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	appOrigin := os.Getenv("APP_ORIGIN")
 	g := rdf2go.NewGraph("")
@@ -167,6 +198,7 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 	)
 	var lastTrackID int
 	var subject rdf2go.Term
+	trackCount := 0
 
 	for rows.Next() {
 		var urlStr string
@@ -175,10 +207,11 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		var predicateID, value, uri *string
 
 		if err := rows.Scan(&trackID, &urlStr, &duration, &predicateID, &value, &uri); err != nil {
-			return g, err
+			return g, trackCount, err
 		}
 
 		if trackID != lastTrackID {
+			trackCount++
 			subject = rdf2go.NewResource(fmt.Sprintf("%s/tracks/%d", mediaMetadataManagerOrigin, trackID))
 			g.AddTriple(subject,
 				rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
@@ -206,7 +239,10 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		}
 	}
 
-	return g, nil
+	if err := rows.Err(); err != nil {
+		return g, trackCount, err
+	}
+	return g, trackCount, nil
 }
 // AlbumToRdf converts rows from the album table into an RDF graph.
 // Each row must have columns: id (int), name (string).
@@ -250,6 +286,9 @@ func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 			rdf2go.NewLiteral(name))
 	}
 
+	if err := rows.Err(); err != nil {
+		return g, err
+	}
 	return g, nil
 }
 

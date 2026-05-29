@@ -575,7 +575,7 @@ func writeTrackRDFByField(store Datastore, w http.ResponseWriter, field string, 
 		return
 	}
 	defer rows.Close()
-	graph, err := rdfgen.TrackToRdf(rows)
+	graph, _, err := rdfgen.TrackToRdf(rows)
 	if err != nil {
 		writeRDFResponse(w, nil, rdfType, err)
 		return
