@@ -79,6 +79,7 @@ func main() {
 	// Reconcile denormalised tag names daily. Catches any drift the webhooks missed
 	// (transient failures, lost deliveries, ordering issues).
 	go func() {
+		store.reconcileTagNames() // run once on startup so frequent deploys can't starve the daily cadence
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
