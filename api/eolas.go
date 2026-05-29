@@ -191,3 +191,17 @@ func resolveOrCreateEolasEntityHTTP(entityType, name string) (string, error) {
 		return "", fmt.Errorf("eolas returned HTTP %d creating %s %q: %s", resp.StatusCode, entityType, name, string(body))
 	}
 }
+
+// ResolveOrCreateEolasEntityByName satisfies the predicateconfig.NameURIResolver
+// interface. It creates (or retrieves) an eolas entity of the given type by name
+// and returns its URI. Used by the composer and producer predicates.
+func (store Datastore) ResolveOrCreateEolasEntityByName(entityType, name string) (string, error) {
+	return resolveOrCreateEolasEntityFn(entityType, name)
+}
+
+// ResolveEolasEntityName satisfies the predicateconfig.NameURIResolver interface.
+// It returns the canonical name for a given eolas entity URI. Used by the composer
+// and producer predicates when a tag is written with a URI but no name.
+func (store Datastore) ResolveEolasEntityName(uri string) (string, error) {
+	return entityNameFetcher(uri)
+}
