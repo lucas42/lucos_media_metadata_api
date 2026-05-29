@@ -136,6 +136,17 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		database.DB.MustExec(sqlStmt)
 	}
 
+	if !database.TableExists("artist") {
+		slog.Info("Creating table `artist`")
+		sqlStmt := `
+		CREATE TABLE "artist" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"name" TEXT NOT NULL UNIQUE
+		);
+		`
+		database.DB.MustExec(sqlStmt)
+	}
+
 	// Migrate mentions/about/language tags to use uri column and import names from eolas
 	if database.needsEolasDataMigration() {
 		database.migrateEolasData()

@@ -21,16 +21,6 @@ const (
 	// resource. Tags with an empty or nil URI are silently skipped in RDF output.
 	// Write validation rejects tags without a URI for these predicates.
 	ValueShapeURIObject
-	// ValueShapeSearchURL is a transitional shape — synthetic IRIs constructed
-	// from ${MEDIA_METADATA_MANAGER_ORIGIN}/search?p.{predicate}={value}. These
-	// IRIs aren't real resources (they're search queries dressed as URIs) and
-	// can't be merged, sameAs'd, or resolved against any vocabulary. Long-term,
-	// each SearchURL predicate should migrate to ValueShape: URIObject with a
-	// proper URI scheme. See per-predicate migration tickets in the comment
-	// thread of #252.
-	//
-	// Deprecated: SearchURL is a transitional shape.
-	ValueShapeSearchURL
 	// ValueShapeMBIDPrefix — the tag's value column is appended to Config.URIPrefix
 	// to produce a full IRI resource (e.g. "https://musicbrainz.org/artist/" + value).
 	// Used for MusicBrainz ID predicates where the value is a bare UUID and the
@@ -41,9 +31,9 @@ const (
 )
 
 // NameURIResolver resolves names to URIs and vice versa for URI-object predicates
-// that support name-based lookup (e.g. album, composer, producer). The api.Datastore
-// type implements this interface, allowing the registry closures to call back into the
-// database and external services without importing the api package.
+// that support name-based lookup (e.g. album, artist, composer, producer). The
+// api.Datastore type implements this interface, allowing the registry closures to
+// call back into the database and external services without importing the api package.
 type NameURIResolver interface {
 	// ResolveOrCreateByName looks up or creates an album-like entity by name.
 	// Used exclusively by the album predicate.
@@ -51,6 +41,12 @@ type NameURIResolver interface {
 	// ResolveNameFromURI looks up an album name from its URI.
 	// Used exclusively by the album predicate.
 	ResolveNameFromURI(uri string) (string, error)
+	// ResolveOrCreateArtistByName looks up or creates an artist by name, returning
+	// its URI. Used exclusively by the artist predicate.
+	ResolveOrCreateArtistByName(name string) (string, error)
+	// ResolveArtistNameFromURI looks up an artist name from its URI.
+	// Used exclusively by the artist predicate.
+	ResolveArtistNameFromURI(uri string) (string, error)
 	// ResolveOrCreateEolasEntityByName looks up or creates an eolas entity of the
 	// given type by name, returning its URI. Used by predicates that store eolas
 	// entity references (e.g. composer → person, producer → person).

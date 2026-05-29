@@ -3,7 +3,6 @@ package rdfgen
 import (
 	"database/sql"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -41,10 +40,6 @@ type Track struct {
 
 
 
-func getSearchUrl(predicateID string, value string, mediaMetadataManagerOrigin string) rdf2go.Term {
-	return rdf2go.NewResource(fmt.Sprintf("%s/search?p.%s=%s", mediaMetadataManagerOrigin, predicateID, url.QueryEscape(value)))
-}
-
 // resolvePredicateURI expands a predicate URI from the registry.
 // URIs starting with "/" are relative to APP_ORIGIN and are prefixed at runtime.
 // All other URIs are used as-is.
@@ -75,9 +70,6 @@ func mapPredicate(predicateID string, value string, uri *string, mediaMetadataMa
 				return "", nil // skip tags with no URI — value alone is not a valid IRI
 			}
 			return predicateURI, []rdf2go.Term{rdf2go.NewResource(*uri)}
-		case predicateconfig.ValueShapeSearchURL:
-			predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
-			return predicateURI, []rdf2go.Term{getSearchUrl(predicateID, value, mediaMetadataManagerOrigin)}
 		case predicateconfig.ValueShapeMBIDPrefix:
 			predicateURI := resolvePredicateURI(rdfConfig.PredicateURI, appOrigin)
 			return predicateURI, []rdf2go.Term{rdf2go.NewResource(rdfConfig.URIPrefix + value)}
@@ -130,6 +122,12 @@ func ExportRDF(dbPath, outFile string) error {
 	}
 	defer albumRows.Close()
 
+	artistRows, err := db.Query(`SELECT id, name FROM artist ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	defer artistRows.Close()
+
 	ontologyGraph, err := OntologyToRdf()
 	if err != nil {
 		return err
@@ -146,6 +144,11 @@ func ExportRDF(dbPath, outFile string) error {
 		return err
 	}
 	g.Merge(albumGraph)
+	artistGraph, err := ArtistToRdf(artistRows)
+	if err != nil {
+		return err
+	}
+	g.Merge(artistGraph)
 	g.Merge(ontologyGraph)
 
 	// Serialize to a temp file on the same filesystem, then rename atomically.
@@ -281,6 +284,77 @@ func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		g.AddTriple(subject,
 			rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
 			rdf2go.NewResource("http://purl.org/ontology/mo/Record"))
+		g.AddTriple(subject,
+			rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+			rdf2go.NewLiteral(name))
+	}
+
+	if err := rows.Err(); err != nil {
+		return g, err
+	}
+	return g, nil
+}
+
+// ArtistToRdf converts rows from the artist table into an RDF graph.
+// Each row must have columns: id (int), name (string).
+// Emits rdf:type mo:MusicArtist and skos:prefLabel for each artist,
+// plus type-level metadata so the document is self-contained.
+//
+// Crucially, it emits mo:MusicArtist rdfs:subClassOf foaf:Agent alongside
+// foaf:Agent skos:prefLabel "Agent"@en. Without the prefLabel for foaf:Agent,
+// the arachne ingestor (ADR-0004 Phase 2) will fail with a ValueError when it
+// walks the subclass chain and finds an unlabelled parent class.
+func ArtistToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
+	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
+	g := rdf2go.NewGraph("")
+
+	moMusicArtist := rdf2go.NewResource("http://purl.org/ontology/mo/MusicArtist")
+	foafAgent := rdf2go.NewResource("http://xmlns.com/foaf/0.1/Agent")
+	owlClass := rdf2go.NewResource("http://www.w3.org/2002/07/owl#Class")
+	rdfsSubClassOf := rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#subClassOf")
+
+	// mo:MusicArtist class metadata
+	g.AddTriple(moMusicArtist,
+		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		owlClass,
+	)
+	g.AddTriple(moMusicArtist,
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Artist", "en"),
+	)
+	g.AddTriple(moMusicArtist, rdfsSubClassOf, foafAgent)
+	g.AddTriple(
+		moMusicArtist,
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"),
+	)
+	g.AddTriple(
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"),
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Musical", "en"),
+	)
+
+	// foaf:Agent parent class — must have a prefLabel so arachne's ingestor
+	// (ADR-0004) can label the class when walking the subclass chain.
+	g.AddTriple(foafAgent,
+		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		owlClass,
+	)
+	g.AddTriple(foafAgent,
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Agent", "en"),
+	)
+
+	for rows.Next() {
+		var id int
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return g, err
+		}
+		subject := rdf2go.NewResource(fmt.Sprintf("%s/artists/%d", mediaMetadataManagerOrigin, id))
+		g.AddTriple(subject,
+			rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+			rdf2go.NewResource("http://purl.org/ontology/mo/MusicArtist"))
 		g.AddTriple(subject,
 			rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
 			rdf2go.NewLiteral(name))
@@ -481,6 +555,49 @@ func OntologyToRdf() (*rdf2go.Graph, error) {
 	g.AddTriple(moRecord,
 		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
 		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"))
+
+	// mo:MusicArtist class metadata — artists use this type.
+	// foaf:Agent prefLabel is also emitted so arachne's ingestor (ADR-0004) can
+	// label the parent class when walking the mo:MusicArtist rdfs:subClassOf chain.
+	moMusicArtist := rdf2go.NewResource("http://purl.org/ontology/mo/MusicArtist")
+	foafAgent := rdf2go.NewResource("http://xmlns.com/foaf/0.1/Agent")
+	g.AddTriple(moMusicArtist,
+		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		rdf2go.NewResource("http://www.w3.org/2002/07/owl#Class"))
+	g.AddTriple(moMusicArtist,
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Artist", "en"))
+	g.AddTriple(moMusicArtist,
+		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#subClassOf"),
+		foafAgent)
+	g.AddTriple(moMusicArtist,
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/hasCategory"),
+		rdf2go.NewResource("https://eolas.l42.eu/ontology/Musical"))
+	g.AddTriple(foafAgent,
+		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		rdf2go.NewResource("http://www.w3.org/2002/07/owl#Class"))
+	g.AddTriple(foafAgent,
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Agent", "en"))
+
+	// foaf:maker property — track→artist, pointing at mo:MusicArtist resources.
+	// Declared here so arachne can label the predicate on Track and Artist pages.
+	// Note: foaf:maker is an external URI so it cannot be handled by the addProperty
+	// helper above (which creates properties in our own ontology namespace). We
+	// emit a prefLabel manually, matching the pattern used for mo:track below.
+	foafMaker := rdf2go.NewResource("http://xmlns.com/foaf/0.1/maker")
+	g.AddTriple(foafMaker,
+		rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		owlObjectProperty)
+	g.AddTriple(foafMaker,
+		rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
+		rdf2go.NewLiteralWithLanguage("Artist", "en"))
+	g.AddTriple(foafMaker,
+		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#domain"),
+		moTrack)
+	g.AddTriple(foafMaker,
+		rdf2go.NewResource("http://www.w3.org/2000/01/rdf-schema#range"),
+		moMusicArtist)
 
 	// onAlbum property: track→album, declared as owl:inverseOf mo:track.
 	// Note: mo:track is an external URI (not in our custom ontology namespace) so it

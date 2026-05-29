@@ -17,9 +17,9 @@ func TestRegistryValidity(t *testing.T) {
 		if c.ValueShape != ValueShapeURIObject && c.AllowedOrigins != nil {
 			t.Errorf("predicate %q: non-URIObject predicate must not have AllowedOrigins set", id)
 		}
-		// Literal, URIObject, SearchURL and MBIDPrefix predicates must have a PredicateURI.
-		if (c.ValueShape == ValueShapeLiteral || c.ValueShape == ValueShapeURIObject || c.ValueShape == ValueShapeSearchURL || c.ValueShape == ValueShapeMBIDPrefix) && c.PredicateURI == "" {
-			t.Errorf("predicate %q: Literal/URIObject/SearchURL/MBIDPrefix predicate must have a PredicateURI", id)
+		// Literal, URIObject, and MBIDPrefix predicates must have a PredicateURI.
+		if (c.ValueShape == ValueShapeLiteral || c.ValueShape == ValueShapeURIObject || c.ValueShape == ValueShapeMBIDPrefix) && c.PredicateURI == "" {
+			t.Errorf("predicate %q: Literal/URIObject/MBIDPrefix predicate must have a PredicateURI", id)
 		}
 		// MBIDPrefix predicates must have a URIPrefix.
 		if c.ValueShape == ValueShapeMBIDPrefix && c.URIPrefix == "" {
@@ -32,7 +32,7 @@ func TestRegistryValidity(t *testing.T) {
 		// ValueShapeOmit predicates must not have a PredicateURI — they are explicitly
 		// suppressed from RDF output (e.g. lastSuccessfulPlay, lastError, lastSkip).
 		if c.ValueShape == ValueShapeOmit && c.PredicateURI != "" {
-			t.Errorf("predicate %q: Omit predicate must not have a PredicateURI — use ValueShapeSearchURL for predicates that need one but aren't yet URIObjects", id)
+			t.Errorf("predicate %q: Omit predicate must not have a PredicateURI", id)
 		}
 		// ResolveNameToURI and ResolveURIToName must be set together or both nil.
 		if (c.ResolveNameToURI == nil) != (c.ResolveURIToName == nil) {
@@ -61,30 +61,16 @@ func TestMultiValueCount(t *testing.T) {
 			count++
 		}
 	}
-	if count != 9 {
-		t.Errorf("expected 9 multi-value predicates, got %d", count)
+	if count != 10 {
+		t.Errorf("expected 10 multi-value predicates, got %d", count)
 	}
 }
 
 // TestURIObjectCount checks the expected number of URIObject predicates.
 func TestURIObjectCount(t *testing.T) {
 	count := len(URIObjectPredicates())
-	if count != 14 {
-		t.Errorf("expected 14 URIObject predicates, got %d", count)
-	}
-}
-
-// TestSearchURLPredicateCount checks the expected number of SearchURL predicates.
-// These are transitional — see ValueShapeSearchURL for context. TODO(#246): remove once artist is migrated.
-func TestSearchURLPredicateCount(t *testing.T) {
-	count := 0
-	for _, c := range registry {
-		if c.ValueShape == ValueShapeSearchURL {
-			count++
-		}
-	}
-	if count != 1 {
-		t.Errorf("expected 1 SearchURL predicate, got %d", count)
+	if count != 15 {
+		t.Errorf("expected 15 URIObject predicates, got %d", count)
 	}
 }
 
