@@ -1,7 +1,5 @@
 package predicateconfig
 
-import "fmt"
-
 // registry holds the configuration for all known predicates.
 // Predicates not listed here use zero-value Config (single-value, Omit shape, default behaviour).
 var registry = map[string]Config{
@@ -35,17 +33,11 @@ var registry = map[string]Config{
 		ValueShape:     ValueShapeURIObject,
 		PredicateURI:   "http://purl.org/ontology/mo/composer",
 		AllowedOrigins: []string{OriginEolas},
-		ResolveNameToURI: func(_ NameURIResolver, name string) (string, error) {
-			if EolasPersonResolver == nil {
-				return "", fmt.Errorf("EolasPersonResolver not configured")
-			}
-			return EolasPersonResolver(name)
+		ResolveNameToURI: func(r NameURIResolver, name string) (string, error) {
+			return r.ResolveOrCreateEolasEntityByName("person", name)
 		},
-		ResolveURIToName: func(_ NameURIResolver, uri string) (string, error) {
-			if EolasPersonNameResolver == nil {
-				return "", fmt.Errorf("EolasPersonNameResolver not configured")
-			}
-			return EolasPersonNameResolver(uri)
+		ResolveURIToName: func(r NameURIResolver, uri string) (string, error) {
+			return r.ResolveEolasEntityName(uri)
 		},
 	},
 	"producer": {
@@ -53,17 +45,11 @@ var registry = map[string]Config{
 		ValueShape:     ValueShapeURIObject,
 		PredicateURI:   "http://purl.org/ontology/mo/producer",
 		AllowedOrigins: []string{OriginEolas},
-		ResolveNameToURI: func(_ NameURIResolver, name string) (string, error) {
-			if EolasPersonResolver == nil {
-				return "", fmt.Errorf("EolasPersonResolver not configured")
-			}
-			return EolasPersonResolver(name)
+		ResolveNameToURI: func(r NameURIResolver, name string) (string, error) {
+			return r.ResolveOrCreateEolasEntityByName("person", name)
 		},
-		ResolveURIToName: func(_ NameURIResolver, uri string) (string, error) {
-			if EolasPersonNameResolver == nil {
-				return "", fmt.Errorf("EolasPersonNameResolver not configured")
-			}
-			return EolasPersonNameResolver(uri)
+		ResolveURIToName: func(r NameURIResolver, uri string) (string, error) {
+			return r.ResolveEolasEntityName(uri)
 		},
 	},
 	// genre: no consumers, no vocabulary; dormant data left in place.

@@ -66,11 +66,7 @@ func TestMultiValueCount(t *testing.T) {
 	}
 }
 
-
 // TestURIObjectCount checks the expected number of URIObject predicates.
-// Includes: language, offence, about, mentions, theme_tune, soundtrack, album (7 pre-existing)
-// Plus: provenance, availability, singalong, dance (4 added in #258) = 11 total.
-// Plus: composer, producer (2 migrated from SearchURL in #237) = 13 total.
 func TestURIObjectCount(t *testing.T) {
 	count := len(URIObjectPredicates())
 	if count != 13 {
@@ -79,10 +75,7 @@ func TestURIObjectCount(t *testing.T) {
 }
 
 // TestSearchURLPredicateCount checks the expected number of SearchURL predicates.
-// These are transitional; see ValueShapeSearchURL for the long-term migration plan.
-// provenance and availability were migrated to URIObject in #258; genre was dropped to Omit.
-// composer and producer were migrated to URIObject in #237.
-// Remaining: artist only. TODO(#246): remove once artist is migrated.
+// These are transitional — see ValueShapeSearchURL for context. TODO(#246): remove once artist is migrated.
 func TestSearchURLPredicateCount(t *testing.T) {
 	count := 0
 	for _, c := range registry {

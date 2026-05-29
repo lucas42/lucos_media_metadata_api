@@ -331,6 +331,20 @@ func (store Datastore) ResolveNameFromURI(uri string) (string, error) {
 	return store.resolveAlbumNameFromURI(uri)
 }
 
+// ResolveOrCreateEolasEntityByName satisfies the predicateconfig.NameURIResolver
+// interface. It creates (or retrieves) an eolas entity of the given type by name
+// and returns its URI. Used by the composer and producer predicates.
+func (store Datastore) ResolveOrCreateEolasEntityByName(entityType, name string) (string, error) {
+	return resolveOrCreateEolasEntityFn(entityType, name)
+}
+
+// ResolveEolasEntityName satisfies the predicateconfig.NameURIResolver interface.
+// It returns the canonical name for a given eolas entity URI. Used by the composer
+// and producer predicates when a tag is written with a URI but no name.
+func (store Datastore) ResolveEolasEntityName(uri string) (string, error) {
+	return entityNameFetcher(uri)
+}
+
 // resolveOrCreateAlbumByName looks up an album by name. If no album with that
 // name exists, one is created. Wired up via ResolveOrCreateByName as the
 // ResolveNameToURI function for the album predicate in the predicateconfig registry.

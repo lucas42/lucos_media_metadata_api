@@ -41,12 +41,22 @@ const (
 )
 
 // NameURIResolver resolves names to URIs and vice versa for URI-object predicates
-// that support name-based lookup (e.g. album). The api.Datastore type implements
-// this interface, allowing the registry closures to call back into the database
-// without importing the api package.
+// that support name-based lookup (e.g. album, composer, producer). The api.Datastore
+// type implements this interface, allowing the registry closures to call back into the
+// database and external services without importing the api package.
 type NameURIResolver interface {
+	// ResolveOrCreateByName looks up or creates an album-like entity by name.
+	// Used exclusively by the album predicate.
 	ResolveOrCreateByName(name string) (string, error)
+	// ResolveNameFromURI looks up an album name from its URI.
+	// Used exclusively by the album predicate.
 	ResolveNameFromURI(uri string) (string, error)
+	// ResolveOrCreateEolasEntityByName looks up or creates an eolas entity of the
+	// given type by name, returning its URI. Used by predicates that store eolas
+	// entity references (e.g. composer → person, producer → person).
+	ResolveOrCreateEolasEntityByName(entityType, name string) (string, error)
+	// ResolveEolasEntityName returns the canonical name for a given eolas entity URI.
+	ResolveEolasEntityName(uri string) (string, error)
 }
 
 // Symbolic origin identifiers for use in Config.AllowedOrigins.

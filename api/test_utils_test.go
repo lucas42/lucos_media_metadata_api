@@ -13,8 +13,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"lucos_media_metadata_api/predicateconfig"
 )
 
 var server *httptest.Server
@@ -90,20 +88,10 @@ func TestMain(m *testing.M) {
 	eolasOrigin = "https://eolas.l42.eu"
 	os.Setenv("EOLAS_ORIGIN", "https://eolas.l42.eu")
 
-	// Provide test stubs for the eolas Person resolvers so tests that write
-	// composer/producer tags don't make real HTTP calls to eolas.
-	predicateconfig.EolasPersonResolver = func(name string) (string, error) {
-		// Return a deterministic synthetic URI based on the name.
-		return "https://eolas.l42.eu/metadata/person/test-" + url.PathEscape(strings.ToLower(name)) + "/", nil
-	}
-	predicateconfig.EolasPersonNameResolver = func(uri string) (string, error) {
-		// Extract the slug from the URI and return it as a name. Good enough for tests.
-		trimmed := strings.TrimSuffix(strings.TrimPrefix(uri, "https://eolas.l42.eu/metadata/person/"), "/")
-		unescaped, err := url.PathUnescape(trimmed)
-		if err != nil {
-			return trimmed, nil
-		}
-		return unescaped, nil
+	// Provide a test stub for eolas entity creation so tests that write
+	// composer/producer name-only tags don't make real HTTP calls to eolas.
+	resolveOrCreateEolasEntityFn = func(entityType, name string) (string, error) {
+		return "https://eolas.l42.eu/metadata/" + url.PathEscape(entityType) + "/test-" + url.PathEscape(strings.ToLower(name)) + "/", nil
 	}
 
 	clearData()
