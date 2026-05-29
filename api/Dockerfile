@@ -11,6 +11,6 @@ COPY predicateconfig/ ./predicateconfig/
 COPY rdfgen/ ./rdfgen/
 COPY api .
 COPY scripts/ ./scripts/
-RUN go install && go build -o $(go env GOPATH)/bin/migrate_album_tags ./scripts/migrate_album_tags/ && go build -o $(go env GOPATH)/bin/migrate_creative_work_tags ./scripts/migrate_creative_work_tags/ && go build -o $(go env GOPATH)/bin/migrate_offence_tags ./scripts/migrate_offence_tags/ && go build -o $(go env GOPATH)/bin/migrate_skos_tags ./scripts/migrate_skos_tags/ && go build -o $(go env GOPATH)/bin/migrate_person_tags ./scripts/migrate_person_tags/
+RUN go install && go build -o $(go env GOPATH)/bin/migrate_album_tags ./scripts/migrate_album_tags/ && go build -o $(go env GOPATH)/bin/migrate_creative_work_tags ./scripts/migrate_creative_work_tags/ && go build -o $(go env GOPATH)/bin/migrate_memory_tags ./scripts/migrate_memory_tags/ && go build -o $(go env GOPATH)/bin/migrate_offence_tags ./scripts/migrate_offence_tags/ && go build -o $(go env GOPATH)/bin/migrate_skos_tags ./scripts/migrate_skos_tags/ && go build -o $(go env GOPATH)/bin/migrate_person_tags ./scripts/migrate_person_tags/
 
 CMD ["lucos_media_metadata_api"]
