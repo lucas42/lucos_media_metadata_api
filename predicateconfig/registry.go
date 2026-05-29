@@ -141,8 +141,10 @@ var registry = map[string]Config{
 		PredicateURI: "http://schema.org/ratingValue",
 	},
 	"memory": {
-		ValueShape:   ValueShapeLiteral,
-		PredicateURI: "/ontology#memory",
+		MultiValue:     true,
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "/ontology#memory",
+		AllowedOrigins: []string{OriginEolas},
 	},
 	"year": {
 		ValueShape:   ValueShapeLiteral,
