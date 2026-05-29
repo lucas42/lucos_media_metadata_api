@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+
+	"lucos_media_metadata_api/predicateconfig"
 )
 
 // mediaMetadataManagerOrigin is the base URL of this service, read from
@@ -36,6 +38,10 @@ func main() {
 		os.Exit(1)
 	}
 	mediaMetadataManagerOrigin = os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
+
+	// Wire eolas Person resolvers used by the composer and producer predicates.
+	predicateconfig.EolasPersonResolver = resolveOrCreateEolasPersonHTTP
+	predicateconfig.EolasPersonNameResolver = fetchEolasName
 
 	// Expose pprof on a localhost-only listener so it's reachable via docker exec
 	// but never from the public internet.

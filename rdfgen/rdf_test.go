@@ -25,23 +25,30 @@ func TestMapPredicate(t *testing.T) {
 
 // Test multi-value predicates: each DB row produces one term per call,
 // and multiple calls with the same predicate return distinct terms.
-// Note: language/about/mentions/offence are excluded here because they require a uri column value
-// to produce output — without one they are silently skipped (see TestMapPredicateSkipsWhenNoUri).
+// composer and producer are now URIObject predicates — they require a uri column
+// value and are silently skipped when absent (see TestMapPredicateSkipsWhenNoUri).
+// language/about/mentions/offence/composer/producer are therefore tested here
+// using their URI-object form.
 func TestMapPredicateMultiValue(t *testing.T) {
+	aliceURI := "https://eolas.l42.eu/metadata/person/alice/"
+	bobURI := "https://eolas.l42.eu/metadata/person/bob/"
+	charlieURI := "https://eolas.l42.eu/metadata/person/charlie/"
+	daveURI := "https://eolas.l42.eu/metadata/person/dave/"
 	cases := []struct {
 		predicateID string
 		value       string
+		uri         *string
 		expectedURI string
 	}{
-		{"composer", "Alice", "http://purl.org/ontology/mo/composer"},
-		{"composer", "Bob", "http://purl.org/ontology/mo/composer"},
-		{"producer", "Charlie", "http://purl.org/ontology/mo/producer"},
-		{"producer", "Dave", "http://purl.org/ontology/mo/producer"},
+		{"composer", "Alice", &aliceURI, "http://purl.org/ontology/mo/composer"},
+		{"composer", "Bob", &bobURI, "http://purl.org/ontology/mo/composer"},
+		{"producer", "Charlie", &charlieURI, "http://purl.org/ontology/mo/producer"},
+		{"producer", "Dave", &daveURI, "http://purl.org/ontology/mo/producer"},
 	}
 	// Track terms by predicate to verify distinct values
 	termsByPredicate := make(map[string][]string)
 	for _, tc := range cases {
-		pred, terms := mapPredicate(tc.predicateID, tc.value, nil, "http://localhost:8020", "http://localhost:3002")
+		pred, terms := mapPredicate(tc.predicateID, tc.value, tc.uri, "http://localhost:8020", "http://localhost:3002")
 		if pred != tc.expectedURI {
 			t.Errorf("predicate %q value %q: expected URI %q, got %q", tc.predicateID, tc.value, tc.expectedURI, pred)
 		}
@@ -86,18 +93,19 @@ func TestExportRDF(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Insert a track and tags — multi-value fields use separate rows
+	// Insert a track and tags — multi-value fields use separate rows.
+	// composer and producer are URIObject predicates and require a uri column value.
 	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 120)`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = db.Exec(`
-	INSERT INTO tag (trackid, predicateid, value) VALUES
-	(1, 'title', 'My Song'),
-	(1, 'composer', 'Alice'),
-	(1, 'composer', 'Bob'),
-	(1, 'producer', 'Charlie'),
-	(1, 'producer', 'Dave')
+	INSERT INTO tag (trackid, predicateid, value, uri) VALUES
+	(1, 'title', 'My Song', ''),
+	(1, 'composer', 'Alice', 'https://eolas.l42.eu/metadata/person/alice/'),
+	(1, 'composer', 'Bob', 'https://eolas.l42.eu/metadata/person/bob/'),
+	(1, 'producer', 'Charlie', 'https://eolas.l42.eu/metadata/person/charlie/'),
+	(1, 'producer', 'Dave', 'https://eolas.l42.eu/metadata/person/dave/')
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -120,9 +128,15 @@ func TestExportRDF(t *testing.T) {
 
 	output := string(content)
 
-	// Verify all multi-value tags appear in the output
-	// Each value should generate a separate triple
-	for _, expected := range []string{"Alice", "Bob", "Charlie", "Dave", "My Song"} {
+	// Verify all multi-value tags appear in the output.
+	// composer/producer now emit eolas Person URIs, not freetext names.
+	for _, expected := range []string{
+		"My Song",
+		"eolas.l42.eu/metadata/person/alice/",
+		"eolas.l42.eu/metadata/person/bob/",
+		"eolas.l42.eu/metadata/person/charlie/",
+		"eolas.l42.eu/metadata/person/dave/",
+	} {
 		if !strings.Contains(output, expected) {
 			t.Errorf("expected RDF output to contain %q, but it was missing", expected)
 		}
@@ -272,10 +286,10 @@ func TestMapPredicateOffenceUri(t *testing.T) {
 	}
 }
 
-// TestMapPredicateSkipsWhenNoUri verifies that language/about/mentions/offence tags without
-// a uri value are silently skipped rather than using value as a fallback IRI.
+// TestMapPredicateSkipsWhenNoUri verifies that all URIObject predicates (including
+// composer and producer, migrated in #237) are silently skipped when uri is absent.
 func TestMapPredicateSkipsWhenNoUri(t *testing.T) {
-	for _, predicateID := range []string{"language", "about", "mentions", "offence"} {
+	for _, predicateID := range []string{"language", "about", "mentions", "offence", "composer", "producer"} {
 		pred, terms := mapPredicate(predicateID, "some label", nil, "http://localhost:8020", "http://localhost:3002")
 		if pred != "" || len(terms) != 0 {
 			t.Errorf("predicate %q with nil uri: expected skip (empty pred and terms), got pred=%q terms=%v", predicateID, pred, terms)
@@ -349,16 +363,16 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 	}
 }
 
-// TestMapPredicateSearchURLPredicates verifies that the remaining SearchURL predicates
-// (artist, composer, producer) produce search-URL IRI objects.
+// TestMapPredicateSearchURLPredicates verifies that the remaining SearchURL predicate
+// (artist) produces search-URL IRI objects. composer and producer were migrated to
+// URIObject in #237 and no longer appear here (see TestMapPredicateMultiValue).
+// TODO(#246): remove once artist is migrated.
 func TestMapPredicateSearchURLPredicates(t *testing.T) {
 	cases := []struct {
 		predicateID  string
 		expectedPred string
 	}{
 		{"artist", "http://xmlns.com/foaf/0.1/maker"},
-		{"composer", "http://purl.org/ontology/mo/composer"},
-		{"producer", "http://purl.org/ontology/mo/producer"},
 	}
 	for _, tc := range cases {
 		pred, terms := mapPredicate(tc.predicateID, "somevalue", nil, "http://localhost:8020", "http://localhost:3002")

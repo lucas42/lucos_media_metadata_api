@@ -1,5 +1,7 @@
 package predicateconfig
 
+import "fmt"
+
 // registry holds the configuration for all known predicates.
 // Predicates not listed here use zero-value Config (single-value, Omit shape, default behaviour).
 var registry = map[string]Config{
@@ -21,22 +23,48 @@ var registry = map[string]Config{
 	},
 
 	// SearchURL predicates — transitional; see ValueShapeSearchURL for context.
-	// TODO(#237): composer and producer are the last remaining SearchURL predicates.
-	// Once #237 (migrate Person-typed tags to eolas URIs) is done, ValueShapeSearchURL
-	// and getSearchUrl can be removed entirely.
+	// TODO(#246): artist is the last remaining SearchURL predicate.
+	// Once #246 (migrate artist tags) is done, ValueShapeSearchURL and getSearchUrl
+	// can be removed entirely.
 	"artist": {
 		ValueShape:   ValueShapeSearchURL,
 		PredicateURI: "http://xmlns.com/foaf/0.1/maker",
 	},
 	"composer": {
-		MultiValue:   true,
-		ValueShape:   ValueShapeSearchURL,
-		PredicateURI: "http://purl.org/ontology/mo/composer",
+		MultiValue:     true,
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "http://purl.org/ontology/mo/composer",
+		AllowedOrigins: []string{OriginEolas},
+		ResolveNameToURI: func(_ NameURIResolver, name string) (string, error) {
+			if EolasPersonResolver == nil {
+				return "", fmt.Errorf("EolasPersonResolver not configured")
+			}
+			return EolasPersonResolver(name)
+		},
+		ResolveURIToName: func(_ NameURIResolver, uri string) (string, error) {
+			if EolasPersonNameResolver == nil {
+				return "", fmt.Errorf("EolasPersonNameResolver not configured")
+			}
+			return EolasPersonNameResolver(uri)
+		},
 	},
 	"producer": {
-		MultiValue:   true,
-		ValueShape:   ValueShapeSearchURL,
-		PredicateURI: "http://purl.org/ontology/mo/producer",
+		MultiValue:     true,
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "http://purl.org/ontology/mo/producer",
+		AllowedOrigins: []string{OriginEolas},
+		ResolveNameToURI: func(_ NameURIResolver, name string) (string, error) {
+			if EolasPersonResolver == nil {
+				return "", fmt.Errorf("EolasPersonResolver not configured")
+			}
+			return EolasPersonResolver(name)
+		},
+		ResolveURIToName: func(_ NameURIResolver, uri string) (string, error) {
+			if EolasPersonNameResolver == nil {
+				return "", fmt.Errorf("EolasPersonNameResolver not configured")
+			}
+			return EolasPersonNameResolver(uri)
+		},
 	},
 	// genre: no consumers, no vocabulary; dormant data left in place.
 	// When a genuine use case arrives, file a fresh design ticket.
