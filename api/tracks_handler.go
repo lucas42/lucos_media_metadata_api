@@ -69,6 +69,7 @@ func writeV3ErrorResponse(w http.ResponseWriter, statusCode int, message string,
 
 // writeV3TagValidationError writes a 400 invalid_tag_value error for a specific predicate.
 func writeV3TagValidationError(w http.ResponseWriter, predicate string, message string) {
+	slog.Warn("track update rejected", "code", "invalid_tag_value", "predicate", predicate, "reason", message)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, max-age=0, no-store, must-revalidate")
 	w.WriteHeader(http.StatusBadRequest)
@@ -97,6 +98,7 @@ func validateTagsV3(tags map[string][]TagValueV3) (predicate string, message str
 func writeV3Error(w http.ResponseWriter, err error) {
 	// URIOriginValidationError carries the predicate name, so use the structured
 	// tag-validation response to include it in the JSON body.
+	// writeV3TagValidationError logs the rejection at WARN level.
 	var uriOriginErr *URIOriginValidationError
 	if errors.As(err, &uriOriginErr) {
 		writeV3TagValidationError(w, uriOriginErr.Predicate, uriOriginErr.Reason)
@@ -106,12 +108,16 @@ func writeV3Error(w http.ResponseWriter, err error) {
 	if strings.HasSuffix(msg, " Not Found") {
 		writeV3ErrorResponse(w, http.StatusNotFound, msg, "not_found")
 	} else if strings.HasPrefix(msg, "Duplicate:") {
+		slog.Warn("track update rejected", "code", "duplicate", "reason", msg)
 		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "duplicate")
 	} else if strings.HasSuffix(msg, "not allowed") {
+		slog.Warn("track update rejected", "code", "bad_request", "reason", msg)
 		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "bad_request")
 	} else if strings.Contains(msg, "requires a URI") {
+		slog.Warn("track update rejected", "code", "requires_uri", "reason", msg)
 		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "requires_uri")
 	} else if strings.Contains(msg, "does not support URI-based filtering") {
+		slog.Warn("track update rejected", "code", "bad_request", "reason", msg)
 		writeV3ErrorResponse(w, http.StatusBadRequest, msg, "bad_request")
 	} else {
 		writeV3ErrorResponse(w, http.StatusInternalServerError, msg, "internal_error")
