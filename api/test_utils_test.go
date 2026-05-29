@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"reflect"
 	"regexp"
@@ -86,6 +87,13 @@ func TestMain(m *testing.M) {
 	// pass validation (empty value → origin filtered out → validation skipped).
 	eolasOrigin = "https://eolas.l42.eu"
 	os.Setenv("EOLAS_ORIGIN", "https://eolas.l42.eu")
+
+	// Provide a test stub for eolas entity creation so tests that write
+	// composer/producer name-only tags don't make real HTTP calls to eolas.
+	resolveOrCreateEolasEntityFn = func(entityType, name string) (string, error) {
+		return "https://eolas.l42.eu/metadata/" + url.PathEscape(entityType) + "/test-" + url.PathEscape(strings.ToLower(name)) + "/", nil
+	}
+
 	clearData()
 	result := m.Run()
 	os.Remove("testrouting.sqlite")

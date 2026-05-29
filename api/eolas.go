@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -117,4 +119,89 @@ func fetchEolasName(uri string) (string, error) {
 // eolasLanguageURI builds the canonical eolas URI for a language code.
 func eolasLanguageURI(code string) string {
 	return fmt.Sprintf("%s/metadata/language/%s/", eolasOrigin, url.PathEscape(code))
+}
+
+// eolasEntityResponse is the JSON shape returned by the eolas entity create endpoint.
+type eolasEntityResponse struct {
+	ID   int    `json:"id"`
+	URI  string `json:"uri"`
+	Name string `json:"name"`
+}
+
+// resolveOrCreateEolasEntityFn is the function used to resolve-or-create eolas
+// entities at tag-write time. Overridable in tests via a package-level swap.
+var resolveOrCreateEolasEntityFn = resolveOrCreateEolasEntityHTTP
+
+// resolveOrCreateEolasEntityHTTP POSTs a new entity of the given type to eolas.
+// On 201 (created) or 409 (already_exists) it returns the entity URI.
+// The 409 case naturally covers concurrent creation — eolas returns the existing
+// entity so no pre-listing is needed.
+//
+// entityType must match an eolas model slug (e.g. "person").
+func resolveOrCreateEolasEntityHTTP(entityType, name string) (string, error) {
+	key := os.Getenv("KEY_LUCOS_EOLAS")
+	if key == "" {
+		return "", fmt.Errorf("KEY_LUCOS_EOLAS not set; cannot resolve eolas %s for %q", entityType, name)
+	}
+	if eolasOrigin == "" {
+		return "", fmt.Errorf("EOLAS_ORIGIN not set; cannot resolve eolas %s for %q", entityType, name)
+	}
+
+	createURL := eolasOrigin + "/api/metadata/" + url.PathEscape(entityType) + "/"
+	payload, err := json.Marshal(map[string]interface{}{"name": name})
+	if err != nil {
+		return "", fmt.Errorf("building create-%s payload: %w", entityType, err)
+	}
+	req, err := http.NewRequest("POST", createURL, bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("building create-%s request: %w", entityType, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("creating eolas %s %q: %w", entityType, name, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading create-%s response: %w", entityType, err)
+	}
+
+	// Check status before unmarshalling — non-JSON error bodies (proxied 503,
+	// plain-text 500) would otherwise produce a misleading parse failure.
+	switch resp.StatusCode {
+	case http.StatusCreated, http.StatusConflict: // 409 = already_exists
+		var entity eolasEntityResponse
+		if err := json.Unmarshal(body, &entity); err != nil {
+			return "", fmt.Errorf("parsing create-%s response (HTTP %d): %w (body: %s)", entityType, resp.StatusCode, err, string(body))
+		}
+		if entity.URI == "" {
+			return "", fmt.Errorf("eolas returned HTTP %d for %s %q but response had no URI: %s", resp.StatusCode, entityType, name, string(body))
+		}
+		if resp.StatusCode == http.StatusCreated {
+			slog.Info("Created eolas entity", "type", entityType, "name", name, "uri", entity.URI)
+		}
+		return entity.URI, nil
+	default:
+		return "", fmt.Errorf("eolas returned HTTP %d creating %s %q: %s", resp.StatusCode, entityType, name, string(body))
+	}
+}
+
+// ResolveOrCreateEolasEntityByName satisfies the predicateconfig.NameURIResolver
+// interface. It creates (or retrieves) an eolas entity of the given type by name
+// and returns its URI. Used by the composer and producer predicates.
+func (store Datastore) ResolveOrCreateEolasEntityByName(entityType, name string) (string, error) {
+	return resolveOrCreateEolasEntityFn(entityType, name)
+}
+
+// ResolveEolasEntityName satisfies the predicateconfig.NameURIResolver interface.
+// It returns the canonical name for a given eolas entity URI. Used by the composer
+// and producer predicates when a tag is written with a URI but no name.
+func (store Datastore) ResolveEolasEntityName(uri string) (string, error) {
+	return entityNameFetcher(uri)
 }

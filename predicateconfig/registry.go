@@ -21,22 +21,36 @@ var registry = map[string]Config{
 	},
 
 	// SearchURL predicates — transitional; see ValueShapeSearchURL for context.
-	// TODO(#237): composer and producer are the last remaining SearchURL predicates.
-	// Once #237 (migrate Person-typed tags to eolas URIs) is done, ValueShapeSearchURL
-	// and getSearchUrl can be removed entirely.
+	// TODO(#246): artist is the last remaining SearchURL predicate.
+	// Once #246 (migrate artist tags) is done, ValueShapeSearchURL and getSearchUrl
+	// can be removed entirely.
 	"artist": {
 		ValueShape:   ValueShapeSearchURL,
 		PredicateURI: "http://xmlns.com/foaf/0.1/maker",
 	},
 	"composer": {
-		MultiValue:   true,
-		ValueShape:   ValueShapeSearchURL,
-		PredicateURI: "http://purl.org/ontology/mo/composer",
+		MultiValue:     true,
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "http://purl.org/ontology/mo/composer",
+		AllowedOrigins: []string{OriginEolas},
+		ResolveNameToURI: func(r NameURIResolver, name string) (string, error) {
+			return r.ResolveOrCreateEolasEntityByName("person", name)
+		},
+		ResolveURIToName: func(r NameURIResolver, uri string) (string, error) {
+			return r.ResolveEolasEntityName(uri)
+		},
 	},
 	"producer": {
-		MultiValue:   true,
-		ValueShape:   ValueShapeSearchURL,
-		PredicateURI: "http://purl.org/ontology/mo/producer",
+		MultiValue:     true,
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "http://purl.org/ontology/mo/producer",
+		AllowedOrigins: []string{OriginEolas},
+		ResolveNameToURI: func(r NameURIResolver, name string) (string, error) {
+			return r.ResolveOrCreateEolasEntityByName("person", name)
+		},
+		ResolveURIToName: func(r NameURIResolver, uri string) (string, error) {
+			return r.ResolveEolasEntityName(uri)
+		},
 	},
 	// genre: no consumers, no vocabulary; dormant data left in place.
 	// When a genuine use case arrives, file a fresh design ticket.
