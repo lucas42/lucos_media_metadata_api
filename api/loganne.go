@@ -35,13 +35,13 @@ func (loganne Loganne) buildAndPost(data map[string]interface{}) {
 	postData, _ := json.Marshal(data)
 	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
 	if err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+		slog.Warn("Error occurred whilst posting to Loganne", slog.Any("error", err))
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
 	if _, err := loganneHTTPClient.Do(req); err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+		slog.Warn("Error occurred whilst posting to Loganne", slog.Any("error", err))
 	}
 }
 
