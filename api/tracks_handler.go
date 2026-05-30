@@ -236,6 +236,12 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 	}
 
 	// Populate the Name field for URI-only tag values.
+	// For predicates with BestEffortURIToName (e.g. composer, producer), failures
+	// are non-fatal: the URI is stored and the daily reconcileTagNames job backfills
+	// the name once the upstream service (eolas) recovers. The URI is already present
+	// so the uri-integrity check remains satisfied.
+	// For other predicates (e.g. album), a resolution failure means the URI doesn't
+	// exist locally and is a hard error that rejects the save.
 	for i, u := range updates {
 		config := predicateconfig.GetConfig(u.predicate)
 		if config.ResolveURIToName != nil {
@@ -243,10 +249,16 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 				if v.Name == "" && v.URI != "" {
 					name, resolveErr := config.ResolveURIToName(store, v.URI)
 					if resolveErr != nil {
-						err = fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, u.predicate, resolveErr)
-						return
+						if config.BestEffortURIToName {
+							slog.Warn("could not resolve name for URI tag; storing URI with empty name for later reconciliation",
+								"predicate", u.predicate, "uri", v.URI, slog.Any("error", resolveErr))
+						} else {
+							err = fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, u.predicate, resolveErr)
+							return
+						}
+					} else {
+						updates[i].values[j].Name = name
 					}
-					updates[i].values[j].Name = name
 				}
 			}
 		}
@@ -349,15 +361,22 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 				}
 			}
 			// Populate Name from URI for URI-only values.
+			// See updateTagsV3 for the BestEffortURIToName resilience rationale.
 			if config.ResolveURIToName != nil {
 				for i, v := range nonEmpty {
 					if v.Name == "" && v.URI != "" {
 						name, resolveErr := config.ResolveURIToName(store, v.URI)
 						if resolveErr != nil {
-							err = fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, predicate, resolveErr)
-							return
+							if config.BestEffortURIToName {
+								slog.Warn("could not resolve name for URI tag; storing URI with empty name for later reconciliation",
+									"predicate", predicate, "uri", v.URI, slog.Any("error", resolveErr))
+							} else {
+								err = fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, predicate, resolveErr)
+								return
+							}
+						} else {
+							nonEmpty[i].Name = name
 						}
-						nonEmpty[i].Name = name
 					}
 				}
 			}

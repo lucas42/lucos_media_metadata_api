@@ -868,3 +868,49 @@ func TestV3PatchLastErrorWithMessageProducesBespokeLoganneMessage(test *testing.
 	assertEqual(test, "Loganne humanReadable message", `Track "Louie Louie" errored`, lastLoganneMessage)
 	assertEqual(test, "Loganne request count", 1, loganneRequestCount)
 }
+
+// TestV3ComposerURIOnlySucceedsWhenNameLookupFails exercises Layer 2 resilience:
+// a composer tag submitted with a URI but no name must be stored successfully
+// even when the URI→name lookup to eolas fails (e.g. eolas is temporarily slow).
+// The URI must be stored; the name may be empty and will be filled by the
+// daily reconcileTagNames job once eolas recovers.
+func TestV3ComposerURIOnlySucceedsWhenNameLookupFails(test *testing.T) {
+	clearData()
+
+	// Override entityNameFetcher to simulate eolas being temporarily unavailable.
+	origFetcher := entityNameFetcher
+	entityNameFetcher = func(uri string) (string, error) {
+		return "", fmt.Errorf("eolas temporarily unavailable (simulated for test)")
+	}
+	defer func() { entityNameFetcher = origFetcher }()
+
+	trackURL := "http://example.org/v3composer-uri-only-resilience"
+	v3Path := fmt.Sprintf("/v3/tracks?url=%s", url.QueryEscape(trackURL))
+	composerURI := "https://eolas.l42.eu/metadata/person/bach/"
+
+	// PUT a track with a URI-only composer tag. Should succeed despite the failing name lookup.
+	body := fmt.Sprintf(`{"fingerprint":"v3comuri-resil","duration":150,"tags":{"composer":[{"uri":%q}]}}`, composerURI)
+	req := basicRequest(test, "PUT", v3Path, body)
+	resp, _ := doRawRequest(test, req)
+	if resp.StatusCode != 200 {
+		test.Fatalf("Expected 200 for URI-only composer when name lookup fails, got %d", resp.StatusCode)
+	}
+
+	// Verify the URI was stored. The name may be empty — that's expected.
+	var track TrackV3
+	getReq := basicRequest(test, "GET", v3Path, "")
+	getResp, _ := doRawRequest(test, getReq)
+	if getResp.StatusCode != 200 {
+		test.Fatalf("Expected 200 for GET after URI-only composer save, got %d", getResp.StatusCode)
+	}
+	if err := json.NewDecoder(getResp.Body).Decode(&track); err != nil {
+		test.Fatalf("Failed to decode GET response: %v", err)
+	}
+	composers := track.Tags["composer"]
+	if len(composers) != 1 {
+		test.Fatalf("Expected 1 composer tag, got %d", len(composers))
+	}
+	if composers[0].URI != composerURI {
+		test.Errorf("Expected stored composer URI %q, got %q", composerURI, composers[0].URI)
+	}
+}

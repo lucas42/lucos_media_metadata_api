@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/deiu/rdf2go"
@@ -21,6 +22,12 @@ var eolasOrigin = os.Getenv("EOLAS_ORIGIN")
 
 const eolasDataPath = "/metadata/all/data/"
 const prefLabelURI = "http://www.w3.org/2004/02/skos/core#prefLabel"
+
+// eolasClientTimeout is the HTTP timeout for eolas calls on the request
+// (save) path. Short by design — a bounded fast failure beats a 30-second
+// hang that cascades into a gateway 502. Background jobs (e.g. reconcile)
+// use their own, longer timeout since latency there does not block a user.
+const eolasClientTimeout = 3 * time.Second
 
 // fetchEolasNames fetches human-readable names (skos:prefLabel) for the given
 // URIs from the lucos_eolas bulk data endpoint. Returns a map of URI → name.
@@ -101,19 +108,68 @@ func fetchEolasNames(uris []string) map[string]string {
 	return names
 }
 
-// fetchEolasName fetches the canonical name for a single eolas entity URI
-// by looking it up in the bulk data endpoint. Returns an error if the URI
-// is not found or if the fetch itself fails.
+// fetchEolasName fetches the canonical name (skos:prefLabel) for a single
+// eolas entity using the per-entity data endpoint (/metadata/{type}/{pk}/data/).
+// This is significantly cheaper than the bulk /metadata/all/data/ endpoint —
+// it fetches only the RDF graph for the requested entity, not the whole dataset.
+// Uses eolasClientTimeout so it fails fast if eolas is slow or unavailable.
 func fetchEolasName(uri string) (string, error) {
-	names := fetchEolasNames([]string{uri})
-	if names == nil {
-		return "", fmt.Errorf("eolas fetch failed for %q", uri)
+	key := os.Getenv("KEY_LUCOS_EOLAS")
+	if key == "" {
+		return "", fmt.Errorf("KEY_LUCOS_EOLAS not set; cannot resolve name for %q", uri)
 	}
-	name, ok := names[uri]
-	if !ok {
-		return "", fmt.Errorf("no name found for %q in eolas data", uri)
+
+	// Construct the per-entity data URL: append "data/" after the entity path.
+	// Eolas entity URIs consistently end with a trailing slash.
+	dataURL := strings.TrimRight(uri, "/") + "/data/"
+
+	eolasBaseURL, _ := url.Parse(eolasOrigin)
+	client := &http.Client{
+		Timeout: eolasClientTimeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Host == eolasBaseURL.Host {
+				req.Header.Set("Authorization", "Bearer "+key)
+			}
+			return nil
+		},
 	}
-	return name, nil
+
+	req, err := http.NewRequest("GET", dataURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("building eolas entity request for %q: %w", uri, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+key)
+	req.Header.Set("Accept", "text/turtle")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+
+	slog.Debug("Fetching entity name from eolas", "uri", uri, "url", dataURL)
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetching eolas entity %q: %w", uri, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", fmt.Errorf("eolas returned HTTP %d for entity %q: %s", resp.StatusCode, uri, string(body))
+	}
+
+	// Parse the entity-scoped Turtle graph. Use the entity URI as the base so
+	// that any relative references in the Turtle resolve correctly.
+	g := rdf2go.NewGraph(uri)
+	if err := g.Parse(resp.Body, "text/turtle"); err != nil {
+		return "", fmt.Errorf("parsing eolas entity RDF for %q: %w", uri, err)
+	}
+
+	prefLabel := rdf2go.NewResource(prefLabelURI)
+	subject := rdf2go.NewResource(uri)
+	for triple := range g.IterTriples() {
+		if triple.Predicate.Equal(prefLabel) && triple.Subject.Equal(subject) {
+			return triple.Object.RawValue(), nil
+		}
+	}
+
+	return "", fmt.Errorf("no prefLabel found for %q in eolas entity data", uri)
 }
 
 // eolasLanguageURI builds the canonical eolas URI for a language code.
@@ -160,7 +216,7 @@ func resolveOrCreateEolasEntityHTTP(entityType, name string) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: eolasClientTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("creating eolas %s %q: %w", entityType, name, err)
