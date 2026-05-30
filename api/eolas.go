@@ -114,6 +114,16 @@ func fetchEolasNames(uris []string) map[string]string {
 // it fetches only the RDF graph for the requested entity, not the whole dataset.
 // Uses eolasClientTimeout so it fails fast if eolas is slow or unavailable.
 func fetchEolasName(uri string) (string, error) {
+	// Belt-and-braces origin guard: URI must start with the configured eolas
+	// origin. This makes the function self-protecting regardless of how callers
+	// evolve, and removes any CodeQL SSRF concern at the point of URL construction.
+	if eolasOrigin == "" {
+		return "", fmt.Errorf("EOLAS_ORIGIN not set; cannot fetch name for %q", uri)
+	}
+	if !strings.HasPrefix(uri, eolasOrigin+"/") {
+		return "", fmt.Errorf("fetchEolasName: URI %q does not start with configured eolas origin", uri)
+	}
+
 	key := os.Getenv("KEY_LUCOS_EOLAS")
 	if key == "" {
 		return "", fmt.Errorf("KEY_LUCOS_EOLAS not set; cannot resolve name for %q", uri)
