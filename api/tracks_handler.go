@@ -150,6 +150,55 @@ func DecodeTrackV3(r io.Reader) (TrackV3, error) {
 	return *track, err
 }
 
+// resolveTagValue applies the full per-value normalisation pipeline for a single
+// v3 tag value before it is written to the database:
+//  1. name→URI resolution (ResolveNameToURI) — fills v.URI from v.Name when configured.
+//  2. URI→name backfill (ResolveURIToName) — fills v.Name from v.URI when configured.
+//     Failures are non-fatal when BestEffortURIToName is set; the name is left empty
+//     and the daily reconcileTagNames job will backfill it later.
+//  3. URI validation (RequiresURI, ValidateURIOrigin) — rejects values that lack a
+//     required URI or whose URI doesn't start with an allowed origin.
+func resolveTagValue(store Datastore, predicate string, config predicateconfig.Config, v TagValueV3) (TagValueV3, error) {
+	// 1. Resolve name to URI if URI is absent.
+	if config.ResolveNameToURI != nil && v.URI == "" && v.Name != "" {
+		uri, err := config.ResolveNameToURI(store, v.Name)
+		if err != nil {
+			return v, fmt.Errorf("could not resolve %q for predicate %q: %w", v.Name, predicate, err)
+		}
+		v.URI = uri
+	}
+	// 2. Backfill name from URI if name is absent.
+	// For predicates with BestEffortURIToName (e.g. composer, producer), failures
+	// are non-fatal: the URI is stored and the daily reconcileTagNames job backfills
+	// the name once the upstream service (eolas) recovers. The URI is already present
+	// so the uri-integrity check remains satisfied.
+	// For other predicates (e.g. album), a resolution failure means the URI doesn't
+	// exist locally and is a hard error that rejects the save.
+	if config.ResolveURIToName != nil && v.Name == "" && v.URI != "" {
+		name, err := config.ResolveURIToName(store, v.URI)
+		if err != nil {
+			if config.BestEffortURIToName {
+				slog.Warn("could not resolve name for URI tag; storing URI with empty name for later reconciliation",
+					"predicate", predicate, "uri", v.URI, slog.Any("error", err))
+			} else {
+				return v, fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, predicate, err)
+			}
+		} else {
+			v.Name = name
+		}
+	}
+	// 3. Validate URI constraints.
+	if config.RequiresURI() {
+		if v.URI == "" {
+			return v, fmt.Errorf("predicate %q requires a URI", predicate)
+		}
+		if reason := config.ValidateURIOrigin(v.URI); reason != "" {
+			return v, &URIOriginValidationError{Predicate: predicate, Reason: reason}
+		}
+	}
+	return v, nil
+}
+
 // updateTagsV3 updates tags for a track using the v3 multi-value semantics.
 // For each predicate in the map, all existing values are replaced with the
 // provided array. Empty arrays delete the predicate's tags.
@@ -162,7 +211,7 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 		values    []TagValueV3 // empty slice means delete all values
 	}
 
-	// Filter empty values and validate constraints before touching the database.
+	// Filter empty values, validate constraints, and resolve name/URI before touching the database.
 	updates := make([]predicateUpdate, 0, len(tags))
 	for predicate, values := range tags {
 		nonEmpty := make([]TagValueV3, 0, len(values))
@@ -179,33 +228,15 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 			return
 		}
 		config := predicateconfig.GetConfig(predicate)
-		// Resolve name to URI before RequiresURI validation so the resolved
-		// URI satisfies that constraint.
-		if config.ResolveNameToURI != nil {
-			for i, v := range nonEmpty {
-				if v.URI == "" && v.Name != "" {
-					uri, resolveErr := config.ResolveNameToURI(store, v.Name)
-					if resolveErr != nil {
-						err = fmt.Errorf("could not resolve %q for predicate %q: %w", v.Name, predicate, resolveErr)
-						return
-					}
-					nonEmpty[i].URI = uri
-				}
+		resolved := make([]TagValueV3, 0, len(nonEmpty))
+		for _, v := range nonEmpty {
+			v, err = resolveTagValue(store, predicate, config, v)
+			if err != nil {
+				return
 			}
+			resolved = append(resolved, v)
 		}
-		if config.RequiresURI() {
-			for _, v := range nonEmpty {
-				if v.URI == "" {
-					err = fmt.Errorf("predicate %q requires a URI", predicate)
-					return
-				}
-				if reason := config.ValidateURIOrigin(v.URI); reason != "" {
-					err = &URIOriginValidationError{Predicate: predicate, Reason: reason}
-					return
-				}
-			}
-		}
-		updates = append(updates, predicateUpdate{predicate, nonEmpty})
+		updates = append(updates, predicateUpdate{predicate, resolved})
 	}
 
 	// Check track exists once.
@@ -231,35 +262,6 @@ func (store Datastore) updateTagsV3(trackid int, tags map[string][]TagValueV3) (
 		if !hasPred {
 			if err = store.createPredicate(u.predicate); err != nil {
 				return
-			}
-		}
-	}
-
-	// Populate the Name field for URI-only tag values.
-	// For predicates with BestEffortURIToName (e.g. composer, producer), failures
-	// are non-fatal: the URI is stored and the daily reconcileTagNames job backfills
-	// the name once the upstream service (eolas) recovers. The URI is already present
-	// so the uri-integrity check remains satisfied.
-	// For other predicates (e.g. album), a resolution failure means the URI doesn't
-	// exist locally and is a hard error that rejects the save.
-	for i, u := range updates {
-		config := predicateconfig.GetConfig(u.predicate)
-		if config.ResolveURIToName != nil {
-			for j, v := range u.values {
-				if v.Name == "" && v.URI != "" {
-					name, resolveErr := config.ResolveURIToName(store, v.URI)
-					if resolveErr != nil {
-						if config.BestEffortURIToName {
-							slog.Warn("could not resolve name for URI tag; storing URI with empty name for later reconciliation",
-								"predicate", u.predicate, "uri", v.URI, slog.Any("error", resolveErr))
-						} else {
-							err = fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, u.predicate, resolveErr)
-							return
-						}
-					} else {
-						updates[i].values[j].Name = name
-					}
-				}
 			}
 		}
 	}
@@ -346,51 +348,13 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 				continue
 			}
 			config := predicateconfig.GetConfig(predicate)
-			// Resolve name to URI before RequiresURI validation. Only fires
-			// here because the predicate is missing (tag will be written).
-			if config.ResolveNameToURI != nil {
-				for i, v := range nonEmpty {
-					if v.URI == "" && v.Name != "" {
-						uri, resolveErr := config.ResolveNameToURI(store, v.Name)
-						if resolveErr != nil {
-							err = fmt.Errorf("could not resolve %q for predicate %q: %w", v.Name, predicate, resolveErr)
-							return
-						}
-						nonEmpty[i].URI = uri
-					}
+			resolved := make([]TagValueV3, 0, len(nonEmpty))
+			for _, v := range nonEmpty {
+				v, err = resolveTagValue(store, predicate, config, v)
+				if err != nil {
+					return
 				}
-			}
-			// Populate Name from URI for URI-only values.
-			// See updateTagsV3 for the BestEffortURIToName resilience rationale.
-			if config.ResolveURIToName != nil {
-				for i, v := range nonEmpty {
-					if v.Name == "" && v.URI != "" {
-						name, resolveErr := config.ResolveURIToName(store, v.URI)
-						if resolveErr != nil {
-							if config.BestEffortURIToName {
-								slog.Warn("could not resolve name for URI tag; storing URI with empty name for later reconciliation",
-									"predicate", predicate, "uri", v.URI, slog.Any("error", resolveErr))
-							} else {
-								err = fmt.Errorf("tag URI %q for predicate %q does not match a known entity: %w", v.URI, predicate, resolveErr)
-								return
-							}
-						} else {
-							nonEmpty[i].Name = name
-						}
-					}
-				}
-			}
-			if config.RequiresURI() {
-				for _, v := range nonEmpty {
-					if v.URI == "" {
-						err = fmt.Errorf("predicate %q requires a URI", predicate)
-						return
-					}
-					if reason := config.ValidateURIOrigin(v.URI); reason != "" {
-						err = &URIOriginValidationError{Predicate: predicate, Reason: reason}
-						return
-					}
-				}
+				resolved = append(resolved, v)
 			}
 			// Ensure predicate exists. createPredicate is idempotent and safe
 			// outside the main transaction.
@@ -403,7 +367,7 @@ func (store Datastore) updateTagsV3IfMissing(trackid int, tags map[string][]TagV
 					return
 				}
 			}
-			inserts = append(inserts, predicateInsert{predicate, nonEmpty})
+			inserts = append(inserts, predicateInsert{predicate, resolved})
 		} else if err != nil {
 			return
 		}
