@@ -44,9 +44,13 @@ func (store Datastore) applyMigrations() {
     sort.Strings(files)
     for _, f := range files {
         version := filepath.Base(f)
-        var applied bool
-        store.DB.Get(&applied, "SELECT 1 FROM schema_migrations WHERE version = ?", version)
-        if applied { continue }
+        // SELECT EXISTS always returns exactly one row (0 or 1) — no sql.ErrNoRows
+        // to special-case, and no driver-dependent integer-to-bool coercion.
+        var exists int
+        if err := store.DB.Get(&exists, "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = ?)", version); err != nil {
+            panic(err)
+        }
+        if exists == 1 { continue }
         sqlText, err := migrationsFS.ReadFile(f)
         if err != nil { panic(err) }
         slog.Info("Applying migration", slog.String("version", version))
