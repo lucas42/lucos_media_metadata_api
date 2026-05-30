@@ -15,6 +15,8 @@ type LoganneInterface interface {
     collectionPost(string, string, Collection, Collection)
     albumPost(string, string, AlbumV3, bool)
     albumMergedPost(string, string, AlbumV3, AlbumV3)
+    artistPost(string, string, ArtistV3, bool)
+    artistMergedPost(string, string, ArtistV3, ArtistV3)
 }
 
 type Loganne struct {
@@ -99,6 +101,56 @@ func (loganne Loganne) albumMergedPost(eventType string, humanReadable string, s
 		"url":           targetAlbum.URI,
 		"sourceUri":     sourceAlbum.URI,
 		"targetUri":     targetAlbum.URI,
+	}
+	postData, _ := json.Marshal(data)
+	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
+	if err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+	if _, err := loganneHTTPClient.Do(req); err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+	}
+}
+
+func (loganne Loganne) artistPost(eventType string, humanReadable string, artist ArtistV3, withURL bool) {
+	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "artist", artist)
+
+	data := map[string]interface{}{
+		"source":        loganne.source,
+		"type":          eventType,
+		"humanReadable": humanReadable,
+		"artist":        artist,
+	}
+	if withURL && artist.URI != "" {
+		data["url"] = artist.URI
+	}
+	postData, _ := json.Marshal(data)
+	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
+	if err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+	if _, err := loganneHTTPClient.Do(req); err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+	}
+}
+
+func (loganne Loganne) artistMergedPost(eventType string, humanReadable string, sourceArtist ArtistV3, targetArtist ArtistV3) {
+	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "sourceArtist", sourceArtist, "targetArtist", targetArtist)
+
+	data := map[string]interface{}{
+		"source":        loganne.source,
+		"type":          eventType,
+		"humanReadable": humanReadable,
+		"artist":        sourceArtist,
+		"url":           targetArtist.URI,
+		"sourceUri":     sourceArtist.URI,
+		"targetUri":     targetArtist.URI,
 	}
 	postData, _ := json.Marshal(data)
 	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))

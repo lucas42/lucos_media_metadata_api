@@ -88,6 +88,7 @@ func TestExportRDF(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -158,6 +159,7 @@ func TestExportRDFRejectsEmptyTrackTable(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -193,6 +195,7 @@ func TestExportRDFUsesTagUriForAboutMentions(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -286,10 +289,10 @@ func TestMapPredicateOffenceUri(t *testing.T) {
 	}
 }
 
-// TestMapPredicateSkipsWhenNoUri verifies that all URIObject predicates (including
-// composer and producer, migrated in #237) are silently skipped when uri is absent.
+// TestMapPredicateSkipsWhenNoUri verifies that all URIObject predicates are silently
+// skipped when uri is absent.
 func TestMapPredicateSkipsWhenNoUri(t *testing.T) {
-	for _, predicateID := range []string{"language", "about", "mentions", "offence", "composer", "producer"} {
+	for _, predicateID := range []string{"language", "about", "mentions", "offence", "composer", "producer", "artist"} {
 		pred, terms := mapPredicate(predicateID, "some label", nil, "http://localhost:8020", "http://localhost:3002")
 		if pred != "" || len(terms) != 0 {
 			t.Errorf("predicate %q with nil uri: expected skip (empty pred and terms), got pred=%q terms=%v", predicateID, pred, terms)
@@ -317,6 +320,7 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -363,34 +367,19 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 	}
 }
 
-// TestMapPredicateSearchURLPredicates verifies that the remaining SearchURL predicate
-// (artist) produces search-URL IRI objects. composer and producer were migrated to
-// URIObject in #237 and no longer appear here (see TestMapPredicateMultiValue).
-// TODO(#246): remove once artist is migrated.
-func TestMapPredicateSearchURLPredicates(t *testing.T) {
-	cases := []struct {
-		predicateID  string
-		expectedPred string
-	}{
-		{"artist", "http://xmlns.com/foaf/0.1/maker"},
+// TestMapPredicateArtistUsesURI verifies that artist tags now use the URIObject
+// shape (foaf:maker predicate, tag.uri as the IRI object), not a search URL.
+func TestMapPredicateArtistUsesURI(t *testing.T) {
+	artistURI := "http://localhost:8020/artists/1"
+	pred, terms := mapPredicate("artist", "Enya", &artistURI, "http://localhost:8020", "http://localhost:3002")
+	if pred != "http://xmlns.com/foaf/0.1/maker" {
+		t.Errorf("expected foaf:maker predicate URI, got %q", pred)
 	}
-	for _, tc := range cases {
-		pred, terms := mapPredicate(tc.predicateID, "somevalue", nil, "http://localhost:8020", "http://localhost:3002")
-		if pred != tc.expectedPred {
-			t.Errorf("predicate %q: expected URI %q, got %q", tc.predicateID, tc.expectedPred, pred)
-		}
-		if len(terms) != 1 {
-			t.Errorf("predicate %q: expected 1 term, got %d", tc.predicateID, len(terms))
-			continue
-		}
-		// Each term should be a search URL, not a literal.
-		termStr := terms[0].String()
-		if !strings.Contains(termStr, "search?p."+tc.predicateID) {
-			t.Errorf("predicate %q: expected search URL in term, got %q", tc.predicateID, termStr)
-		}
-		if !strings.Contains(termStr, "somevalue") {
-			t.Errorf("predicate %q: expected value in search URL term, got %q", tc.predicateID, termStr)
-		}
+	if len(terms) != 1 {
+		t.Fatalf("expected 1 term, got %d", len(terms))
+	}
+	if !strings.Contains(terms[0].String(), "artists/1") {
+		t.Errorf("expected artist URI in term, got %q", terms[0].String())
 	}
 }
 
@@ -586,6 +575,7 @@ func TestExportRDFIncludesAlbums(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -693,6 +683,7 @@ func TestExportRDFTrackLanguageEmission(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -915,6 +906,7 @@ func TestExportRDFSKOSConceptEmission(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -960,6 +952,165 @@ func TestExportRDFSKOSConceptEmission(t *testing.T) {
 		if !strings.Contains(output, uri) {
 			t.Errorf("expected concept URI %q in RDF output", uri)
 		}
+	}
+}
+
+// TestArtistToRdf verifies that ArtistToRdf emits mo:MusicArtist type, skos:prefLabel,
+// and the critical type-level metadata including the foaf:Agent parent class label.
+func TestArtistToRdf(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO artist (id, name) VALUES (1, 'Enya'), (2, 'Clannad')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+
+	rows, err := db.Query("SELECT id, name FROM artist ORDER BY id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	g, err := ArtistToRdf(rows)
+	if err != nil {
+		t.Fatalf("ArtistToRdf failed: %v", err)
+	}
+
+	var buf strings.Builder
+	if err := g.Serialize(&buf, "text/turtle"); err != nil {
+		t.Fatalf("serialize failed: %v", err)
+	}
+	output := buf.String()
+
+	// Entity-level triples
+	if !strings.Contains(output, "artists/1") {
+		t.Error("expected artist 1 URI in output")
+	}
+	if !strings.Contains(output, "artists/2") {
+		t.Error("expected artist 2 URI in output")
+	}
+	if !strings.Contains(output, "mo/MusicArtist") {
+		t.Errorf("expected mo:MusicArtist type in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "Enya") {
+		t.Error("expected artist name 'Enya' in output")
+	}
+	if !strings.Contains(output, "Clannad") {
+		t.Error("expected artist name 'Clannad' in output")
+	}
+	// Type-level metadata
+	if !strings.Contains(output, "Artist") {
+		t.Errorf("expected mo:MusicArtist prefLabel 'Artist' in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "subClassOf") {
+		t.Errorf("expected rdfs:subClassOf triple in output, got:\n%s", output)
+	}
+	if !strings.Contains(output, "foaf/0.1/Agent") {
+		t.Errorf("expected foaf:Agent URI in output, got:\n%s", output)
+	}
+	// foaf:Agent MUST have a prefLabel so arachne's ingestor doesn't fail
+	foafAgent := rdf2go.NewResource("http://xmlns.com/foaf/0.1/Agent")
+	prefLabelPred := rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel")
+	agentLabels := g.All(foafAgent, prefLabelPred, nil)
+	if len(agentLabels) == 0 {
+		t.Error("expected foaf:Agent to have a skos:prefLabel triple (required by arachne ADR-0004)")
+	}
+	if !strings.Contains(output, "hasCategory") {
+		t.Errorf("expected eolas:hasCategory triple for mo:MusicArtist in output, got:\n%s", output)
+	}
+}
+
+// TestExportRDFIncludesArtists verifies that ExportRDF emits artist triples alongside
+// tracks, including both entity-level triples (URI, rdf:type, prefLabel) and the
+// type-level metadata for mo:MusicArtist and foaf:Agent.
+//
+// This is a regression test for the pattern identified in lucos_eolas#273: tests
+// written against entity model methods alone can miss bugs in the bulk export path.
+// This test exercises ExportRDF directly (the actual bulk export code path) rather
+// than calling ArtistToRdf in isolation.
+func TestExportRDFIncludesArtists(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
+	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
+	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO track (id, url, duration) VALUES (1, 'http://example.com', 120)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO artist (id, name) VALUES (1, 'Enya')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Tag the track with an artist URI reference
+	_, err = db.Exec(`INSERT INTO tag (trackid, predicateid, value, uri) VALUES (1, 'artist', 'Enya', 'http://localhost:8020/artists/1')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpFile := filepath.Join(tmpDir, "output.ttl")
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+	os.Setenv("APP_ORIGIN", "http://localhost:3002")
+	if err := ExportRDF(dbPath, tmpFile); err != nil {
+		t.Fatalf("ExportRDF failed: %v", err)
+	}
+
+	content, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("could not read RDF output file: %v", err)
+	}
+	output := string(content)
+
+	// Entity-level triples
+	if !strings.Contains(output, "artists/1") {
+		t.Error("expected artist URI in export output")
+	}
+	if !strings.Contains(output, "Enya") {
+		t.Error("expected artist name 'Enya' in export output")
+	}
+	if !strings.Contains(output, "mo/MusicArtist") {
+		t.Error("expected mo:MusicArtist type in export output")
+	}
+	// Track-to-artist link via foaf:maker
+	if !strings.Contains(output, "foaf/0.1/maker") {
+		t.Error("expected foaf:maker predicate in export output")
+	}
+	// Type-level metadata — mo:MusicArtist prefLabel required by arachne ADR-0004
+	if !strings.Contains(output, "subClassOf") {
+		t.Error("expected rdfs:subClassOf triple for mo:MusicArtist in export output")
+	}
+	if !strings.Contains(output, "foaf/0.1/Agent") {
+		t.Error("expected foaf:Agent URI in export output (parent class of mo:MusicArtist)")
+	}
+	// foaf:Agent skos:prefLabel is the critical regression guard: arachne's ingestor
+	// calls get_label() on every class in the subclass chain and will fail with
+	// ValueError if foaf:Agent has no label in the exported RDF.
+	if !strings.Contains(output, "Agent") {
+		t.Error("expected foaf:Agent prefLabel 'Agent' in export output")
 	}
 }
 

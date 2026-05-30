@@ -25,6 +25,9 @@ var lastLoganneExistingCollection Collection
 var lastLoganneAlbum AlbumV3
 var lastLoganneAlbumWithURL bool
 var lastLoganneTargetAlbum AlbumV3
+var lastLoganneArtist ArtistV3
+var lastLoganneArtistWithURL bool
+var lastLoganneTargetArtist ArtistV3
 var loganneRequestCount int
 
 type MockLoganne struct {}
@@ -72,6 +75,32 @@ func (mock MockLoganne) albumMergedPost(eventType string, humanReadable string, 
 	lastLoganneTargetAlbum = targetAlbum
 	loganneRequestCount++
 }
+func (mock MockLoganne) artistPost(eventType string, humanReadable string, artist ArtistV3, withURL bool) {
+	lastLoganneType = eventType
+	lastLoganneMessage = humanReadable
+	lastLoganneTrack = Track{}
+	lastLoganneExistingTrack = Track{}
+	lastLoganneUpdatedCollection = Collection{}
+	lastLoganneExistingCollection = Collection{}
+	lastLoganneAlbum = AlbumV3{}
+	lastLoganneArtist = artist
+	lastLoganneArtistWithURL = withURL
+	lastLoganneTargetArtist = ArtistV3{}
+	loganneRequestCount++
+}
+func (mock MockLoganne) artistMergedPost(eventType string, humanReadable string, sourceArtist ArtistV3, targetArtist ArtistV3) {
+	lastLoganneType = eventType
+	lastLoganneMessage = humanReadable
+	lastLoganneTrack = Track{}
+	lastLoganneExistingTrack = Track{}
+	lastLoganneUpdatedCollection = Collection{}
+	lastLoganneExistingCollection = Collection{}
+	lastLoganneAlbum = AlbumV3{}
+	lastLoganneArtist = sourceArtist
+	lastLoganneArtistWithURL = false
+	lastLoganneTargetArtist = targetArtist
+	loganneRequestCount++
+}
 
 func clearData() {
 	os.Remove("testrouting.sqlite")
@@ -117,6 +146,9 @@ func restartServer() {
 	lastLoganneAlbum = AlbumV3{}
 	lastLoganneAlbumWithURL = false
 	lastLoganneTargetAlbum = AlbumV3{}
+	lastLoganneArtist = ArtistV3{}
+	lastLoganneArtistWithURL = false
+	lastLoganneTargetArtist = ArtistV3{}
 	loganneRequestCount = 0
 	store := DBInit("testrouting.sqlite", MockLoganne{})
 	server = httptest.NewServer(FrontController(store, "test_app1:staging=validkey;test_app2:staging=2ndvalidkey"))

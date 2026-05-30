@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/jmoiron/sqlx"
@@ -134,6 +136,27 @@ func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
 		);
 		`
 		database.DB.MustExec(sqlStmt)
+	}
+
+	if !database.TableExists("artist") {
+		slog.Info("Creating table `artist`")
+		sqlStmt := `
+		CREATE TABLE "artist" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"name" TEXT NOT NULL UNIQUE
+		);
+		`
+		database.DB.MustExec(sqlStmt)
+	}
+
+	// Backfill artist tag rows that pre-date the URIObject migration.
+	// Before this change, artist was a SearchURL predicate and tags were written
+	// with value=name, uri=NULL. rdfgen's URIObject branch silently drops any
+	// tag with an empty uri, so every unmigrated artist tag would vanish from the
+	// RDF export and the arachne search index on the first deploy. Idempotent:
+	// rows already backfilled (uri non-empty) are not touched.
+	if database.needsArtistTagMigration() {
+		database.migrateArtistTags()
 	}
 
 	// Migrate mentions/about/language tags to use uri column and import names from eolas
@@ -371,4 +394,104 @@ func (store Datastore) migrateEolasData() {
 	}
 
 	slog.Info("Eolas data migration complete", "migrated_tags", migratedCount)
+}
+
+// needsArtistTagMigration checks whether any artist tag rows lack a uri column
+// value. These are pre-migration rows written when artist was a SearchURL
+// predicate — they have value=name but uri=NULL/empty.
+func (store Datastore) needsArtistTagMigration() bool {
+	var count int
+	store.DB.Get(&count, `SELECT COUNT(*) FROM tag WHERE predicateid = 'artist' AND (uri = '' OR uri IS NULL)`)
+	return count > 0
+}
+
+// migrateArtistTags backfills the uri column for all artist tag rows that were
+// written before the predicate was migrated to ValueShapeURIObject. For each
+// distinct artist name, an Artist entity is resolved-or-created, then all tag
+// rows for that name are updated to point at the artist's URI. Idempotent: rows
+// whose uri is already non-empty are untouched.
+func (store Datastore) migrateArtistTags() {
+	slog.Info("Starting artist tag migration")
+
+	managerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
+
+	type tagRow struct {
+		TrackID int    `db:"trackid"`
+		Value   string `db:"value"`
+	}
+	var tags []tagRow
+	err := store.DB.Select(&tags, `SELECT trackid, value FROM tag WHERE predicateid = 'artist' AND (uri = '' OR uri IS NULL)`)
+	if err != nil {
+		slog.Warn("Failed to query artist tags for migration", slog.Any("error", err))
+		return
+	}
+	if len(tags) == 0 {
+		slog.Info("No artist tags need migration")
+		return
+	}
+
+	slog.Info("Artist tags needing migration", "count", len(tags))
+
+	// Resolve-or-create an Artist entity for each distinct name.
+	type artistRow struct {
+		ID   int    `db:"id"`
+		Name string `db:"name"`
+	}
+	nameToURI := make(map[string]string)
+	for _, tag := range tags {
+		if _, seen := nameToURI[tag.Value]; seen {
+			continue
+		}
+		var row artistRow
+		err := store.DB.Get(&row, "SELECT id, name FROM artist WHERE name = $1", tag.Value)
+		if err != nil {
+			if err.Error() != "sql: no rows in result set" {
+				slog.Warn("Failed to look up artist during migration", "name", tag.Value, slog.Any("error", err))
+				return
+			}
+			// Artist doesn't exist yet — create it.
+			result, err := store.DB.Exec("INSERT INTO artist(name) VALUES($1)", tag.Value)
+			if err != nil {
+				slog.Warn("Failed to create artist during migration", "name", tag.Value, slog.Any("error", err))
+				return
+			}
+			id64, err := result.LastInsertId()
+			if err != nil {
+				slog.Warn("Failed to get artist id during migration", slog.Any("error", err))
+				return
+			}
+			row = artistRow{ID: int(id64), Name: tag.Value}
+			slog.Info("Created artist entity during migration", "name", tag.Value, "id", row.ID)
+		}
+		nameToURI[tag.Value] = managerOrigin + "/artists/" + strconv.Itoa(row.ID)
+	}
+
+	// Backfill the uri column for all matching tag rows in one transaction.
+	tx, err := store.DB.Beginx()
+	if err != nil {
+		slog.Warn("Failed to begin artist tag migration transaction", slog.Any("error", err))
+		return
+	}
+
+	migratedCount := 0
+	for name, uri := range nameToURI {
+		result, err := tx.Exec(
+			`UPDATE tag SET uri = $1 WHERE predicateid = 'artist' AND value = $2 AND (uri = '' OR uri IS NULL)`,
+			uri, name)
+		if err != nil {
+			slog.Warn("Failed to migrate artist tag", "name", name, slog.Any("error", err))
+			_ = tx.Rollback()
+			return
+		}
+		affected, _ := result.RowsAffected()
+		migratedCount += int(affected)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		slog.Warn("Failed to commit artist tag migration", slog.Any("error", err))
+		return
+	}
+
+	slog.Info("Artist tag migration complete", "migrated_tags", migratedCount, "distinct_artists", len(nameToURI))
 }

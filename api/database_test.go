@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"github.com/jmoiron/sqlx"
 )
@@ -435,6 +436,178 @@ func TestMigrateEolasDataLanguage(test *testing.T) {
 	}
 
 	os.Remove(dbpath)
+}
+
+// TestMigrateArtistTags verifies that the artist tag migration backfills the uri
+// column for old-style artist tags (value=name, uri=NULL) by creating Artist
+// entities and populating the URI.
+func TestMigrateArtistTags(test *testing.T) {
+	dbpath := "testmigration_artist_tags.sqlite"
+	os.Remove(dbpath)
+	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
+
+	// Pre-create all required tables to simulate a pre-migration database.
+	db.MustExec(`
+		CREATE TABLE "track" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"fingerprint" TEXT UNIQUE,
+			"url" TEXT UNIQUE,
+			"duration" INTEGER,
+			"weighting" FLOAT NOT NULL DEFAULT 0,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0
+		);
+		CREATE TABLE "predicate" ("id" TEXT PRIMARY KEY NOT NULL);
+		CREATE TABLE "tag" (
+			"trackid" TEXT NOT NULL,
+			"predicateid" TEXT NOT NULL,
+			"value" TEXT,
+			"uri" TEXT DEFAULT "",
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			FOREIGN KEY (predicateid) REFERENCES predicate(id)
+		);
+		CREATE TABLE "collection" (
+			"slug" TEXT PRIMARY KEY NOT NULL,
+			"name" TEXT UNIQUE NOT NULL,
+			"icon" TEXT DEFAULT ""
+		);
+		CREATE TABLE "collection_track" (
+			"collectionslug" TEXT NOT NULL,
+			"trackid" TEXT NOT NULL,
+			FOREIGN KEY (collectionslug) REFERENCES collection(slug),
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			CONSTRAINT track_collection_unique UNIQUE (collectionslug, trackid)
+		);
+		CREATE TABLE "album" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"name" TEXT NOT NULL UNIQUE
+		);
+	`)
+
+	// Old-style artist tags: value=name, uri=empty (pre-SearchURL-removal state)
+	db.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	db.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(2, 'http://example.com/t2', 'fp2', 120)`)
+	db.MustExec(`INSERT INTO predicate(id) VALUES('artist'), ('title')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value, uri) VALUES(1, 'artist', 'Enya', '')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value, uri) VALUES(2, 'artist', 'Enya', '')`)  // same artist, two tracks
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value, uri) VALUES(1, 'artist', 'Clannad', '')`) // second artist on track 1
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value, uri) VALUES(1, 'title', 'Orinoco Flow', '')`) // non-artist tag untouched
+	db.Close()
+
+	// DBInit should detect unmigrated artist tags and run the backfill.
+	// MEDIA_METADATA_MANAGER_ORIGIN is unset in tests, so URIs are like "/artists/{id}".
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	// Verify all artist tags now have a uri set.
+	var artistTags []Tag
+	datastore.DB.Select(&artistTags, "SELECT trackid, predicateid, value, uri FROM tag WHERE predicateid = 'artist' ORDER BY trackid, value")
+	assertEqual(test, "artist tag count", 3, len(artistTags))
+	for _, tag := range artistTags {
+		if tag.URI == "" {
+			test.Errorf("artist tag for %q on track %d still has empty uri after migration", tag.Value, tag.TrackID)
+		}
+		if !strings.Contains(tag.URI, "/artists/") {
+			test.Errorf("artist tag uri %q doesn't look like an artist URI", tag.URI)
+		}
+	}
+
+	// Verify only one Artist entity was created for "Enya" (two tracks, one entity).
+	var enyaCount int
+	datastore.DB.Get(&enyaCount, "SELECT COUNT(*) FROM artist WHERE name = 'Enya'")
+	assertEqual(test, "only one Enya artist entity", 1, enyaCount)
+
+	// Verify "Clannad" got its own entity.
+	var clannadCount int
+	datastore.DB.Get(&clannadCount, "SELECT COUNT(*) FROM artist WHERE name = 'Clannad'")
+	assertEqual(test, "only one Clannad artist entity", 1, clannadCount)
+
+	// Verify both "Enya" tag rows point to the same URI.
+	var enyaTags []Tag
+	datastore.DB.Select(&enyaTags, "SELECT uri FROM tag WHERE predicateid = 'artist' AND value = 'Enya'")
+	if len(enyaTags) == 2 && enyaTags[0].URI != enyaTags[1].URI {
+		test.Errorf("both Enya artist tags should point to the same URI, got %q and %q", enyaTags[0].URI, enyaTags[1].URI)
+	}
+
+	// Verify non-artist tag was NOT touched.
+	var titleTag Tag
+	datastore.DB.Get(&titleTag, "SELECT value, uri FROM tag WHERE predicateid = 'title'")
+	assertEqual(test, "title value unchanged", "Orinoco Flow", titleTag.Value)
+	assertEqual(test, "title uri unchanged", "", titleTag.URI)
+
+	os.Remove(dbpath)
+	os.Remove(dbpath + "-shm")
+	os.Remove(dbpath + "-wal")
+}
+
+// TestMigrateArtistTagsIdempotent verifies that the migration does not re-process
+// artist tags that already have a uri populated.
+func TestMigrateArtistTagsIdempotent(test *testing.T) {
+	dbpath := "testmigration_artist_idempotent.sqlite"
+	os.Remove(dbpath)
+	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
+
+	db.MustExec(`
+		CREATE TABLE "track" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"fingerprint" TEXT UNIQUE,
+			"url" TEXT UNIQUE,
+			"duration" INTEGER,
+			"weighting" FLOAT NOT NULL DEFAULT 0,
+			"cum_weighting" FLOAT NOT NULL DEFAULT 0
+		);
+		CREATE TABLE "predicate" ("id" TEXT PRIMARY KEY NOT NULL);
+		CREATE TABLE "tag" (
+			"trackid" TEXT NOT NULL,
+			"predicateid" TEXT NOT NULL,
+			"value" TEXT,
+			"uri" TEXT DEFAULT "",
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			FOREIGN KEY (predicateid) REFERENCES predicate(id)
+		);
+		CREATE TABLE "collection" (
+			"slug" TEXT PRIMARY KEY NOT NULL,
+			"name" TEXT UNIQUE NOT NULL,
+			"icon" TEXT DEFAULT ""
+		);
+		CREATE TABLE "collection_track" (
+			"collectionslug" TEXT NOT NULL,
+			"trackid" TEXT NOT NULL,
+			FOREIGN KEY (collectionslug) REFERENCES collection(slug),
+			FOREIGN KEY (trackid) REFERENCES track(id),
+			CONSTRAINT track_collection_unique UNIQUE (collectionslug, trackid)
+		);
+		CREATE TABLE "album" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"name" TEXT NOT NULL UNIQUE
+		);
+		CREATE TABLE "artist" (
+			"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+			"name" TEXT NOT NULL UNIQUE
+		);
+	`)
+
+	// Already-migrated artist tag: uri is already set.
+	db.MustExec(`INSERT INTO track(id, url, fingerprint, duration) VALUES(1, 'http://example.com/t1', 'fp1', 100)`)
+	db.MustExec(`INSERT INTO predicate(id) VALUES('artist')`)
+	db.MustExec(`INSERT INTO artist(id, name) VALUES(1, 'Enya')`)
+	db.MustExec(`INSERT INTO tag(trackid, predicateid, value, uri) VALUES(1, 'artist', 'Enya', '/artists/1')`)
+	db.Close()
+
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	// Verify the existing tag was NOT modified.
+	var tag Tag
+	datastore.DB.Get(&tag, "SELECT value, uri FROM tag WHERE predicateid = 'artist'")
+	assertEqual(test, "artist value unchanged", "Enya", tag.Value)
+	assertEqual(test, "artist uri unchanged", "/artists/1", tag.URI)
+
+	// Verify no duplicate artist entity was created.
+	var count int
+	datastore.DB.Get(&count, "SELECT COUNT(*) FROM artist")
+	assertEqual(test, "still only one artist entity", 1, count)
+
+	os.Remove(dbpath)
+	os.Remove(dbpath + "-shm")
+	os.Remove(dbpath + "-wal")
 }
 
 func TestMigrateEolasDataIdempotent(test *testing.T) {

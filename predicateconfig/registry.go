@@ -20,13 +20,17 @@ var registry = map[string]Config{
 		URIPrefix:    "https://musicbrainz.org/release/",
 	},
 
-	// SearchURL predicates — transitional; see ValueShapeSearchURL for context.
-	// TODO(#246): artist is the last remaining SearchURL predicate.
-	// Once #246 (migrate artist tags) is done, ValueShapeSearchURL and getSearchUrl
-	// can be removed entirely.
 	"artist": {
-		ValueShape:   ValueShapeSearchURL,
-		PredicateURI: "http://xmlns.com/foaf/0.1/maker",
+		MultiValue:     true,
+		ValueShape:     ValueShapeURIObject,
+		PredicateURI:   "http://xmlns.com/foaf/0.1/maker",
+		AllowedOrigins: []string{OriginMediaMetadataManager},
+		ResolveNameToURI: func(r NameURIResolver, name string) (string, error) {
+			return r.ResolveOrCreateArtistByName(name)
+		},
+		ResolveURIToName: func(r NameURIResolver, uri string) (string, error) {
+			return r.ResolveArtistNameFromURI(uri)
+		},
 	},
 	"composer": {
 		MultiValue:     true,
@@ -111,10 +115,10 @@ var registry = map[string]Config{
 		PredicateURI:   "/ontology#onAlbum",
 		AllowedOrigins: []string{OriginMediaMetadataManager},
 		ResolveNameToURI: func(r NameURIResolver, name string) (string, error) {
-			return r.ResolveOrCreateByName(name)
+			return r.ResolveOrCreateAlbumByName(name)
 		},
 		ResolveURIToName: func(r NameURIResolver, uri string) (string, error) {
-			return r.ResolveNameFromURI(uri)
+			return r.ResolveAlbumNameFromURI(uri)
 		},
 	},
 
