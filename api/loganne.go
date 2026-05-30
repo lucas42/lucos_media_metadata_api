@@ -29,12 +29,28 @@ type Loganne struct {
 // or unreachable Loganne service never blocks request handlers indefinitely.
 var loganneHTTPClient = &http.Client{Timeout: 5 * time.Second}
 
+// buildAndPost marshals data to JSON and fires a POST to the Loganne endpoint.
+// All entity-specific post methods delegate the HTTP boilerplate to this helper.
+func (loganne Loganne) buildAndPost(data map[string]interface{}) {
+	postData, _ := json.Marshal(data)
+	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
+	if err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
+	if _, err := loganneHTTPClient.Do(req); err != nil {
+		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
+	}
+}
+
 func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack Track, existingTrack Track) {
 	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "url", loganne.endpoint, "updatedTrack", updatedTrack, "existingTrack", existingTrack)
 
 	data := map[string]interface{}{
-		"source":  loganne.source,
-		"type": eventType,
+		"source":        loganne.source,
+		"type":          eventType,
 		"humanReadable": humanReadable,
 	}
 
@@ -49,17 +65,7 @@ func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack
 		data["track"] = TrackToV3(existingTrack)
 		data["url"] = fmt.Sprintf("%s/tracks/%d", loganne.mediaMetadataManagerOrigin, existingTrack.ID)
 	}
-	postData, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
-	if err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := loganneHTTPClient.Do(req); err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-	}
+	loganne.buildAndPost(data)
 }
 
 func (loganne Loganne) albumPost(eventType string, humanReadable string, album AlbumV3, withURL bool) {
@@ -74,17 +80,7 @@ func (loganne Loganne) albumPost(eventType string, humanReadable string, album A
 	if withURL && album.URI != "" {
 		data["url"] = album.URI
 	}
-	postData, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
-	if err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := loganneHTTPClient.Do(req); err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-	}
+	loganne.buildAndPost(data)
 }
 
 // albumMergedPost emits an albumMerged Loganne event, matching the entityMerged
@@ -93,7 +89,7 @@ func (loganne Loganne) albumPost(eventType string, humanReadable string, album A
 func (loganne Loganne) albumMergedPost(eventType string, humanReadable string, sourceAlbum AlbumV3, targetAlbum AlbumV3) {
 	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "sourceAlbum", sourceAlbum, "targetAlbum", targetAlbum)
 
-	data := map[string]interface{}{
+	loganne.buildAndPost(map[string]interface{}{
 		"source":        loganne.source,
 		"type":          eventType,
 		"humanReadable": humanReadable,
@@ -101,18 +97,7 @@ func (loganne Loganne) albumMergedPost(eventType string, humanReadable string, s
 		"url":           targetAlbum.URI,
 		"sourceUri":     sourceAlbum.URI,
 		"targetUri":     targetAlbum.URI,
-	}
-	postData, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
-	if err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := loganneHTTPClient.Do(req); err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-	}
+	})
 }
 
 func (loganne Loganne) artistPost(eventType string, humanReadable string, artist ArtistV3, withURL bool) {
@@ -127,23 +112,13 @@ func (loganne Loganne) artistPost(eventType string, humanReadable string, artist
 	if withURL && artist.URI != "" {
 		data["url"] = artist.URI
 	}
-	postData, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
-	if err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := loganneHTTPClient.Do(req); err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-	}
+	loganne.buildAndPost(data)
 }
 
 func (loganne Loganne) artistMergedPost(eventType string, humanReadable string, sourceArtist ArtistV3, targetArtist ArtistV3) {
 	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "sourceArtist", sourceArtist, "targetArtist", targetArtist)
 
-	data := map[string]interface{}{
+	loganne.buildAndPost(map[string]interface{}{
 		"source":        loganne.source,
 		"type":          eventType,
 		"humanReadable": humanReadable,
@@ -151,26 +126,15 @@ func (loganne Loganne) artistMergedPost(eventType string, humanReadable string, 
 		"url":           targetArtist.URI,
 		"sourceUri":     sourceArtist.URI,
 		"targetUri":     targetArtist.URI,
-	}
-	postData, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
-	if err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := loganneHTTPClient.Do(req); err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-	}
+	})
 }
 
 func (loganne Loganne) collectionPost(eventType string, humanReadable string, updatedCollection Collection, existingCollection Collection) {
 	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "url", loganne.endpoint, "updatedCollection", updatedCollection, "existingCollection", existingCollection)
 
 	data := map[string]interface{}{
-		"source":  loganne.source,
-		"type": eventType,
+		"source":        loganne.source,
+		"type":          eventType,
 		"humanReadable": humanReadable,
 	}
 
@@ -184,15 +148,5 @@ func (loganne Loganne) collectionPost(eventType string, humanReadable string, up
 	} else if existingCollection.Slug != "" {
 		data["collection"] = existingCollection
 	}
-	postData, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", loganne.endpoint, bytes.NewBuffer(postData))
-	if err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
-	if _, err := loganneHTTPClient.Do(req); err != nil {
-		slog.Warn("Error occured whilst posting to Loganne", slog.Any("error", err))
-	}
+	loganne.buildAndPost(data)
 }
