@@ -115,10 +115,10 @@ var registry = map[string]Config{
 		PredicateURI:   "/ontology#onAlbum",
 		AllowedOrigins: []string{OriginMediaMetadataManager},
 		ResolveNameToURI: func(r NameURIResolver, name string) (string, error) {
-			return r.ResolveOrCreateByName(name)
+			return r.ResolveOrCreateAlbumByName(name)
 		},
 		ResolveURIToName: func(r NameURIResolver, uri string) (string, error) {
-			return r.ResolveNameFromURI(uri)
+			return r.ResolveAlbumNameFromURI(uri)
 		},
 	},
 

@@ -35,12 +35,12 @@ const (
 // api.Datastore type implements this interface, allowing the registry closures to
 // call back into the database and external services without importing the api package.
 type NameURIResolver interface {
-	// ResolveOrCreateByName looks up or creates an album-like entity by name.
+	// ResolveOrCreateAlbumByName looks up or creates an album by name, returning
+	// its URI. Used exclusively by the album predicate.
+	ResolveOrCreateAlbumByName(name string) (string, error)
+	// ResolveAlbumNameFromURI looks up an album name from its URI.
 	// Used exclusively by the album predicate.
-	ResolveOrCreateByName(name string) (string, error)
-	// ResolveNameFromURI looks up an album name from its URI.
-	// Used exclusively by the album predicate.
-	ResolveNameFromURI(uri string) (string, error)
+	ResolveAlbumNameFromURI(uri string) (string, error)
 	// ResolveOrCreateArtistByName looks up or creates an artist by name, returning
 	// its URI. Used exclusively by the artist predicate.
 	ResolveOrCreateArtistByName(name string) (string, error)
