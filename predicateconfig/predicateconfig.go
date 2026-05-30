@@ -103,6 +103,13 @@ type Config struct {
 	// before storing.
 	ResolveURIToName func(NameURIResolver, string) (string, error)
 
+	// BestEffortURIToName, when true, makes URI→name resolution failures non-fatal
+	// on the save path. Use this for predicates whose names come from an external
+	// service (e.g. eolas) that may be temporarily unavailable — the URI is still
+	// stored and the name will be backfilled by the daily reconcileTagNames job.
+	// When false (default), a ResolveURIToName failure rejects the save.
+	BestEffortURIToName bool
+
 	// LoganneHumanReadable, if non-nil, returns a bespoke humanReadable message
 	// for Loganne events when this predicate is the only non-silent tag changed in
 	// an update and no scalar track fields are being modified.

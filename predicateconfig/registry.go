@@ -33,10 +33,11 @@ var registry = map[string]Config{
 		},
 	},
 	"composer": {
-		MultiValue:     true,
-		ValueShape:     ValueShapeURIObject,
-		PredicateURI:   "http://purl.org/ontology/mo/composer",
-		AllowedOrigins: []string{OriginEolas},
+		MultiValue:          true,
+		ValueShape:          ValueShapeURIObject,
+		PredicateURI:        "http://purl.org/ontology/mo/composer",
+		AllowedOrigins:      []string{OriginEolas},
+		BestEffortURIToName: true, // eolas may be temporarily unavailable; reconcile fills the name later
 		ResolveNameToURI: func(r NameURIResolver, name string) (string, error) {
 			return r.ResolveOrCreateEolasEntityByName("person", name)
 		},
@@ -45,10 +46,11 @@ var registry = map[string]Config{
 		},
 	},
 	"producer": {
-		MultiValue:     true,
-		ValueShape:     ValueShapeURIObject,
-		PredicateURI:   "http://purl.org/ontology/mo/producer",
-		AllowedOrigins: []string{OriginEolas},
+		MultiValue:          true,
+		ValueShape:          ValueShapeURIObject,
+		PredicateURI:        "http://purl.org/ontology/mo/producer",
+		AllowedOrigins:      []string{OriginEolas},
+		BestEffortURIToName: true, // eolas may be temporarily unavailable; reconcile fills the name later
 		ResolveNameToURI: func(r NameURIResolver, name string) (string, error) {
 			return r.ResolveOrCreateEolasEntityByName("person", name)
 		},

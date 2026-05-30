@@ -31,7 +31,7 @@ var entityNameFetcher func(uri string) (string, error) = fetchEntityNameFromSour
 
 // fetchEntityNameFromSource is the production implementation of entityNameFetcher.
 // It routes by hostname:
-//   - eolas.l42.eu → fetchEolasName (bulk Turtle endpoint)
+//   - eolas.l42.eu → fetchEolasName (per-entity /metadata/{type}/{pk}/data/ endpoint)
 func fetchEntityNameFromSource(entityURI string) (string, error) {
 	u, err := url.Parse(entityURI)
 	if err != nil {
