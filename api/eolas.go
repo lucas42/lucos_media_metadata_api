@@ -31,15 +31,23 @@ const eolasClientTimeout = 3 * time.Second
 
 // fetchEolasNames fetches human-readable names (skos:prefLabel) for the given
 // URIs from the lucos_eolas bulk data endpoint. Returns a map of URI → name.
-// Returns nil if KEY_LUCOS_EOLAS is not set or if eolas is unreachable.
-func fetchEolasNames(uris []string) map[string]string {
+//
+// A non-nil error means the names could not be retrieved: missing credentials
+// (KEY_LUCOS_EOLAS unset), transport error / timeout, non-200 response, or
+// unparseable RDF. The daily reconcile job treats this as a job failure rather
+// than silently reporting success on a no-op run (see #303). A successful fetch
+// that happens to resolve zero names is NOT an error: the trigger is the failed
+// retrieval, not the resolved-count.
+//
+// Returns (nil, nil) — a non-error skip — only when there is genuinely nothing
+// to do: no URIs to resolve.
+func fetchEolasNames(uris []string) (map[string]string, error) {
 	key := os.Getenv("KEY_LUCOS_EOLAS")
 	if key == "" {
-		slog.Warn("KEY_LUCOS_EOLAS not set, skipping name import from eolas")
-		return nil
+		return nil, fmt.Errorf("KEY_LUCOS_EOLAS not set; cannot fetch names from eolas")
 	}
 	if len(uris) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Build a set of URIs we're interested in for fast lookup
@@ -64,8 +72,7 @@ func fetchEolasNames(uris []string) map[string]string {
 
 	req, err := http.NewRequest("GET", dataURL, nil)
 	if err != nil {
-		slog.Warn("Failed to create eolas request", slog.Any("error", err))
-		return nil
+		return nil, fmt.Errorf("building eolas bulk request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Accept", "text/turtle")
@@ -74,21 +81,18 @@ func fetchEolasNames(uris []string) map[string]string {
 	slog.Info("Fetching entity names from eolas", "url", dataURL, "uri_count", len(uris))
 	resp, err := client.Do(req)
 	if err != nil {
-		slog.Warn("Failed to fetch eolas data", slog.Any("error", err))
-		return nil
+		return nil, fmt.Errorf("fetching eolas data: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		slog.Warn("Eolas returned non-200 status", "status", resp.StatusCode, "body", string(body))
-		return nil
+		return nil, fmt.Errorf("eolas returned HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
 	g := rdf2go.NewGraph("")
 	if err := g.Parse(resp.Body, "text/turtle"); err != nil {
-		slog.Warn("Failed to parse eolas RDF data", slog.Any("error", err))
-		return nil
+		return nil, fmt.Errorf("parsing eolas RDF data: %w", err)
 	}
 
 	prefLabel := rdf2go.NewResource(prefLabelURI)
@@ -105,7 +109,7 @@ func fetchEolasNames(uris []string) map[string]string {
 	}
 
 	slog.Info("Fetched entity names from eolas", "requested", len(uris), "resolved", len(names))
-	return names
+	return names, nil
 }
 
 // fetchEolasName fetches the canonical name (skos:prefLabel) for a single
