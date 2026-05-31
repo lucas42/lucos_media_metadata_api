@@ -130,6 +130,8 @@ var registry = map[string]Config{
 		ValueShape:   ValueShapeLiteral,
 		PredicateURI: "/ontology#dateAdded",
 	},
+	// Uses skos:prefLabel for consistency with other items in the triplestore.
+	// Might be useful to also add a dc:title predicate in future.
 	"title": {
 		ValueShape:   ValueShapeLiteral,
 		PredicateURI: "http://www.w3.org/2004/02/skos/core#prefLabel",
@@ -138,10 +140,14 @@ var registry = map[string]Config{
 		ValueShape:   ValueShapeLiteral,
 		PredicateURI: "http://schema.org/comment",
 	},
+	// Known deviation: mo:lyrics should link to a mo:Lyrics node whose mo:text holds the literal.
+	// We place the literal directly on the Track for simplicity.
 	"lyrics": {
 		ValueShape:   ValueShapeLiteral,
 		PredicateURI: "http://purl.org/ontology/mo/lyrics",
 	},
+	// Known deviation: schema:ratingValue should be an attribute of a schema:Rating node.
+	// We place it directly on the Track for simplicity.
 	"rating": {
 		ValueShape:   ValueShapeLiteral,
 		PredicateURI: "http://schema.org/ratingValue",
