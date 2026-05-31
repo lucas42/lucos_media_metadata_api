@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -19,14 +20,14 @@ func TestReconcileUpdatesEolasURIs(t *testing.T) {
 	// Open a second handle to the same DB to call reconcileTagNamesWithFetchers directly.
 	store := DBInit("testrouting.sqlite", MockLoganne{})
 	store.reconcileTagNamesWithFetchers(
-		func(uris []string) map[string]string {
+		func(uris []string) (map[string]string, error) {
 			result := make(map[string]string)
 			for _, u := range uris {
 				if u == eolasEntityURI {
 					result[u] = "Updated Eolas Name"
 				}
 			}
-			return result
+			return result, nil
 		},
 	)
 
@@ -53,9 +54,9 @@ func TestReconcileSkipsUnknownHostURIs(t *testing.T) {
 
 	eolasCallCount := 0
 	store.reconcileTagNamesWithFetchers(
-		func(uris []string) map[string]string {
+		func(uris []string) (map[string]string, error) {
 			eolasCallCount += len(uris)
-			return nil
+			return nil, nil
 		},
 	)
 
@@ -80,10 +81,63 @@ func TestReconcileNoURITags(t *testing.T) {
 
 	called := false
 	store.reconcileTagNamesWithFetchers(
-		func(uris []string) map[string]string { called = true; return nil },
+		func(uris []string) (map[string]string, error) { called = true; return nil, nil },
 	)
 
 	if called {
 		t.Error("expected no fetcher calls when there are no URI tags")
+	}
+}
+
+// ── Test: a failed eolas fetch fails the whole job (does not silently no-op) ──
+// Regression guard for #303: when the eolas call itself fails, reconcile must
+// return an error (so reconcileTagNames reports failure to schedule_tracker)
+// rather than swallowing it and reporting success.
+
+func TestReconcileFailsWhenEolasFetchErrors(t *testing.T) {
+	clearData()
+
+	eolasEntityURI := "https://eolas.l42.eu/metadata/person/recon-fetch-err/"
+	trackURL := createTrackWithURITag(t, "reconcile-fetch-err-1", eolasEntityURI)
+
+	store := DBInit("testrouting.sqlite", MockLoganne{})
+	err := store.reconcileTagNamesWithFetchers(
+		func(uris []string) (map[string]string, error) {
+			return nil, fmt.Errorf("context deadline exceeded")
+		},
+	)
+
+	if err == nil {
+		t.Fatal("expected reconcileTagNamesWithFetchers to return an error when the eolas fetch fails")
+	}
+
+	// The tag must be left untouched — a failed fetch resolves nothing.
+	tagsAfter := getTagsForTrack(t, trackURL)
+	if len(tagsAfter["language"]) == 0 {
+		t.Fatal("language tag disappeared after a failed reconcile")
+	}
+	assertEqual(t, "URI unchanged after failed fetch", eolasEntityURI, tagsAfter["language"][0].URI)
+}
+
+// ── Test: a successful fetch resolving zero names is NOT a failure ───────────
+// Per the #303 refinement: the trigger is the failed call, not the resolved
+// count. A fetch that succeeds but matches no names returns no error.
+
+func TestReconcileZeroResolvedIsNotAnError(t *testing.T) {
+	clearData()
+
+	eolasEntityURI := "https://eolas.l42.eu/metadata/person/recon-zero/"
+	createTrackWithURITag(t, "reconcile-zero-1", eolasEntityURI)
+
+	store := DBInit("testrouting.sqlite", MockLoganne{})
+	err := store.reconcileTagNamesWithFetchers(
+		func(uris []string) (map[string]string, error) {
+			// Successful call, but nothing matched.
+			return map[string]string{}, nil
+		},
+	)
+
+	if err != nil {
+		t.Fatalf("expected no error when the fetch succeeds with zero resolved names, got: %v", err)
 	}
 }

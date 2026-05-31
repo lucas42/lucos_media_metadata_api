@@ -39,11 +39,13 @@ func (store Datastore) reconcileTagNames() {
 
 // reconcileTagNamesWithFetchers is the testable core of reconcileTagNames.
 // Production code calls it via reconcileTagNames; tests inject a mock fetcher.
-// Returns a non-nil error only for structural failures (DB unavailable, query
-// build failure); best-effort per-URI fetch failures are logged but do not
-// cause an error return.
+// Returns a non-nil error for structural failures (DB unavailable, query build
+// failure) and when the eolas name fetch itself fails (timeout / non-200 /
+// unparseable RDF) — so a failed eolas call surfaces as a job failure rather
+// than a silent no-op (see #303). A successful fetch resolving zero names is
+// not an error.
 func (store Datastore) reconcileTagNamesWithFetchers(
-	eolasNamesFetcher func(uris []string) map[string]string,
+	eolasNamesFetcher func(uris []string) (map[string]string, error),
 ) error {
 	slog.Info("reconcileTagNames: starting")
 
@@ -93,7 +95,13 @@ func (store Datastore) reconcileTagNamesWithFetchers(
 	// Fetch names from eolas.
 	allNames := make(map[string]string)
 	if len(eolasURIs) > 0 {
-		names := eolasNamesFetcher(eolasURIs)
+		names, err := eolasNamesFetcher(eolasURIs)
+		if err != nil {
+			// The eolas call itself failed (timeout / non-200 / unparseable RDF).
+			// Fail the whole job so it reports failure to schedule_tracker rather
+			// than silently no-opping and reporting success (see #303).
+			return fmt.Errorf("eolas name fetch failed: %w", err)
+		}
 		for uri, name := range names {
 			allNames[uri] = name
 		}
