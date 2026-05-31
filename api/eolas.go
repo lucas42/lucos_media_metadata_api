@@ -32,19 +32,19 @@ const eolasClientTimeout = 3 * time.Second
 // fetchEolasNames fetches human-readable names (skos:prefLabel) for the given
 // URIs from the lucos_eolas bulk data endpoint. Returns a map of URI → name.
 //
-// A non-nil error means the eolas call itself failed (transport error / timeout,
-// non-200 response, or unparseable RDF) — the daily reconcile job treats this as
-// a job failure rather than silently reporting success on a no-op run (see #303).
-// A successful fetch that happens to resolve zero names is NOT an error: the
-// trigger is the failed call, not the resolved-count.
+// A non-nil error means the names could not be retrieved: missing credentials
+// (KEY_LUCOS_EOLAS unset), transport error / timeout, non-200 response, or
+// unparseable RDF. The daily reconcile job treats this as a job failure rather
+// than silently reporting success on a no-op run (see #303). A successful fetch
+// that happens to resolve zero names is NOT an error: the trigger is the failed
+// retrieval, not the resolved-count.
 //
-// Returns (nil, nil) — a non-error skip — when no call is attempted: KEY_LUCOS_EOLAS
-// is unset, or there are no URIs to resolve.
+// Returns (nil, nil) — a non-error skip — only when there is genuinely nothing
+// to do: no URIs to resolve.
 func fetchEolasNames(uris []string) (map[string]string, error) {
 	key := os.Getenv("KEY_LUCOS_EOLAS")
 	if key == "" {
-		slog.Warn("KEY_LUCOS_EOLAS not set, skipping name import from eolas")
-		return nil, nil
+		return nil, fmt.Errorf("KEY_LUCOS_EOLAS not set; cannot fetch names from eolas")
 	}
 	if len(uris) == 0 {
 		return nil, nil

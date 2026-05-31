@@ -141,3 +141,17 @@ func TestReconcileZeroResolvedIsNotAnError(t *testing.T) {
 		t.Fatalf("expected no error when the fetch succeeds with zero resolved names, got: %v", err)
 	}
 }
+
+// ── Test: missing eolas credentials cause an error (not a silent skip) ───────
+// Per lucas42's review of #303: a lack of credentials should fail the fetch, so
+// the reconcile job reports failure rather than silently no-opping. The key
+// check returns before any HTTP call, so this makes no network request.
+
+func TestFetchEolasNamesErrorsWithoutKey(t *testing.T) {
+	t.Setenv("KEY_LUCOS_EOLAS", "")
+
+	_, err := fetchEolasNames([]string{"https://eolas.l42.eu/metadata/person/1/"})
+	if err == nil {
+		t.Fatal("expected fetchEolasNames to return an error when KEY_LUCOS_EOLAS is unset")
+	}
+}
