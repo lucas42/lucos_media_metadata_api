@@ -40,10 +40,10 @@ func (store Datastore) reconcileTagNames() {
 // reconcileTagNamesWithFetchers is the testable core of reconcileTagNames.
 // Production code calls it via reconcileTagNames; tests inject a mock fetcher.
 // Returns a non-nil error for structural failures (DB unavailable, query build
-// failure) and when the eolas name fetch itself fails (timeout / non-200 /
-// unparseable RDF) — so a failed eolas call surfaces as a job failure rather
-// than a silent no-op (see #303). A successful fetch resolving zero names is
-// not an error.
+// failure) and when the eolas name fetch fails to retrieve names (missing
+// credentials, timeout / non-200 / unparseable RDF) — so a failed eolas call
+// surfaces as a job failure rather than a silent no-op (see #303). A successful
+// fetch resolving zero names is not an error.
 func (store Datastore) reconcileTagNamesWithFetchers(
 	eolasNamesFetcher func(uris []string) (map[string]string, error),
 ) error {
