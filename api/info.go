@@ -125,14 +125,23 @@ func WeightingCheck(store Datastore) (weightingCheck Check, weightingDrift Metri
 	} else if weightingDrift.Value > 0 {
 		weightingCheck.OK = false
 		weightingCheck.Debug = "The maximum `cum_weighting` value in the `tracks` table is greater than the sum of all the `weighting` values"
+		slog.Warn("WeightingCheck: cum_weighting inconsistency detected", "drift", weightingDrift.Value, "direction", "cum_max > sum")
 	} else if weightingDrift.Value < 0 {
 		weightingCheck.OK = false
 		weightingCheck.Debug = "The maximum `cum_weighting` value in the `tracks` table is less than the sum of all the `weighting` values"
+		slog.Warn("WeightingCheck: cum_weighting inconsistency detected", "drift", weightingDrift.Value, "direction", "cum_max < sum")
 	} else {
 		weightingCheck.OK = true
 	}
 	return weightingCheck, weightingDrift
 }
+// uriMissingRow is used to scan per-predicate counts of tags missing a URI,
+// for diagnostic logging when URIIntegrityCheck detects a failure.
+type uriMissingRow struct {
+	PredicateID string `db:"predicateid"`
+	Count       int    `db:"count"`
+}
+
 func URIIntegrityCheck(store Datastore) (uriCheck Check, missingCount Metric) {
 	uriCheck = Check{TechDetail: "Tags with URI-dependent predicates all have a URI set"}
 	missingCount = Metric{TechDetail: "Number of tags with a URI-dependent predicate but no URI"}
@@ -158,6 +167,23 @@ func URIIntegrityCheck(store Datastore) (uriCheck Check, missingCount Metric) {
 	} else if missingCount.Value > 0 {
 		uriCheck.OK = false
 		uriCheck.Debug = fmt.Sprintf("%d tag(s) with a URI-dependent predicate are missing a URI", missingCount.Value)
+		// Log a per-predicate breakdown so the next occurrence is diagnosable.
+		// Best-effort: a query failure here only affects logging, not the check result.
+		bQuery, bArgs, bErr := sqlx.In(
+			"SELECT predicateid, COUNT(*) as count FROM tag WHERE predicateid IN (?) AND (uri IS NULL OR uri = '') GROUP BY predicateid ORDER BY count DESC",
+			predicates,
+		)
+		if bErr == nil {
+			bQuery = store.DB.Rebind(bQuery)
+			var breakdown []uriMissingRow
+			if scanErr := store.DB.Select(&breakdown, bQuery, bArgs...); scanErr == nil {
+				slog.Warn("URIIntegrityCheck: tags missing URIs detected", "total", missingCount.Value, "by_predicate", breakdown)
+			} else {
+				slog.Warn("URIIntegrityCheck: tags missing URIs detected", "total", missingCount.Value, "breakdown_error", scanErr.Error())
+			}
+		} else {
+			slog.Warn("URIIntegrityCheck: tags missing URIs detected", "total", missingCount.Value)
+		}
 	} else {
 		uriCheck.OK = true
 	}
