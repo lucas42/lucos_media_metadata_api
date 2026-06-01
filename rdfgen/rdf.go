@@ -122,7 +122,7 @@ func ExportRDF(dbPath, outFile string) error {
 	}
 	defer albumRows.Close()
 
-	artistRows, err := db.Query(`SELECT id, name FROM artist ORDER BY id`)
+	artistRows, err := db.Query(`SELECT id, name, person_uri FROM artist ORDER BY id`)
 	if err != nil {
 		return err
 	}
@@ -296,9 +296,14 @@ func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 }
 
 // ArtistToRdf converts rows from the artist table into an RDF graph.
-// Each row must have columns: id (int), name (string).
+// Each row must have columns: id (int), name (string), person_uri (nullable string).
 // Emits rdf:type mo:MusicArtist and skos:prefLabel for each artist,
 // plus type-level metadata so the document is self-contained.
+//
+// When person_uri is non-null/non-empty, also emits:
+//   - owl:sameAs → the eolas:Person URI (joins the arachne closure)
+//   - eolas:preferredIdentifier → the same URI (declares the eolas Person canonical,
+//     so the merged search-index document uses a deterministic id — ADR-0009)
 //
 // Crucially, it emits mo:MusicArtist rdfs:subClassOf foaf:Agent alongside
 // foaf:Agent skos:prefLabel "Agent"@en. Without the prefLabel for foaf:Agent,
@@ -348,7 +353,8 @@ func ArtistToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 	for rows.Next() {
 		var id int
 		var name string
-		if err := rows.Scan(&id, &name); err != nil {
+		var personURIRaw sql.NullString
+		if err := rows.Scan(&id, &name, &personURIRaw); err != nil {
 			return g, err
 		}
 		subject := rdf2go.NewResource(fmt.Sprintf("%s/artists/%d", mediaMetadataManagerOrigin, id))
@@ -358,6 +364,19 @@ func ArtistToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		g.AddTriple(subject,
 			rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
 			rdf2go.NewLiteral(name))
+
+		// ADR-0009 identity link: emit owl:sameAs + eolas:preferredIdentifier when
+		// a manually-curated eolas:Person URI is stored for this artist.  Groups and
+		// un-curated artists have a NULL person_uri and emit no link triples.
+		if personURIRaw.Valid && personURIRaw.String != "" {
+			personURI := rdf2go.NewResource(personURIRaw.String)
+			g.AddTriple(subject,
+				rdf2go.NewResource("http://www.w3.org/2002/07/owl#sameAs"),
+				personURI)
+			g.AddTriple(subject,
+				rdf2go.NewResource("https://eolas.l42.eu/ontology/preferredIdentifier"),
+				personURI)
+		}
 	}
 
 	if err := rows.Err(); err != nil {

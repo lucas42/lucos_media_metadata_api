@@ -484,3 +484,97 @@ func TestTrackMultipleArtists(test *testing.T) {
 		test.Errorf("Expected 2 artist values, got %d", len(artistArr))
 	}
 }
+
+// TestArtistSetPersonURIViaUpdate checks that PUT /v3/artists/{id} with a valid
+// eolas personUri sets the identity link and returns it in the response.
+func TestArtistSetPersonURIViaUpdate(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/artists", `{"name":"Enya"}`, 201) // id=1
+
+	// Update with a valid eolas Person URI (eolasOrigin is "https://eolas.l42.eu" in test setup)
+	makeRequest(test, "PUT", "/v3/artists/1",
+		`{"name":"Eithne Brennan","personUri":"https://eolas.l42.eu/metadata/person/42/"}`,
+		200,
+		`{"id":1,"name":"Eithne Brennan","uri":"/artists/1","personUri":"https://eolas.l42.eu/metadata/person/42/"}`,
+		true,
+	)
+}
+
+// TestArtistClearPersonURI checks that PUT /v3/artists/{id} with personUri="" clears
+// a previously-set identity link.
+func TestArtistClearPersonURI(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/artists", `{"name":"Enya"}`, 201)
+	setupRequest(test, "PUT", "/v3/artists/1",
+		`{"name":"Enya","personUri":"https://eolas.l42.eu/metadata/person/42/"}`, 200)
+
+	// Clear it with empty string
+	makeRequest(test, "PUT", "/v3/artists/1",
+		`{"name":"Enya","personUri":""}`,
+		200,
+		`{"id":1,"name":"Enya","uri":"/artists/1"}`, // personUri omitted (empty)
+		true,
+	)
+}
+
+// TestArtistPersonURIKeptWhenAbsent checks that PUT /v3/artists/{id} without
+// personUri in the body does NOT clear an existing identity link.
+func TestArtistPersonURIKeptWhenAbsent(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/artists", `{"name":"Enya"}`, 201)
+	setupRequest(test, "PUT", "/v3/artists/1",
+		`{"name":"Enya","personUri":"https://eolas.l42.eu/metadata/person/42/"}`, 200)
+
+	// Update name only — personUri should be preserved
+	makeRequest(test, "PUT", "/v3/artists/1",
+		`{"name":"Eithne Brennan"}`, // no personUri
+		200,
+		`{"id":1,"name":"Eithne Brennan","uri":"/artists/1","personUri":"https://eolas.l42.eu/metadata/person/42/"}`,
+		true,
+	)
+}
+
+// TestArtistInvalidPersonURIHost checks that PUT /v3/artists/{id} with a
+// personUri whose host is not eolas.l42.eu is rejected with 400.
+func TestArtistInvalidPersonURIHost(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/artists", `{"name":"Enya"}`, 201)
+
+	makeRequest(test, "PUT", "/v3/artists/1",
+		`{"name":"Enya","personUri":"https://contacts.l42.eu/people/42/"}`,
+		400,
+		`{"error":"personUri must start with the eolas origin (https://eolas.l42.eu/)","code":"invalid_person_uri"}`,
+		true,
+	)
+}
+
+// TestArtistGetByIDIncludesPersonURI checks that GET /v3/artists/{id} returns
+// personUri in the response when it is set.
+func TestArtistGetByIDIncludesPersonURI(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/artists", `{"name":"Enya"}`, 201)
+	setupRequest(test, "PUT", "/v3/artists/1",
+		`{"name":"Enya","personUri":"https://eolas.l42.eu/metadata/person/42/"}`, 200)
+
+	makeRequest(test, "GET", "/v3/artists/1",
+		"",
+		200,
+		`{"id":1,"name":"Enya","uri":"/artists/1","personUri":"https://eolas.l42.eu/metadata/person/42/"}`,
+		true,
+	)
+}
+
+// TestArtistPersonURIOmittedWhenNull checks that GET /v3/artists/{id} omits
+// personUri from the response when it is not set.
+func TestArtistPersonURIOmittedWhenNull(test *testing.T) {
+	clearData()
+	setupRequest(test, "POST", "/v3/artists", `{"name":"Enya"}`, 201)
+
+	// personUri should NOT appear in the response JSON at all
+	makeRequest(test, "GET", "/v3/artists/1",
+		"",
+		200,
+		`{"id":1,"name":"Enya","uri":"/artists/1"}`,
+		true,
+	)
+}
