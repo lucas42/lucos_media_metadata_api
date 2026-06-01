@@ -1,8 +1,10 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math"
@@ -15,9 +17,23 @@ import (
 
 // ArtistV3 is the v3 wire representation of an artist.
 type ArtistV3 struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-	URI  string `json:"uri"`
+	ID        int     `json:"id"`
+	Name      string  `json:"name"`
+	URI       string  `json:"uri"`
+	PersonURI *string `json:"personUri,omitempty"` // optional eolas:Person identity link (ADR-0009)
+}
+
+// validateArtistPersonURI checks that personURI, if non-empty, starts with the
+// configured eolas origin (host-validated per ADR-0005/#245). Returns a non-empty
+// error message suitable for a 400 response if validation fails, empty string if OK.
+func validateArtistPersonURI(personURI string) string {
+	if eolasOrigin == "" {
+		return "EOLAS_ORIGIN not configured; cannot validate personUri"
+	}
+	if !strings.HasPrefix(personURI, eolasOrigin+"/") {
+		return fmt.Sprintf("personUri must start with the eolas origin (%s/)", eolasOrigin)
+	}
+	return ""
 }
 
 // ArtistListV3 wraps a paginated list of artists.
@@ -67,8 +83,9 @@ func (store Datastore) getAllArtists(rawpage, q string) (list ArtistListV3, err 
 	}
 
 	type artistRow struct {
-		ID   int    `db:"id"`
-		Name string `db:"name"`
+		ID        int            `db:"id"`
+		Name      string         `db:"name"`
+		PersonURI sql.NullString `db:"person_uri"`
 	}
 
 	var total int
@@ -79,13 +96,13 @@ func (store Datastore) getAllArtists(rawpage, q string) (list ArtistListV3, err 
 		if err != nil {
 			return
 		}
-		err = store.DB.Select(&rows, "SELECT id, name FROM artist WHERE name LIKE $1 ORDER BY name LIMIT $2 OFFSET $3", like, limit, offset)
+		err = store.DB.Select(&rows, "SELECT id, name, person_uri FROM artist WHERE name LIKE $1 ORDER BY name LIMIT $2 OFFSET $3", like, limit, offset)
 	} else {
 		err = store.DB.Get(&total, "SELECT COUNT(*) FROM artist")
 		if err != nil {
 			return
 		}
-		err = store.DB.Select(&rows, "SELECT id, name FROM artist ORDER BY name LIMIT $1 OFFSET $2", limit, offset)
+		err = store.DB.Select(&rows, "SELECT id, name, person_uri FROM artist ORDER BY name LIMIT $1 OFFSET $2", limit, offset)
 	}
 	if err != nil {
 		return
@@ -94,9 +111,10 @@ func (store Datastore) getAllArtists(rawpage, q string) (list ArtistListV3, err 
 	artists := make([]ArtistV3, len(rows))
 	for i, row := range rows {
 		artists[i] = ArtistV3{
-			ID:   row.ID,
-			Name: row.Name,
-			URI:  store.artistURI(row.ID),
+			ID:        row.ID,
+			Name:      row.Name,
+			URI:       store.artistURI(row.ID),
+			PersonURI: nullStringToPtr(row.PersonURI),
 		}
 	}
 
@@ -112,11 +130,12 @@ func (store Datastore) getAllArtists(rawpage, q string) (list ArtistListV3, err 
 // getArtistByID returns a single artist by its integer ID.
 func (store Datastore) getArtistByID(id int) (artist ArtistV3, err error) {
 	type artistRow struct {
-		ID   int    `db:"id"`
-		Name string `db:"name"`
+		ID        int            `db:"id"`
+		Name      string         `db:"name"`
+		PersonURI sql.NullString `db:"person_uri"`
 	}
 	var row artistRow
-	err = store.DB.Get(&row, "SELECT id, name FROM artist WHERE id = $1", id)
+	err = store.DB.Get(&row, "SELECT id, name, person_uri FROM artist WHERE id = $1", id)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			err = errors.New("Artist Not Found")
@@ -124,11 +143,22 @@ func (store Datastore) getArtistByID(id int) (artist ArtistV3, err error) {
 		return
 	}
 	artist = ArtistV3{
-		ID:   row.ID,
-		Name: row.Name,
-		URI:  store.artistURI(row.ID),
+		ID:        row.ID,
+		Name:      row.Name,
+		URI:       store.artistURI(row.ID),
+		PersonURI: nullStringToPtr(row.PersonURI),
 	}
 	return
+}
+
+// nullStringToPtr converts a sql.NullString to a *string.
+// Returns nil for NULL or empty strings (both mean "no value set").
+func nullStringToPtr(ns sql.NullString) *string {
+	if !ns.Valid || ns.String == "" {
+		return nil
+	}
+	s := ns.String
+	return &s
 }
 
 // createArtist inserts a new artist with the given name and returns the created ArtistV3.
@@ -155,9 +185,16 @@ func (store Datastore) createArtist(name string) (artist ArtistV3, err error) {
 	return
 }
 
-// updateArtist renames an existing artist.
+// updateArtist renames an existing artist and optionally updates the eolas:Person
+// identity link (ADR-0009).
+//
+// personURI semantics:
+//   - nil: do not change the existing person_uri value
+//   - pointer to "": clear person_uri (set to NULL — un-curate the identity link)
+//   - pointer to non-empty string: set person_uri to that value
+//
 // Returns "Artist Not Found" if the id doesn't exist.
-func (store Datastore) updateArtist(id int, name string) (artist ArtistV3, err error) {
+func (store Datastore) updateArtist(id int, name string, personURI *string) (artist ArtistV3, err error) {
 	slog.Info("Update Artist", "id", id, "name", name)
 
 	tx, err := store.DB.Beginx()
@@ -166,7 +203,18 @@ func (store Datastore) updateArtist(id int, name string) (artist ArtistV3, err e
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	result, err := tx.Exec("UPDATE artist SET name = $1 WHERE id = $2", name, id)
+	var result sql.Result
+	if personURI == nil {
+		// Don't touch person_uri
+		result, err = tx.Exec("UPDATE artist SET name = $1 WHERE id = $2", name, id)
+	} else {
+		// Set or clear person_uri
+		var personURIVal sql.NullString
+		if *personURI != "" {
+			personURIVal = sql.NullString{String: *personURI, Valid: true}
+		}
+		result, err = tx.Exec("UPDATE artist SET name = $1, person_uri = $2 WHERE id = $3", name, personURIVal, id)
+	}
 	if err != nil {
 		_ = tx.Rollback()
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -201,10 +249,10 @@ func (store Datastore) updateArtist(id int, name string) (artist ArtistV3, err e
 		return
 	}
 
-	artist = ArtistV3{
-		ID:   id,
-		Name: name,
-		URI:  artistURI,
+	// Re-fetch the full artist row so PersonURI reflects the DB state.
+	artist, err = store.getArtistByID(id)
+	if err != nil {
+		return
 	}
 	store.Loganne.artistPost("artistUpdated", "Artist \""+name+"\" updated", artist, true)
 	return
@@ -317,13 +365,14 @@ func (store Datastore) ResolveArtistNameFromURI(uri string) (string, error) {
 // name exists, one is created.
 func (store Datastore) resolveOrCreateArtistByName(name string) (artist ArtistV3, err error) {
 	type artistRow struct {
-		ID   int    `db:"id"`
-		Name string `db:"name"`
+		ID        int            `db:"id"`
+		Name      string         `db:"name"`
+		PersonURI sql.NullString `db:"person_uri"`
 	}
 	var row artistRow
-	err = store.DB.Get(&row, "SELECT id, name FROM artist WHERE name = $1", name)
+	err = store.DB.Get(&row, "SELECT id, name, person_uri FROM artist WHERE name = $1", name)
 	if err == nil {
-		artist = ArtistV3{ID: row.ID, Name: row.Name, URI: store.artistURI(row.ID)}
+		artist = ArtistV3{ID: row.ID, Name: row.Name, URI: store.artistURI(row.ID), PersonURI: nullStringToPtr(row.PersonURI)}
 		return
 	}
 	if err.Error() != "sql: no rows in result set" {
@@ -355,7 +404,7 @@ func writeArtistRDFByID(store Datastore, w http.ResponseWriter, id int, rdfType 
 		writeRDFResponse(w, nil, rdfType, err)
 		return
 	}
-	rows, err := store.DB.Query("SELECT id, name FROM artist WHERE id = $1", id)
+	rows, err := store.DB.Query("SELECT id, name, person_uri FROM artist WHERE id = $1", id)
 	if err != nil {
 		writeRDFResponse(w, nil, rdfType, err)
 		return
@@ -467,13 +516,21 @@ func (store Datastore) ArtistsV3Controller(w http.ResponseWriter, r *http.Reques
 				return
 			}
 			var input struct {
-				Name string `json:"name"`
+				Name      string  `json:"name"`
+				PersonURI *string `json:"personUri"`
 			}
 			if err = json.Unmarshal(body, &input); err != nil || input.Name == "" {
 				writeV3ErrorResponse(w, http.StatusBadRequest, "Request body must include a non-empty \"name\" field", "bad_request")
 				return
 			}
-			artist, err := store.updateArtist(id, input.Name)
+			// Validate personUri if provided and non-empty
+			if input.PersonURI != nil && *input.PersonURI != "" {
+				if msg := validateArtistPersonURI(*input.PersonURI); msg != "" {
+					writeV3ErrorResponse(w, http.StatusBadRequest, msg, "invalid_person_uri")
+					return
+				}
+			}
+			artist, err := store.updateArtist(id, input.Name, input.PersonURI)
 			if err != nil {
 				if err.Error() == "artist_duplicate_name" {
 					writeV3ErrorResponse(w, http.StatusConflict, "An artist with that name already exists", "duplicate_name")

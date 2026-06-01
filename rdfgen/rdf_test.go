@@ -88,7 +88,7 @@ func TestExportRDF(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
-	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +159,7 @@ func TestExportRDFRejectsEmptyTrackTable(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
-	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -195,7 +195,7 @@ func TestExportRDFUsesTagUriForAboutMentions(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
-	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -320,7 +320,7 @@ func TestExportRDFSkipsTagsWithNoUri(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
-	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -575,7 +575,7 @@ func TestExportRDFIncludesAlbums(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
-	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -683,7 +683,7 @@ func TestExportRDFTrackLanguageEmission(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
-	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -906,7 +906,7 @@ func TestExportRDFSKOSConceptEmission(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
-	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -966,7 +966,7 @@ func TestArtistToRdf(t *testing.T) {
 	}
 	defer db.Close()
 
-	_, err = db.Exec(`CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT)`)
+	_, err = db.Exec(`CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT)`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -977,7 +977,7 @@ func TestArtistToRdf(t *testing.T) {
 
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
 
-	rows, err := db.Query("SELECT id, name FROM artist ORDER BY id")
+	rows, err := db.Query("SELECT id, name, person_uri FROM artist ORDER BY id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1053,7 +1053,7 @@ func TestExportRDFIncludesArtists(t *testing.T) {
 	CREATE TABLE track (id INTEGER PRIMARY KEY, url TEXT, duration INTEGER);
 	CREATE TABLE tag (trackid INTEGER, predicateid TEXT, value TEXT, uri TEXT);
 	CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT);
-	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT);
+	CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT);
 	`)
 	if err != nil {
 		t.Fatal(err)
@@ -1111,6 +1111,134 @@ func TestExportRDFIncludesArtists(t *testing.T) {
 	// ValueError if foaf:Agent has no label in the exported RDF.
 	if !strings.Contains(output, "Agent") {
 		t.Error("expected foaf:Agent prefLabel 'Agent' in export output")
+	}
+}
+
+// TestArtistToRdfWithPersonURI verifies that when an artist has a non-NULL person_uri,
+// ArtistToRdf emits both owl:sameAs and eolas:preferredIdentifier triples pointing at
+// that URI (ADR-0009 identity link). An artist without a person_uri must emit neither.
+func TestArtistToRdfWithPersonURI(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Artist 1 has an identity link; artist 2 is a group with no link.
+	_, err = db.Exec(`
+		INSERT INTO artist (id, name, person_uri) VALUES
+		  (1, 'Enya', 'https://eolas.l42.eu/metadata/person/42/'),
+		  (2, 'Clannad', NULL)
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+
+	rows, err := db.Query("SELECT id, name, person_uri FROM artist ORDER BY id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	g, err := ArtistToRdf(rows)
+	if err != nil {
+		t.Fatalf("ArtistToRdf failed: %v", err)
+	}
+
+	var buf strings.Builder
+	if err := g.Serialize(&buf, "text/turtle"); err != nil {
+		t.Fatalf("serialize failed: %v", err)
+	}
+	output := buf.String()
+
+	// Artist 1 (Enya) must emit owl:sameAs and preferredIdentifier to the eolas Person URI.
+	if !strings.Contains(output, "owl#sameAs") {
+		t.Errorf("expected owl:sameAs triple for artist with person_uri, got:\n%s", output)
+	}
+	if !strings.Contains(output, "preferredIdentifier") {
+		t.Errorf("expected eolas:preferredIdentifier triple for artist with person_uri, got:\n%s", output)
+	}
+	if !strings.Contains(output, "eolas.l42.eu/metadata/person/42/") {
+		t.Errorf("expected eolas Person URI in output, got:\n%s", output)
+	}
+
+	// Both link triples must point at artist 1's subject URI, not artist 2's.
+	owlSameAs := rdf2go.NewResource("http://www.w3.org/2002/07/owl#sameAs")
+	prefId := rdf2go.NewResource("https://eolas.l42.eu/ontology/preferredIdentifier")
+	eolasPersonURI := rdf2go.NewResource("https://eolas.l42.eu/metadata/person/42/")
+	artist1Subject := rdf2go.NewResource("http://localhost:8020/artists/1")
+	artist2Subject := rdf2go.NewResource("http://localhost:8020/artists/2")
+
+	sameAsTriples := g.All(artist1Subject, owlSameAs, eolasPersonURI)
+	if len(sameAsTriples) == 0 {
+		t.Error("expected artist 1 to have an owl:sameAs triple to eolas Person URI")
+	}
+	prefIdTriples := g.All(artist1Subject, prefId, eolasPersonURI)
+	if len(prefIdTriples) == 0 {
+		t.Error("expected artist 1 to have an eolas:preferredIdentifier triple to eolas Person URI")
+	}
+
+	// Artist 2 (Clannad/group) must NOT have any identity link triples.
+	noSameAs := g.All(artist2Subject, owlSameAs, nil)
+	if len(noSameAs) > 0 {
+		t.Errorf("expected artist 2 (group) to have no owl:sameAs triples, got %d", len(noSameAs))
+	}
+	noPrefId := g.All(artist2Subject, prefId, nil)
+	if len(noPrefId) > 0 {
+		t.Errorf("expected artist 2 (group) to have no preferredIdentifier triples, got %d", len(noPrefId))
+	}
+}
+
+// TestArtistToRdfWithoutPersonURI verifies that ArtistToRdf works correctly when
+// no artists have a person_uri (the default state before any curation).
+// This is a regression test ensuring no link triples appear in the output.
+func TestArtistToRdfWithoutPersonURI(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO artist (id, name) VALUES (1, 'Enya')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
+
+	rows, err := db.Query("SELECT id, name, person_uri FROM artist ORDER BY id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	g, err := ArtistToRdf(rows)
+	if err != nil {
+		t.Fatalf("ArtistToRdf failed: %v", err)
+	}
+
+	owlSameAs := rdf2go.NewResource("http://www.w3.org/2002/07/owl#sameAs")
+	prefId := rdf2go.NewResource("https://eolas.l42.eu/ontology/preferredIdentifier")
+
+	if triples := g.All(nil, owlSameAs, nil); len(triples) > 0 {
+		t.Errorf("expected no owl:sameAs triples for uncurated artist, got %d", len(triples))
+	}
+	if triples := g.All(nil, prefId, nil); len(triples) > 0 {
+		t.Errorf("expected no preferredIdentifier triples for uncurated artist, got %d", len(triples))
 	}
 }
 
