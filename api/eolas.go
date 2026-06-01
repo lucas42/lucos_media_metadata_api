@@ -20,7 +20,6 @@ import (
 // the allowed origin for URI validation of eolas predicates.
 var eolasOrigin = os.Getenv("EOLAS_ORIGIN")
 
-const eolasDataPath = "/metadata/all/data/"
 const prefLabelURI = "http://www.w3.org/2004/02/skos/core#prefLabel"
 
 // eolasClientTimeout is the HTTP timeout for eolas calls on the request
@@ -29,12 +28,13 @@ const prefLabelURI = "http://www.w3.org/2004/02/skos/core#prefLabel"
 // use their own, longer timeout since latency there does not block a user.
 const eolasClientTimeout = 3 * time.Second
 
-// fetchEolasNames fetches human-readable names (skos:prefLabel) for the given
-// URIs from the lucos_eolas bulk data endpoint. Returns a map of URI → name.
+// fetchEolasNames resolves human-readable names (skos:prefLabel) for the given
+// URIs using the eolas batch-names endpoint (POST /metadata/names). Returns a
+// map of URI → name. URIs not found in eolas are omitted from the returned map.
 //
 // A non-nil error means the names could not be retrieved: missing credentials
 // (KEY_LUCOS_EOLAS unset), transport error / timeout, non-200 response, or
-// unparseable RDF. The daily reconcile job treats this as a job failure rather
+// unparseable JSON. The daily reconcile job treats this as a job failure rather
 // than silently reporting success on a no-op run (see #303). A successful fetch
 // that happens to resolve zero names is NOT an error: the trigger is the failed
 // retrieval, not the resolved-count.
@@ -50,38 +50,29 @@ func fetchEolasNames(uris []string) (map[string]string, error) {
 		return nil, nil
 	}
 
-	// Build a set of URIs we're interested in for fast lookup
-	wanted := make(map[string]bool, len(uris))
-	for _, uri := range uris {
-		wanted[uri] = true
-	}
-
-	dataURL := eolasOrigin + eolasDataPath
-	eolasBaseURL, _ := url.Parse(eolasOrigin)
-
-	// Only reattach auth header when the redirect stays on the same host
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if req.URL.Host == eolasBaseURL.Host {
-				req.Header.Set("Authorization", "Bearer "+key)
-			}
-			return nil
-		},
-	}
-
-	req, err := http.NewRequest("GET", dataURL, nil)
+	payload, err := json.Marshal(uris)
 	if err != nil {
-		return nil, fmt.Errorf("building eolas bulk request: %w", err)
+		return nil, fmt.Errorf("building eolas batch-names request body: %w", err)
+	}
+
+	batchURL := eolasOrigin + "/metadata/names"
+
+	req, err := http.NewRequest("POST", batchURL, bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("building eolas batch-names request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+key)
-	req.Header.Set("Accept", "text/turtle")
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", os.Getenv("SYSTEM"))
 
-	slog.Info("Fetching entity names from eolas", "url", dataURL, "uri_count", len(uris))
+	// The batch-names endpoint is a scoped indexed lookup — it returns in well
+	// under a second for a few-thousand-URI batch, so a short timeout suffices.
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	slog.Info("Fetching entity names from eolas", "url", batchURL, "uri_count", len(uris))
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetching eolas data: %w", err)
+		return nil, fmt.Errorf("fetching eolas batch names: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -90,22 +81,9 @@ func fetchEolasNames(uris []string) (map[string]string, error) {
 		return nil, fmt.Errorf("eolas returned HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
-	g := rdf2go.NewGraph("")
-	if err := g.Parse(resp.Body, "text/turtle"); err != nil {
-		return nil, fmt.Errorf("parsing eolas RDF data: %w", err)
-	}
-
-	prefLabel := rdf2go.NewResource(prefLabelURI)
-	names := make(map[string]string, len(uris))
-	for triple := range g.IterTriples() {
-		if !triple.Predicate.Equal(prefLabel) {
-			continue
-		}
-		subjectURI := triple.Subject.RawValue()
-		if !wanted[subjectURI] {
-			continue
-		}
-		names[subjectURI] = triple.Object.RawValue()
+	var names map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&names); err != nil {
+		return nil, fmt.Errorf("parsing eolas batch-names response: %w", err)
 	}
 
 	slog.Info("Fetched entity names from eolas", "requested", len(uris), "resolved", len(names))
