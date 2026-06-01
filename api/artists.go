@@ -399,18 +399,12 @@ func (store Datastore) resolveArtistNameFromURI(uri string) (name string, err er
 
 // writeArtistRDFByID writes an RDF representation of a single artist.
 func writeArtistRDFByID(store Datastore, w http.ResponseWriter, id int, rdfType string) {
-	_, err := store.getArtistByID(id)
+	artist, err := store.getArtistByID(id)
 	if err != nil {
 		writeRDFResponse(w, nil, rdfType, err)
 		return
 	}
-	rows, err := store.DB.Query("SELECT id, name, person_uri FROM artist WHERE id = $1", id)
-	if err != nil {
-		writeRDFResponse(w, nil, rdfType, err)
-		return
-	}
-	defer rows.Close()
-	graph, err := rdfgen.ArtistToRdf(rows)
+	graph, err := rdfgen.ArtistToRdf([]rdfgen.ArtistData{{ID: artist.ID, Name: artist.Name, PersonURI: artist.PersonURI}})
 	writeRDFResponse(w, graph, rdfType, err)
 }
 

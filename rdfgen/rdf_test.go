@@ -498,32 +498,12 @@ func TestMapPredicateAlbumUsesOnAlbum(t *testing.T) {
 
 // TestAlbumToRdf verifies that AlbumToRdf emits mo:Record type and skos:prefLabel.
 func TestAlbumToRdf(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec(`CREATE TABLE album (id INTEGER PRIMARY KEY, name TEXT)`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(`INSERT INTO album (id, name) VALUES (1, 'Abbey Road'), (2, 'Let It Be')`)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
 
-	rows, err := db.Query("SELECT id, name FROM album ORDER BY id")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-
-	g, err := AlbumToRdf(rows)
+	g, err := AlbumToRdf([]AlbumData{
+		{ID: 1, Name: "Abbey Road"},
+		{ID: 2, Name: "Let It Be"},
+	})
 	if err != nil {
 		t.Fatalf("AlbumToRdf failed: %v", err)
 	}
@@ -958,32 +938,12 @@ func TestExportRDFSKOSConceptEmission(t *testing.T) {
 // TestArtistToRdf verifies that ArtistToRdf emits mo:MusicArtist type, skos:prefLabel,
 // and the critical type-level metadata including the foaf:Agent parent class label.
 func TestArtistToRdf(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec(`CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT)`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(`INSERT INTO artist (id, name) VALUES (1, 'Enya'), (2, 'Clannad')`)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
 
-	rows, err := db.Query("SELECT id, name, person_uri FROM artist ORDER BY id")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-
-	g, err := ArtistToRdf(rows)
+	g, err := ArtistToRdf([]ArtistData{
+		{ID: 1, Name: "Enya"},
+		{ID: 2, Name: "Clannad"},
+	})
 	if err != nil {
 		t.Fatalf("ArtistToRdf failed: %v", err)
 	}
@@ -1114,41 +1074,18 @@ func TestExportRDFIncludesArtists(t *testing.T) {
 	}
 }
 
-// TestArtistToRdfWithPersonURI verifies that when an artist has a non-NULL person_uri,
+// TestArtistToRdfWithPersonURI verifies that when an artist has a non-nil PersonURI,
 // ArtistToRdf emits both owl:sameAs and eolas:preferredIdentifier triples pointing at
-// that URI (ADR-0009 identity link). An artist without a person_uri must emit neither.
+// that URI (ADR-0009 identity link). An artist without a PersonURI must emit neither.
 func TestArtistToRdfWithPersonURI(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec(`CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT)`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Artist 1 has an identity link; artist 2 is a group with no link.
-	_, err = db.Exec(`
-		INSERT INTO artist (id, name, person_uri) VALUES
-		  (1, 'Enya', 'https://eolas.l42.eu/metadata/person/42/'),
-		  (2, 'Clannad', NULL)
-	`)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
 
-	rows, err := db.Query("SELECT id, name, person_uri FROM artist ORDER BY id")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-
-	g, err := ArtistToRdf(rows)
+	// Artist 1 has an identity link; artist 2 is a group with no link.
+	eolasURI := "https://eolas.l42.eu/metadata/person/42/"
+	g, err := ArtistToRdf([]ArtistData{
+		{ID: 1, Name: "Enya", PersonURI: &eolasURI},
+		{ID: 2, Name: "Clannad", PersonURI: nil},
+	})
 	if err != nil {
 		t.Fatalf("ArtistToRdf failed: %v", err)
 	}
@@ -1198,35 +1135,14 @@ func TestArtistToRdfWithPersonURI(t *testing.T) {
 }
 
 // TestArtistToRdfWithoutPersonURI verifies that ArtistToRdf works correctly when
-// no artists have a person_uri (the default state before any curation).
+// no artists have a PersonURI (the default state before any curation).
 // This is a regression test ensuring no link triples appear in the output.
 func TestArtistToRdfWithoutPersonURI(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec(`CREATE TABLE artist (id INTEGER PRIMARY KEY, name TEXT, person_uri TEXT)`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = db.Exec(`INSERT INTO artist (id, name) VALUES (1, 'Enya')`)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	os.Setenv("MEDIA_METADATA_MANAGER_ORIGIN", "http://localhost:8020")
 
-	rows, err := db.Query("SELECT id, name, person_uri FROM artist ORDER BY id")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-
-	g, err := ArtistToRdf(rows)
+	g, err := ArtistToRdf([]ArtistData{
+		{ID: 1, Name: "Enya", PersonURI: nil},
+	})
 	if err != nil {
 		t.Fatalf("ArtistToRdf failed: %v", err)
 	}

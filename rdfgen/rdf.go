@@ -139,12 +139,39 @@ func ExportRDF(dbPath, outFile string) error {
 	if trackCount == 0 {
 		return fmt.Errorf("sanity check failed: export produced 0 tracks; refusing to overwrite output file")
 	}
-	albumGraph, err := AlbumToRdf(albumRows)
+	var albums []AlbumData
+	for albumRows.Next() {
+		var a AlbumData
+		if err := albumRows.Scan(&a.ID, &a.Name); err != nil {
+			return err
+		}
+		albums = append(albums, a)
+	}
+	if err := albumRows.Err(); err != nil {
+		return err
+	}
+	albumGraph, err := AlbumToRdf(albums)
 	if err != nil {
 		return err
 	}
 	g.Merge(albumGraph)
-	artistGraph, err := ArtistToRdf(artistRows)
+
+	var artists []ArtistData
+	for artistRows.Next() {
+		var a ArtistData
+		var personURIRaw sql.NullString
+		if err := artistRows.Scan(&a.ID, &a.Name, &personURIRaw); err != nil {
+			return err
+		}
+		if personURIRaw.Valid && personURIRaw.String != "" {
+			a.PersonURI = &personURIRaw.String
+		}
+		artists = append(artists, a)
+	}
+	if err := artistRows.Err(); err != nil {
+		return err
+	}
+	artistGraph, err := ArtistToRdf(artists)
 	if err != nil {
 		return err
 	}
@@ -247,11 +274,16 @@ func TrackToRdf(rows *sql.Rows) (*rdf2go.Graph, int, error) {
 	}
 	return g, trackCount, nil
 }
-// AlbumToRdf converts rows from the album table into an RDF graph.
-// Each row must have columns: id (int), name (string).
+// AlbumData holds the fields needed by AlbumToRdf to build album RDF triples.
+type AlbumData struct {
+	ID   int
+	Name string
+}
+
+// AlbumToRdf converts a slice of albums into an RDF graph.
 // Emits rdf:type mo:Record and skos:prefLabel for each album,
 // plus type-level metadata for mo:Record itself so the document is self-contained.
-func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
+func AlbumToRdf(albums []AlbumData) (*rdf2go.Graph, error) {
 	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	g := rdf2go.NewGraph("")
 	moRecord := rdf2go.NewResource("http://purl.org/ontology/mo/Record")
@@ -274,33 +306,31 @@ func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		rdf2go.NewLiteralWithLanguage("Musical", "en"),
 	)
 
-	for rows.Next() {
-		var id int
-		var name string
-		if err := rows.Scan(&id, &name); err != nil {
-			return g, err
-		}
-		subject := rdf2go.NewResource(fmt.Sprintf("%s/albums/%d", mediaMetadataManagerOrigin, id))
+	for _, album := range albums {
+		subject := rdf2go.NewResource(fmt.Sprintf("%s/albums/%d", mediaMetadataManagerOrigin, album.ID))
 		g.AddTriple(subject,
 			rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
 			rdf2go.NewResource("http://purl.org/ontology/mo/Record"))
 		g.AddTriple(subject,
 			rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
-			rdf2go.NewLiteral(name))
+			rdf2go.NewLiteral(album.Name))
 	}
 
-	if err := rows.Err(); err != nil {
-		return g, err
-	}
 	return g, nil
 }
 
-// ArtistToRdf converts rows from the artist table into an RDF graph.
-// Each row must have columns: id (int), name (string), person_uri (nullable string).
+// ArtistData holds the fields needed by ArtistToRdf to build artist RDF triples.
+type ArtistData struct {
+	ID        int
+	Name      string
+	PersonURI *string // nil if no identity link (ADR-0009)
+}
+
+// ArtistToRdf converts a slice of artists into an RDF graph.
 // Emits rdf:type mo:MusicArtist and skos:prefLabel for each artist,
 // plus type-level metadata so the document is self-contained.
 //
-// When person_uri is non-null/non-empty, also emits:
+// When PersonURI is non-nil and non-empty, also emits:
 //   - owl:sameAs → the eolas:Person URI (joins the arachne closure)
 //   - eolas:preferredIdentifier → the same URI (declares the eolas Person canonical,
 //     so the merged search-index document uses a deterministic id — ADR-0009)
@@ -309,7 +339,7 @@ func AlbumToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 // foaf:Agent skos:prefLabel "Agent"@en. Without the prefLabel for foaf:Agent,
 // the arachne ingestor (ADR-0004 Phase 2) will fail with a ValueError when it
 // walks the subclass chain and finds an unlabelled parent class.
-func ArtistToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
+func ArtistToRdf(artists []ArtistData) (*rdf2go.Graph, error) {
 	mediaMetadataManagerOrigin := os.Getenv("MEDIA_METADATA_MANAGER_ORIGIN")
 	g := rdf2go.NewGraph("")
 
@@ -350,26 +380,20 @@ func ArtistToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		rdf2go.NewLiteralWithLanguage("Agent", "en"),
 	)
 
-	for rows.Next() {
-		var id int
-		var name string
-		var personURIRaw sql.NullString
-		if err := rows.Scan(&id, &name, &personURIRaw); err != nil {
-			return g, err
-		}
-		subject := rdf2go.NewResource(fmt.Sprintf("%s/artists/%d", mediaMetadataManagerOrigin, id))
+	for _, artist := range artists {
+		subject := rdf2go.NewResource(fmt.Sprintf("%s/artists/%d", mediaMetadataManagerOrigin, artist.ID))
 		g.AddTriple(subject,
 			rdf2go.NewResource("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
 			rdf2go.NewResource("http://purl.org/ontology/mo/MusicArtist"))
 		g.AddTriple(subject,
 			rdf2go.NewResource("http://www.w3.org/2004/02/skos/core#prefLabel"),
-			rdf2go.NewLiteral(name))
+			rdf2go.NewLiteral(artist.Name))
 
 		// ADR-0009 identity link: emit owl:sameAs + eolas:preferredIdentifier when
 		// a manually-curated eolas:Person URI is stored for this artist.  Groups and
-		// un-curated artists have a NULL person_uri and emit no link triples.
-		if personURIRaw.Valid && personURIRaw.String != "" {
-			personURI := rdf2go.NewResource(personURIRaw.String)
+		// un-curated artists have a nil PersonURI and emit no link triples.
+		if artist.PersonURI != nil && *artist.PersonURI != "" {
+			personURI := rdf2go.NewResource(*artist.PersonURI)
 			g.AddTriple(subject,
 				rdf2go.NewResource("http://www.w3.org/2002/07/owl#sameAs"),
 				personURI)
@@ -379,9 +403,6 @@ func ArtistToRdf(rows *sql.Rows) (*rdf2go.Graph, error) {
 		}
 	}
 
-	if err := rows.Err(); err != nil {
-		return g, err
-	}
 	return g, nil
 }
 
