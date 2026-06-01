@@ -370,19 +370,12 @@ func (store Datastore) resolveAlbumNameFromURI(uri string) (name string, err err
 
 // writeAlbumRDFByID writes an RDF representation of a single album.
 func writeAlbumRDFByID(store Datastore, w http.ResponseWriter, id int, rdfType string) {
-	// Check existence first so we can return 404 for unknown albums.
-	_, err := store.getAlbumByID(id)
+	album, err := store.getAlbumByID(id)
 	if err != nil {
 		writeRDFResponse(w, nil, rdfType, err)
 		return
 	}
-	rows, err := store.DB.Query("SELECT id, name FROM album WHERE id = $1", id)
-	if err != nil {
-		writeRDFResponse(w, nil, rdfType, err)
-		return
-	}
-	defer rows.Close()
-	graph, err := rdfgen.AlbumToRdf(rows)
+	graph, err := rdfgen.AlbumToRdf([]rdfgen.AlbumData{{ID: album.ID, Name: album.Name}})
 	writeRDFResponse(w, graph, rdfType, err)
 }
 
