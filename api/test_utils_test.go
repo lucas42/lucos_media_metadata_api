@@ -313,3 +313,23 @@ func assertNoError(test *testing.T, message string, err error) {
 		test.Errorf("%s Error message: %s", message, err)
 	}
 }
+
+// TableExists reports whether a table with the given name exists in the database.
+// Only used in tests — not part of the production binary.
+func (store Datastore) TableExists(tablename string) (found bool) {
+	err := store.DB.Get(&found, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", tablename)
+	if err != nil && err.Error() != "sql: no rows in result set" {
+		panic(err)
+	}
+	return
+}
+
+// ColExists reports whether a column with the given name exists in the given table.
+// Only used in tests — not part of the production binary.
+func (store Datastore) ColExists(tablename string, colname string) (found bool) {
+	err := store.DB.Get(&found, "SELECT 1 FROM pragma_table_info(?) WHERE name= ?", tablename, colname)
+	if err != nil && err.Error() != "sql: no rows in result set" {
+		panic(err)
+	}
+	return
+}
