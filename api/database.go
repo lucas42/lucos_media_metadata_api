@@ -82,17 +82,3 @@ func (store Datastore) applyMigrationsFromFS(migFS fs.FS, pattern string) {
 	}
 }
 
-func (store Datastore) TableExists(tablename string) (found bool) {
-	err := store.DB.Get(&found, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", tablename)
-	if err != nil && err.Error() != "sql: no rows in result set" {
-		panic(err)
-	}
-	return
-}
-func (store Datastore) ColExists(tablename string, colname string) (found bool) {
-	err := store.DB.Get(&found, "SELECT 1 FROM pragma_table_info(?) WHERE name= ?", tablename, colname)
-	if err != nil && err.Error() != "sql: no rows in result set" {
-		panic(err)
-	}
-	return
-}
