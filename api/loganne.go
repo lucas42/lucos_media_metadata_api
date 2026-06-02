@@ -11,7 +11,9 @@ import (
 )
 
 type LoganneInterface interface {
-    post(string, string, Track, Track)
+    // post emits a track-level loganne event. level is the ADR-0001 prominence
+    // level to include in the payload (e.g. "routine", "detail").
+    post(string, string, Track, Track, string)
     collectionPost(string, string, Collection, Collection)
     albumPost(string, string, AlbumV3, bool)
     albumMergedPost(string, string, AlbumV3, AlbumV3)
@@ -45,13 +47,14 @@ func (loganne Loganne) buildAndPost(data map[string]interface{}) {
 	}
 }
 
-func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack Track, existingTrack Track) {
+func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack Track, existingTrack Track, level string) {
 	slog.Debug("Posting to loganne", "eventType", eventType, "humanReadable", humanReadable, "url", loganne.endpoint, "updatedTrack", updatedTrack, "existingTrack", existingTrack)
 
 	data := map[string]interface{}{
 		"source":        loganne.source,
 		"type":          eventType,
 		"humanReadable": humanReadable,
+		"level":         level,
 	}
 
 	// If there's an updated track, include that in the data and link to it in loganne
