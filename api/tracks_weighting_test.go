@@ -22,6 +22,7 @@ func TestWeightingLoganneMessageRounding(test *testing.T) {
 	}
 	assertEqual(test, "Loganne event type", "trackWeightingUpdated", lastLoganneType)
 	assertEqual(test, "Loganne humanReadable message", "Weighting for track #1 updated from 5.00 to 5.12", lastLoganneMessage)
+	assertEqual(test, "Loganne level", "detail", lastLoganneLevel)
 }
 
 func assertWeighting(test *testing.T, store Datastore, trackid int, expectedWeighting float64, expectedCumulativeWeighting float64) {

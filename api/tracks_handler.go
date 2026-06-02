@@ -604,7 +604,7 @@ func (store Datastore) patchMultipleTracksV3(w http.ResponseWriter, r *http.Requ
 	action := "noChange"
 	if len(changedTrackIDs) > 0 {
 		action = "tracksUpdated"
-		store.Loganne.post(action, strconv.Itoa(len(changedTrackIDs))+" tracks updated", Track{}, Track{})
+		store.Loganne.post(action, strconv.Itoa(len(changedTrackIDs))+" tracks updated", Track{}, Track{}, "")
 	}
 	// Re-query to get v3-formatted results
 	tracks, totalPages, totalTracks, page, err := queryMultipleTracksV3(store, r)

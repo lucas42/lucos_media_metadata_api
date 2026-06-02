@@ -56,7 +56,7 @@ func TestLoganneEvent(test *testing.T) {
 			Tag{PredicateID: "album", Value: "Harvest Storm"},
 		},
 	}
-	loganne.post("testEvent", "This event is from the test", track, Track{})
+	loganne.post("testEvent", "This event is from the test", track, Track{}, "")
 
 	latestRequest, latestRequestBody, latestRequestError := cap.get()
 	assertEqual(test, "Loganne request made to wrong path", "/events", latestRequest.URL.Path)
@@ -87,7 +87,7 @@ func TestLoganneDeleteEvent(test *testing.T) {
 	}
 
 	// Delete event passes empty track for the updated track, then existing track
-	loganne.post("deleteEvent", "This event is from the delete test", Track{}, track)
+	loganne.post("deleteEvent", "This event is from the delete test", Track{}, track, "")
 
 	latestRequest, latestRequestBody, latestRequestError := cap.get()
 	assertEqual(test, "Loganne request made to wrong path", "/events", latestRequest.URL.Path)
@@ -107,11 +107,31 @@ func TestBulkEvent(test *testing.T) {
 		endpoint: server.URL + "/events",
 		source:   "metadata_api_test",
 	}
-	loganne.post("bulkTestEvent", "This event is from the bulk test", Track{}, Track{})
+	loganne.post("bulkTestEvent", "This event is from the bulk test", Track{}, Track{}, "")
 
 	latestRequest, latestRequestBody, latestRequestError := cap.get()
 	assertEqual(test, "Loganne request made to wrong path", "/events", latestRequest.URL.Path)
 	assertEqual(test, "Loganne request wasn't POST request", "POST", latestRequest.Method)
 	assertNoError(test, "Failed to get request body", latestRequestError)
 	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the bulk test","source":"metadata_api_test","type":"bulkTestEvent"}`, latestRequestBody)
+}
+
+/**
+ * Test that a non-empty level is included in the loganne payload.
+ **/
+func TestLoganneEventWithLevel(test *testing.T) {
+	server, cap := newMockLoganneServer()
+	defer server.Close()
+
+	loganne := Loganne{
+		endpoint: server.URL + "/events",
+		source:   "metadata_api_test",
+	}
+	loganne.post("detailTestEvent", "This event is detail level", Track{}, Track{}, "detail")
+
+	latestRequest, latestRequestBody, latestRequestError := cap.get()
+	assertEqual(test, "Loganne request made to wrong path", "/events", latestRequest.URL.Path)
+	assertEqual(test, "Loganne request wasn't POST request", "POST", latestRequest.Method)
+	assertNoError(test, "Failed to get request body", latestRequestError)
+	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is detail level","level":"detail","source":"metadata_api_test","type":"detailTestEvent"}`, latestRequestBody)
 }

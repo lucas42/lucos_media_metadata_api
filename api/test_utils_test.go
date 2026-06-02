@@ -18,6 +18,7 @@ import (
 var server *httptest.Server
 var lastLoganneType string
 var lastLoganneMessage string
+var lastLoganneLevel string
 var lastLoganneTrack Track
 var lastLoganneExistingTrack Track
 var lastLoganneUpdatedCollection Collection
@@ -31,9 +32,10 @@ var lastLoganneTargetArtist ArtistV3
 var loganneRequestCount int
 
 type MockLoganne struct {}
-func (mock MockLoganne) post(eventType string, humanReadable string, track Track, existingTrack Track) {
+func (mock MockLoganne) post(eventType string, humanReadable string, track Track, existingTrack Track, level string) {
 	lastLoganneType = eventType
 	lastLoganneMessage = humanReadable
+	lastLoganneLevel = level
 	lastLoganneTrack = track
 	lastLoganneExistingTrack = existingTrack
 	lastLoganneUpdatedCollection = Collection{}
@@ -139,6 +141,7 @@ func restartServer() {
 	}
 	lastLoganneType = ""
 	lastLoganneMessage = ""
+	lastLoganneLevel = ""
 	lastLoganneTrack = Track{}
 	lastLoganneExistingTrack = Track{}
 	lastLoganneUpdatedCollection = Collection{}

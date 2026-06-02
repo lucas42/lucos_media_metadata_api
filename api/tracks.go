@@ -320,10 +320,10 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		if humanReadable == "" {
 			humanReadable = "Track " + storedTrack.getName() + " updated"
 		}
-		store.Loganne.post(action, humanReadable, storedTrack, existingTrack)
+		store.Loganne.post(action, humanReadable, storedTrack, existingTrack, "")
 	} else {
 		action = "trackAdded"
-		store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack)
+		store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack, "")
 	}
 	return
 }
@@ -438,7 +438,7 @@ func (store Datastore) setTrackWeighting(trackid int, newWeighting float64) (err
 	updatedTrack := existingTrack
 	updatedTrack.Weighting = newWeighting
 	humanReadableMessage := "Weighting for track "+updatedTrack.getName()+" updated from "+strconv.FormatFloat(oldWeighting, 'f', 2, 64)+" to "+strconv.FormatFloat(newWeighting, 'f', 2, 64)
-	store.Loganne.post("trackWeightingUpdated", humanReadableMessage, updatedTrack, existingTrack)
+	store.Loganne.post("trackWeightingUpdated", humanReadableMessage, updatedTrack, existingTrack, "detail")
 	return
 }
 
@@ -546,7 +546,7 @@ func (store Datastore) deleteTrack(trackid int) (err error) {
 	if (err != nil) {
 		return
 	}
-	store.Loganne.post("trackDeleted", "Track "+existingTrack.getName()+" deleted", Track{}, existingTrack)
+	store.Loganne.post("trackDeleted", "Track "+existingTrack.getName()+" deleted", Track{}, existingTrack, "")
 	return
 }
 
