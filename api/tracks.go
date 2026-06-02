@@ -146,35 +146,38 @@ func stringSlicesEqual(a, b []string) bool {
 	return true
 }
 
-// getBespokeLoganneMessage returns a bespoke humanReadable Loganne message when the
-// changeset contains exactly one non-silent tag predicate with a LoganneHumanReadable
-// function and no scalar track fields (fingerprint, URL, duration, weighting) are
-// actually changing, and no collection membership changes are present.
+// getBespokeLoganneMessage returns a bespoke humanReadable Loganne message and the
+// ADR-0001 level to use when the changeset contains exactly one non-silent tag
+// predicate with a LoganneHumanReadable function and no scalar track fields
+// (fingerprint, URL, duration, weighting) are actually changing, and no collection
+// membership changes are present.
 // Predicates marked LoganneSilent (e.g. lastErrorMessage) are ignored when counting
 // and do not suppress the bespoke message, allowing a primary predicate (e.g. lastError)
 // to be paired with a silent companion in a single PATCH without losing its bespoke message.
-// Returns an empty string when the generic "Track X updated" message should be used.
+// Returns ("", "") when the generic "Track X updated" message should be used.
+// The returned level is the predicate's LoganneLevel when set, or "routine" otherwise.
 //
 // existingTrack is used to distinguish "field is set to current value" (no scalar
 // change) from "field is genuinely changing" — the request handler populates filter
 // fields (e.g. URL) on the changeset even for tag-only PATCHes.
-func getBespokeLoganneMessage(changeSet TrackV3, existingTrack Track, trackName string) string {
+func getBespokeLoganneMessage(changeSet TrackV3, existingTrack Track, trackName string) (string, string) {
 	if changeSet.Fingerprint != "" && changeSet.Fingerprint != existingTrack.Fingerprint {
-		return ""
+		return "", ""
 	}
 	if changeSet.URL != "" && changeSet.URL != existingTrack.URL {
-		return ""
+		return "", ""
 	}
 	if changeSet.Duration != 0 && changeSet.Duration != existingTrack.Duration {
-		return ""
+		return "", ""
 	}
 	if changeSet.Weighting != 0 && changeSet.Weighting != existingTrack.Weighting {
-		return ""
+		return "", ""
 	}
 	if changeSet.Collections != nil {
-		return ""
+		return "", ""
 	}
 	var bespokeMsg string
+	var bespokeLevel string
 	for predicateID := range changeSet.Tags {
 		config := predicateconfig.GetConfig(predicateID)
 		if config.LoganneSilent {
@@ -183,15 +186,20 @@ func getBespokeLoganneMessage(changeSet TrackV3, existingTrack Track, trackName 
 		if config.LoganneHumanReadable != nil {
 			if bespokeMsg != "" {
 				// More than one non-silent predicate with a bespoke message: fall back to generic.
-				return ""
+				return "", ""
 			}
 			bespokeMsg = config.LoganneHumanReadable(trackName)
+			if config.LoganneLevel != "" {
+				bespokeLevel = config.LoganneLevel
+			} else {
+				bespokeLevel = "routine"
+			}
 		} else {
 			// Non-silent predicate with no bespoke message: fall back to generic.
-			return ""
+			return "", ""
 		}
 	}
-	return bespokeMsg
+	return bespokeMsg, bespokeLevel
 }
 
 /**
@@ -316,11 +324,12 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 	}
 	if existingTrack.ID > 0 {
 		action = "trackUpdated"
-		humanReadable := getBespokeLoganneMessage(track, existingTrack, storedTrack.getName())
+		humanReadable, level := getBespokeLoganneMessage(track, existingTrack, storedTrack.getName())
 		if humanReadable == "" {
 			humanReadable = "Track " + storedTrack.getName() + " updated"
+			level = "routine"
 		}
-		store.Loganne.post(action, humanReadable, storedTrack, existingTrack, "routine")
+		store.Loganne.post(action, humanReadable, storedTrack, existingTrack, level)
 	} else {
 		action = "trackAdded"
 		store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack, "routine")

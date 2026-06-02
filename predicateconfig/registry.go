@@ -167,6 +167,7 @@ var registry = map[string]Config{
 	"lastSuccessfulPlay": {
 		ValueShape:           ValueShapeOmit,
 		LoganneHumanReadable: func(trackName string) string { return "Track " + trackName + " finished playing" },
+		LoganneLevel:         "detail",
 	},
 	"lastError": {
 		ValueShape:           ValueShapeOmit,

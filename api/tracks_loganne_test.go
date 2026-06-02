@@ -13,17 +13,28 @@ func makeTagOnlyChangeSet(predicateID string) TrackV3 {
 }
 
 func TestGetBespokeLoganneMessageLastSuccessfulPlay(test *testing.T) {
-	msg := getBespokeLoganneMessage(makeTagOnlyChangeSet("lastSuccessfulPlay"), Track{}, `"Tuesday's Gone"`)
+	msg, _ := getBespokeLoganneMessage(makeTagOnlyChangeSet("lastSuccessfulPlay"), Track{}, `"Tuesday's Gone"`)
 	assertEqual(test, "bespoke loganne message for lastSuccessfulPlay", `Track "Tuesday's Gone" finished playing`, msg)
 }
 
+func TestGetBespokeLoganneLevelLastSuccessfulPlay(test *testing.T) {
+	_, level := getBespokeLoganneMessage(makeTagOnlyChangeSet("lastSuccessfulPlay"), Track{}, `"Tuesday's Gone"`)
+	assertEqual(test, "bespoke loganne level for lastSuccessfulPlay", "detail", level)
+}
+
+func TestGetBespokeLoganneLevelLastSkip(test *testing.T) {
+	// lastSkip has no LoganneLevel set — should default to "routine"
+	_, level := getBespokeLoganneMessage(makeTagOnlyChangeSet("lastSkip"), Track{}, `"Tuesday's Gone"`)
+	assertEqual(test, "bespoke loganne level for lastSkip (default)", "routine", level)
+}
+
 func TestGetBespokeLoganneMessageLastError(test *testing.T) {
-	msg := getBespokeLoganneMessage(makeTagOnlyChangeSet("lastError"), Track{}, `"Tuesday's Gone"`)
+	msg, _ := getBespokeLoganneMessage(makeTagOnlyChangeSet("lastError"), Track{}, `"Tuesday's Gone"`)
 	assertEqual(test, "bespoke loganne message for lastError", `Track "Tuesday's Gone" errored`, msg)
 }
 
 func TestGetBespokeLoganneMessageLastSkip(test *testing.T) {
-	msg := getBespokeLoganneMessage(makeTagOnlyChangeSet("lastSkip"), Track{}, `"Tuesday's Gone"`)
+	msg, _ := getBespokeLoganneMessage(makeTagOnlyChangeSet("lastSkip"), Track{}, `"Tuesday's Gone"`)
 	assertEqual(test, "bespoke loganne message for lastSkip", `Track "Tuesday's Gone" skipped`, msg)
 }
 
@@ -34,7 +45,7 @@ func TestGetBespokeLoganneMessageMultipleTagsReturnsEmpty(test *testing.T) {
 			"lastSkip":           {{Name: "2026-05-10T11:00:00Z"}},
 		},
 	}
-	msg := getBespokeLoganneMessage(changeSet, Track{}, `"Tuesday's Gone"`)
+	msg, _ := getBespokeLoganneMessage(changeSet, Track{}, `"Tuesday's Gone"`)
 	assertEqual(test, "bespoke loganne message for multi-tag changeset", "", msg)
 }
 
@@ -46,7 +57,7 @@ func TestGetBespokeLoganneMessageWithChangedFingerprintReturnsEmpty(test *testin
 		},
 	}
 	existing := Track{Fingerprint: "old-fingerprint"}
-	msg := getBespokeLoganneMessage(changeSet, existing, `"Tuesday's Gone"`)
+	msg, _ := getBespokeLoganneMessage(changeSet, existing, `"Tuesday's Gone"`)
 	assertEqual(test, "bespoke loganne message when fingerprint changes", "", msg)
 }
 
@@ -60,11 +71,11 @@ func TestGetBespokeLoganneMessageWithSameFingerprintNotBlocked(test *testing.T) 
 		},
 	}
 	existing := Track{Fingerprint: "abc123"}
-	msg := getBespokeLoganneMessage(changeSet, existing, `"Tuesday's Gone"`)
+	msg, _ := getBespokeLoganneMessage(changeSet, existing, `"Tuesday's Gone"`)
 	assertEqual(test, "bespoke loganne message when fingerprint is unchanged", `Track "Tuesday's Gone" finished playing`, msg)
 }
 
 func TestGetBespokeLoganneMessageUnknownTagReturnsEmpty(test *testing.T) {
-	msg := getBespokeLoganneMessage(makeTagOnlyChangeSet("title"), Track{}, "#42")
+	msg, _ := getBespokeLoganneMessage(makeTagOnlyChangeSet("title"), Track{}, "#42")
 	assertEqual(test, "bespoke loganne message for non-bespoke predicate", "", msg)
 }
