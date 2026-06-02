@@ -116,6 +116,12 @@ type Config struct {
 	// Receives the track name as returned by track.getName().
 	LoganneHumanReadable func(trackName string) string
 
+	// LoganneLevel, when non-empty, is the ADR-0001 prominence level to emit in
+	// Loganne events when this predicate is the sole non-silent tag changed in an
+	// update and no scalar track fields are being modified. Empty string means the
+	// caller should use its default level (typically "routine").
+	LoganneLevel string
+
 	// LoganneSilent marks a predicate as a silent companion that does not affect
 	// which Loganne message is emitted. When true, this predicate is ignored when
 	// deciding whether to emit a bespoke or generic message.
