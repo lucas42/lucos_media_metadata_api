@@ -56,13 +56,13 @@ func TestLoganneEvent(test *testing.T) {
 			Tag{PredicateID: "album", Value: "Harvest Storm"},
 		},
 	}
-	loganne.post("testEvent", "This event is from the test", track, Track{}, "")
+	loganne.post("testEvent", "This event is from the test", track, Track{}, "routine")
 
 	latestRequest, latestRequestBody, latestRequestError := cap.get()
 	assertEqual(test, "Loganne request made to wrong path", "/events", latestRequest.URL.Path)
 	assertEqual(test, "Loganne request wasn't POST request", "POST", latestRequest.Method)
 	assertNoError(test, "Failed to get request body", latestRequestError)
-	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","id":17,"tags":{"album":[{"name":"Harvest Storm"}],"artist":[{"name":"Altan"}]},"weighting":9},"type":"testEvent","url":"http://localhost:8020/tracks/17"}`, latestRequestBody)
+	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the test","level":"routine","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","id":17,"tags":{"album":[{"name":"Harvest Storm"}],"artist":[{"name":"Altan"}]},"weighting":9},"type":"testEvent","url":"http://localhost:8020/tracks/17"}`, latestRequestBody)
 }
 
 func TestLoganneDeleteEvent(test *testing.T) {
@@ -87,13 +87,13 @@ func TestLoganneDeleteEvent(test *testing.T) {
 	}
 
 	// Delete event passes empty track for the updated track, then existing track
-	loganne.post("deleteEvent", "This event is from the delete test", Track{}, track, "")
+	loganne.post("deleteEvent", "This event is from the delete test", Track{}, track, "routine")
 
 	latestRequest, latestRequestBody, latestRequestError := cap.get()
 	assertEqual(test, "Loganne request made to wrong path", "/events", latestRequest.URL.Path)
 	assertEqual(test, "Loganne request wasn't POST request", "POST", latestRequest.Method)
 	assertNoError(test, "Failed to get request body", latestRequestError)
-	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the delete test","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","id":18,"tags":{"album":[{"name":"Harvest Storm"}],"artist":[{"name":"Altan"}]},"weighting":9},"type":"deleteEvent","url":"http://localhost:8020/tracks/18"}`, latestRequestBody)
+	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the delete test","level":"routine","source":"metadata_api_test","track":{"fingerprint":"abc","duration":137,"url":"http://example.com/track-1.mp3","id":18,"tags":{"album":[{"name":"Harvest Storm"}],"artist":[{"name":"Altan"}]},"weighting":9},"type":"deleteEvent","url":"http://localhost:8020/tracks/18"}`, latestRequestBody)
 }
 
 /**
@@ -107,13 +107,13 @@ func TestBulkEvent(test *testing.T) {
 		endpoint: server.URL + "/events",
 		source:   "metadata_api_test",
 	}
-	loganne.post("bulkTestEvent", "This event is from the bulk test", Track{}, Track{}, "")
+	loganne.post("bulkTestEvent", "This event is from the bulk test", Track{}, Track{}, "routine")
 
 	latestRequest, latestRequestBody, latestRequestError := cap.get()
 	assertEqual(test, "Loganne request made to wrong path", "/events", latestRequest.URL.Path)
 	assertEqual(test, "Loganne request wasn't POST request", "POST", latestRequest.Method)
 	assertNoError(test, "Failed to get request body", latestRequestError)
-	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the bulk test","source":"metadata_api_test","type":"bulkTestEvent"}`, latestRequestBody)
+	assertEqual(test, "Unexpected request body", `{"humanReadable":"This event is from the bulk test","level":"routine","source":"metadata_api_test","type":"bulkTestEvent"}`, latestRequestBody)
 }
 
 /**

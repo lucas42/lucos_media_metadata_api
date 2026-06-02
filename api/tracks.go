@@ -320,10 +320,10 @@ func (store Datastore) updateCreateTrackDataByField(filterField string, value in
 		if humanReadable == "" {
 			humanReadable = "Track " + storedTrack.getName() + " updated"
 		}
-		store.Loganne.post(action, humanReadable, storedTrack, existingTrack, "")
+		store.Loganne.post(action, humanReadable, storedTrack, existingTrack, "routine")
 	} else {
 		action = "trackAdded"
-		store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack, "")
+		store.Loganne.post(action, "New Track "+storedTrack.getName()+" added", storedTrack, existingTrack, "routine")
 	}
 	return
 }
@@ -546,7 +546,7 @@ func (store Datastore) deleteTrack(trackid int) (err error) {
 	if (err != nil) {
 		return
 	}
-	store.Loganne.post("trackDeleted", "Track "+existingTrack.getName()+" deleted", Track{}, existingTrack, "")
+	store.Loganne.post("trackDeleted", "Track "+existingTrack.getName()+" deleted", Track{}, existingTrack, "routine")
 	return
 }
 

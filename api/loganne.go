@@ -12,8 +12,7 @@ import (
 
 type LoganneInterface interface {
     // post emits a track-level loganne event. level is the ADR-0001 prominence
-    // level to include in the payload (e.g. "detail", "routine"); an empty string
-    // omits the field so loganne defaults to "routine".
+    // level to include in the payload (e.g. "routine", "detail").
     post(string, string, Track, Track, string)
     collectionPost(string, string, Collection, Collection)
     albumPost(string, string, AlbumV3, bool)
@@ -55,12 +54,7 @@ func (loganne Loganne) post(eventType string, humanReadable string, updatedTrack
 		"source":        loganne.source,
 		"type":          eventType,
 		"humanReadable": humanReadable,
-	}
-
-	// Include the ADR-0001 level field when explicitly set; omit it otherwise so
-	// loganne applies its default ("routine").
-	if level != "" {
-		data["level"] = level
+		"level":         level,
 	}
 
 	// If there's an updated track, include that in the data and link to it in loganne
