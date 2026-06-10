@@ -17,7 +17,7 @@ ENV CGO_ENABLED=1
 RUN go build -o /rdf-exporter ./main.go
 
 # Stage 2: Minimal runtime image
-FROM alpine:3.23
+FROM alpine:3.24
 ARG VERSION
 ENV VERSION=$VERSION
 
