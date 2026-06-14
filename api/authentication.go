@@ -63,14 +63,10 @@ func (server AuthentictedServer) checkAuth(request *http.Request) (bool, bool) {
 
 // isAuthorized checks whether the client's scopes permit the given request.
 //
-// Current estate-vocabulary scope strings:
-//   - "media-metadata:read"  — permits any GET request (covers /v3/* and /v2/export)
-//   - "media-metadata:write" — permits POST/PATCH/DELETE on /v3/* paths
+// Estate-vocabulary scope strings:
+//   - "media-metadata:read"  — permits any GET request
+//   - "media-metadata:write" — permits any POST/PUT/PATCH/DELETE request (excluding /webhooks)
 //   - "webhook"              — permits POST /webhooks only (estate-wide bundled scope)
-//
-// Legacy scope strings (dual-accept during migration; remove after production creds migrated):
-//   - "full"        — permits any path and method (use media-metadata:read + media-metadata:write instead)
-//   - "export:read" — permits GET /v2/export only (use media-metadata:read instead)
 //
 // A client with no scopes is fail-closed: all paths return false.
 func (client AuthenticatedClient) isAuthorized(request *http.Request) bool {
@@ -81,19 +77,13 @@ func (client AuthenticatedClient) isAuthorized(request *http.Request) bool {
 				return true
 			}
 		case "media-metadata:write":
-			if (request.Method == http.MethodPost || request.Method == http.MethodPatch || request.Method == http.MethodDelete) &&
-				strings.HasPrefix(request.URL.Path, "/v3/") {
+			isWrite := request.Method == http.MethodPost || request.Method == http.MethodPut ||
+				request.Method == http.MethodPatch || request.Method == http.MethodDelete
+			if isWrite && request.URL.Path != "/webhooks" {
 				return true
 			}
 		case "webhook":
 			if request.Method == http.MethodPost && request.URL.Path == "/webhooks" {
-				return true
-			}
-		// Legacy scopes — dual-accept during migration
-		case "full":
-			return true
-		case "export:read":
-			if request.Method == http.MethodGet && request.URL.Path == "/v2/export" {
 				return true
 			}
 		}
