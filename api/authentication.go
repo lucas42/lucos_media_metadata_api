@@ -63,23 +63,31 @@ func (server AuthentictedServer) checkAuth(request *http.Request) (bool, bool) {
 
 // isAuthorized checks whether the client's scopes permit the given request.
 //
-// Scope vocabulary:
-//   - "full"        — permits any path and method
-//   - "webhook"     — permits POST /webhooks only
-//   - "export:read" — permits GET /v2/export only
+// Estate-vocabulary scope strings:
+//   - "media-metadata:read"  — permits any GET or HEAD request
+//   - "media-metadata:write" — permits any POST/PUT/PATCH/DELETE request (excluding /webhooks)
+//   - "webhook"              — permits POST /webhooks only (estate-wide bundled scope)
+//
+// Note: HEAD is included in media-metadata:read because Go's ServeMux automatically
+// serves HEAD for registered GET routes (stripping the body), but auth runs before
+// routing — so HEAD must be explicitly allowed here or it falls through to 403.
 //
 // A client with no scopes is fail-closed: all paths return false.
 func (client AuthenticatedClient) isAuthorized(request *http.Request) bool {
 	for _, scope := range client.Scopes {
 		switch scope {
-		case "full":
-			return true
-		case "webhook":
-			if request.Method == http.MethodPost && request.URL.Path == "/webhooks" {
+		case "media-metadata:read":
+			if request.Method == http.MethodGet || request.Method == http.MethodHead {
 				return true
 			}
-		case "export:read":
-			if request.Method == http.MethodGet && request.URL.Path == "/v2/export" {
+		case "media-metadata:write":
+			isWrite := request.Method == http.MethodPost || request.Method == http.MethodPut ||
+				request.Method == http.MethodPatch || request.Method == http.MethodDelete
+			if isWrite && request.URL.Path != "/webhooks" {
+				return true
+			}
+		case "webhook":
+			if request.Method == http.MethodPost && request.URL.Path == "/webhooks" {
 				return true
 			}
 		}

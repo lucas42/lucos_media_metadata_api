@@ -79,6 +79,11 @@ func TestClientKeyParsing(test *testing.T) {
 	assertEqual(test, "Wrong first scope", "webhook", multiScope["mykey"].Scopes[0])
 	assertEqual(test, "Wrong second scope", "export:read", multiScope["mykey"].Scopes[1])
 
+	newVocabScope := parseClientKeys("test_app:prod=mykey|media-metadata:read,media-metadata:write")
+	assertEqual(test, "Wrong scope count for new vocab", 2, len(newVocabScope["mykey"].Scopes))
+	assertEqual(test, "Wrong first new scope", "media-metadata:read", newVocabScope["mykey"].Scopes[0])
+	assertEqual(test, "Wrong second new scope", "media-metadata:write", newVocabScope["mykey"].Scopes[1])
+
 	noScope := parseClientKeys("test_app:prod=mykey")
 	assertEqual(test, "Unscoped key should have no scopes", 0, len(noScope["mykey"].Scopes))
 }
@@ -90,20 +95,73 @@ func makeTestRequest(method, path string) *http.Request {
 }
 
 func TestScopeEnforcement(test *testing.T) {
-	fullClient := AuthenticatedClient{System: "test", Environment: "prod", Scopes: []string{"full"}}
 	webhookClient := AuthenticatedClient{System: "test", Environment: "prod", Scopes: []string{"webhook"}}
-	exportClient := AuthenticatedClient{System: "test", Environment: "prod", Scopes: []string{"export:read"}}
+	readClient := AuthenticatedClient{System: "test", Environment: "prod", Scopes: []string{"media-metadata:read"}}
+	writeClient := AuthenticatedClient{System: "test", Environment: "prod", Scopes: []string{"media-metadata:write"}}
+	readWriteClient := AuthenticatedClient{System: "test", Environment: "prod", Scopes: []string{"media-metadata:read", "media-metadata:write"}}
 	unscopedClient := AuthenticatedClient{System: "test", Environment: "prod", Scopes: []string{}}
 
-	// full scope permits any path and method
-	if !fullClient.isAuthorized(makeTestRequest(http.MethodGet, "/v3/tracks")) {
-		test.Error("full scope should allow GET /v3/tracks")
+	// media-metadata:read permits any GET or HEAD request
+	if !readClient.isAuthorized(makeTestRequest(http.MethodGet, "/v3/tracks")) {
+		test.Error("media-metadata:read scope should allow GET /v3/tracks")
 	}
-	if !fullClient.isAuthorized(makeTestRequest(http.MethodPost, "/webhooks")) {
-		test.Error("full scope should allow POST /webhooks")
+	if !readClient.isAuthorized(makeTestRequest(http.MethodGet, "/v2/export")) {
+		test.Error("media-metadata:read scope should allow GET /v2/export")
 	}
-	if !fullClient.isAuthorized(makeTestRequest(http.MethodGet, "/v2/export")) {
-		test.Error("full scope should allow GET /v2/export")
+	if !readClient.isAuthorized(makeTestRequest(http.MethodGet, "/v3/collections")) {
+		test.Error("media-metadata:read scope should allow GET /v3/collections")
+	}
+	if !readClient.isAuthorized(makeTestRequest(http.MethodHead, "/v3/tracks")) {
+		test.Error("media-metadata:read scope should allow HEAD /v3/tracks (ServeMux serves HEAD for GET routes)")
+	}
+	if readClient.isAuthorized(makeTestRequest(http.MethodPost, "/v3/tracks")) {
+		test.Error("media-metadata:read scope should deny POST /v3/tracks")
+	}
+	if readClient.isAuthorized(makeTestRequest(http.MethodPatch, "/v3/tracks/1")) {
+		test.Error("media-metadata:read scope should deny PATCH /v3/tracks/1")
+	}
+	if readClient.isAuthorized(makeTestRequest(http.MethodPost, "/webhooks")) {
+		test.Error("media-metadata:read scope should deny POST /webhooks")
+	}
+
+	// media-metadata:write permits any POST/PUT/PATCH/DELETE except /webhooks
+	if !writeClient.isAuthorized(makeTestRequest(http.MethodPost, "/v3/tracks")) {
+		test.Error("media-metadata:write scope should allow POST /v3/tracks")
+	}
+	if !writeClient.isAuthorized(makeTestRequest(http.MethodPut, "/v3/tracks")) {
+		test.Error("media-metadata:write scope should allow PUT /v3/tracks")
+	}
+	if !writeClient.isAuthorized(makeTestRequest(http.MethodPatch, "/v3/tracks/1")) {
+		test.Error("media-metadata:write scope should allow PATCH /v3/tracks/1")
+	}
+	if !writeClient.isAuthorized(makeTestRequest(http.MethodDelete, "/v3/tracks/1")) {
+		test.Error("media-metadata:write scope should allow DELETE /v3/tracks/1")
+	}
+	if !writeClient.isAuthorized(makeTestRequest(http.MethodPut, "/v2/tracks/1")) {
+		test.Error("media-metadata:write scope should allow PUT /v2/tracks/1 (returns 410, but auth must pass first)")
+	}
+	if writeClient.isAuthorized(makeTestRequest(http.MethodGet, "/v3/tracks")) {
+		test.Error("media-metadata:write scope should deny GET /v3/tracks")
+	}
+	if writeClient.isAuthorized(makeTestRequest(http.MethodPost, "/webhooks")) {
+		test.Error("media-metadata:write scope should deny POST /webhooks")
+	}
+	if writeClient.isAuthorized(makeTestRequest(http.MethodGet, "/v2/export")) {
+		test.Error("media-metadata:write scope should deny GET /v2/export")
+	}
+
+	// Combined read + write covers both
+	if !readWriteClient.isAuthorized(makeTestRequest(http.MethodGet, "/v3/tracks")) {
+		test.Error("read+write client should allow GET /v3/tracks")
+	}
+	if !readWriteClient.isAuthorized(makeTestRequest(http.MethodPost, "/v3/tracks")) {
+		test.Error("read+write client should allow POST /v3/tracks")
+	}
+	if !readWriteClient.isAuthorized(makeTestRequest(http.MethodGet, "/v2/export")) {
+		test.Error("read+write client should allow GET /v2/export")
+	}
+	if readWriteClient.isAuthorized(makeTestRequest(http.MethodPost, "/webhooks")) {
+		test.Error("read+write client should deny POST /webhooks (needs webhook scope)")
 	}
 
 	// webhook scope only permits POST /webhooks
@@ -118,20 +176,6 @@ func TestScopeEnforcement(test *testing.T) {
 	}
 	if webhookClient.isAuthorized(makeTestRequest(http.MethodGet, "/v2/export")) {
 		test.Error("webhook scope should deny GET /v2/export")
-	}
-
-	// export:read scope only permits GET /v2/export
-	if !exportClient.isAuthorized(makeTestRequest(http.MethodGet, "/v2/export")) {
-		test.Error("export:read scope should allow GET /v2/export")
-	}
-	if exportClient.isAuthorized(makeTestRequest(http.MethodGet, "/v3/tracks")) {
-		test.Error("export:read scope should deny GET /v3/tracks")
-	}
-	if exportClient.isAuthorized(makeTestRequest(http.MethodPost, "/v2/export")) {
-		test.Error("export:read scope should deny POST /v2/export")
-	}
-	if exportClient.isAuthorized(makeTestRequest(http.MethodPost, "/webhooks")) {
-		test.Error("export:read scope should deny POST /webhooks")
 	}
 
 	// No scope = fail-closed for all paths

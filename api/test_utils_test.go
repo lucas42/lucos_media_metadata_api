@@ -154,7 +154,7 @@ func restartServer() {
 	lastLoganneTargetArtist = ArtistV3{}
 	loganneRequestCount = 0
 	store := DBInit("testrouting.sqlite", MockLoganne{})
-	server = httptest.NewServer(FrontController(store, "test_app1:staging=validkey|full;test_app2:staging=2ndvalidkey|full"))
+	server = httptest.NewServer(FrontController(store, "test_app1:staging=validkey|media-metadata:read,media-metadata:write,webhook;test_app2:staging=2ndvalidkey|media-metadata:read,media-metadata:write,webhook"))
 }
 
 /**
