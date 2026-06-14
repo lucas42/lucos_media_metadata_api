@@ -101,7 +101,7 @@ func TestScopeEnforcement(test *testing.T) {
 	readWriteClient := AuthenticatedClient{System: "test", Environment: "prod", Scopes: []string{"media-metadata:read", "media-metadata:write"}}
 	unscopedClient := AuthenticatedClient{System: "test", Environment: "prod", Scopes: []string{}}
 
-	// media-metadata:read permits any GET request
+	// media-metadata:read permits any GET or HEAD request
 	if !readClient.isAuthorized(makeTestRequest(http.MethodGet, "/v3/tracks")) {
 		test.Error("media-metadata:read scope should allow GET /v3/tracks")
 	}
@@ -110,6 +110,9 @@ func TestScopeEnforcement(test *testing.T) {
 	}
 	if !readClient.isAuthorized(makeTestRequest(http.MethodGet, "/v3/collections")) {
 		test.Error("media-metadata:read scope should allow GET /v3/collections")
+	}
+	if !readClient.isAuthorized(makeTestRequest(http.MethodHead, "/v3/tracks")) {
+		test.Error("media-metadata:read scope should allow HEAD /v3/tracks (ServeMux serves HEAD for GET routes)")
 	}
 	if readClient.isAuthorized(makeTestRequest(http.MethodPost, "/v3/tracks")) {
 		test.Error("media-metadata:read scope should deny POST /v3/tracks")

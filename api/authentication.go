@@ -64,16 +64,20 @@ func (server AuthentictedServer) checkAuth(request *http.Request) (bool, bool) {
 // isAuthorized checks whether the client's scopes permit the given request.
 //
 // Estate-vocabulary scope strings:
-//   - "media-metadata:read"  — permits any GET request
+//   - "media-metadata:read"  — permits any GET or HEAD request
 //   - "media-metadata:write" — permits any POST/PUT/PATCH/DELETE request (excluding /webhooks)
 //   - "webhook"              — permits POST /webhooks only (estate-wide bundled scope)
+//
+// Note: HEAD is included in media-metadata:read because Go's ServeMux automatically
+// serves HEAD for registered GET routes (stripping the body), but auth runs before
+// routing — so HEAD must be explicitly allowed here or it falls through to 403.
 //
 // A client with no scopes is fail-closed: all paths return false.
 func (client AuthenticatedClient) isAuthorized(request *http.Request) bool {
 	for _, scope := range client.Scopes {
 		switch scope {
 		case "media-metadata:read":
-			if request.Method == http.MethodGet {
+			if request.Method == http.MethodGet || request.Method == http.MethodHead {
 				return true
 			}
 		case "media-metadata:write":
