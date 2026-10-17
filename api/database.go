@@ -28,10 +28,9 @@ type Datastore struct {
 }
 
 func DBInit(dbpath string, loganne LoganneInterface) (database Datastore) {
-	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000")
+	db := sqlx.MustConnect("sqlite3", dbpath+"?_busy_timeout=10000&_foreign_keys=1")
 	database = Datastore{DB: db, Loganne: loganne, infoCache: new(atomic.Pointer[InfoMetricsSnapshot])}
 	database.DB.MustExec("PRAGMA journal_mode=WAL;")
-	database.DB.MustExec("PRAGMA foreign_keys = ON;")
 	database.applyMigrations()
 	return
 }
