@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"sync/atomic"
 	"testing"
@@ -246,4 +247,30 @@ func TestMigrationRunnerOrdering(test *testing.T) {
 	assertEqual(test, "still 2 records after idempotent re-run", 2, count)
 
 	os.Remove(dbpath)
+}
+
+// TestForeignKeysEnforcedOnEveryPooledConnection verifies the foreign_keys pragma
+// (which is per-connection in SQLite) applies to each connection the pool opens.
+func TestForeignKeysEnforcedOnEveryPooledConnection(test *testing.T) {
+	dbpath := "testforeignkeys.sqlite"
+	os.Remove(dbpath)
+	defer os.Remove(dbpath)
+	store := DBInit(dbpath, MockLoganne{})
+
+	ctx := context.Background()
+	var conns []*sqlx.Conn
+	for i := 0; i < 3; i++ {
+		conn, err := store.DB.Connx(ctx)
+		if err != nil {
+			test.Fatalf("couldn't open pooled connection %d: %v", i, err)
+		}
+		defer conn.Close()
+		conns = append(conns, conn)
+	}
+	for i, conn := range conns {
+		_, err := conn.ExecContext(ctx, "INSERT INTO collection_track (collectionslug, trackid) VALUES ('no-such-collection', 999999)")
+		if err == nil {
+			test.Errorf("connection %d: foreign-key-violating insert succeeded, expected it to be rejected", i)
+		}
+	}
 }
