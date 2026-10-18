@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"testing/fstest"
@@ -271,6 +272,43 @@ func TestForeignKeysEnforcedOnEveryPooledConnection(test *testing.T) {
 		_, err := conn.ExecContext(ctx, "INSERT INTO collection_track (collectionslug, trackid) VALUES ('no-such-collection', 999999)")
 		if err == nil {
 			test.Errorf("connection %d: foreign-key-violating insert succeeded, expected it to be rejected", i)
+		}
+	}
+}
+
+func TestTrackLookupsUseIndexes(test *testing.T) {
+	dbpath := "testlookupindexes.sqlite"
+	os.Remove(dbpath)
+	defer os.Remove(dbpath)
+	datastore := DBInit(dbpath, MockLoganne{})
+
+	queries := map[string]string{
+		"tag_trackid":              "SELECT * FROM tag WHERE trackid = ?",
+		"collection_track_trackid": "SELECT slug, name, icon FROM collection_track LEFT JOIN collection ON collection_track.collectionslug = collection.slug WHERE collection_track.trackid = ?",
+	}
+	for index, query := range queries {
+		var plan []string
+		rows, err := datastore.DB.Query("EXPLAIN QUERY PLAN "+query, 1)
+		if err != nil {
+			test.Fatal(err)
+		}
+		for rows.Next() {
+			var id, parent, notused int
+			var detail string
+			if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+				test.Fatal(err)
+			}
+			plan = append(plan, detail)
+		}
+		rows.Close()
+		found := false
+		for _, detail := range plan {
+			if strings.Contains(detail, "USING INDEX "+index) {
+				found = true
+			}
+		}
+		if !found {
+			test.Errorf("query not using index %s; plan: %v", index, plan)
 		}
 	}
 }
